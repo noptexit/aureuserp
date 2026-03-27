@@ -218,7 +218,8 @@ export class PurchaseFlowPage {
         await this.gotoQuotationsPage();
         await this.searchList(searchKey);
         await this.openRowActions();
-        await this.clickMenuAction(/Edit/i);
+        // await this.clickMenuAction(/Edit/i);
+        await this.erpLocators.purchaseQuotationEditButton.click();
 
         await this.erpLocators.purchaseQuotationQuantityInput.first().fill(quantity);
 
@@ -226,7 +227,7 @@ export class PurchaseFlowPage {
             await this.erpLocators.purchaseQuotationUnitPriceInput.first().fill(unitPrice);
         }
 
-        await this.erpLocators.purchaseQuotationSaveButton.click();
+        await this.erpLocators.purchaseQuotationSavechangesButton.click();
         await this.expectSuccessToast();
     }
 
@@ -234,7 +235,8 @@ export class PurchaseFlowPage {
         await this.gotoQuotationsPage();
         await this.searchList(searchKey);
         await this.openRowActions();
-        await this.clickMenuAction(/Delete/i);
+        // await this.clickMenuAction(/Delete/i);
+        await this.erpLocators.purchaseQuotationDeleteButton.click();
         await this.erpLocators.purchaseConfirmDeleteButton.click();
         await this.expectSuccessToast();
     }
@@ -310,7 +312,8 @@ export class PurchaseFlowPage {
         await this.gotoPurchaseAgreementsPage();
         await this.searchList(searchKey);
         await this.openRowActions();
-        await this.clickMenuAction(/Edit/i);
+        // await this.clickMenuAction(/Edit/i);
+        await this.erpLocators.purchaseAgreementEditButton.click();
 
         if (updates.reference) {
             await this.erpLocators.purchaseAgreementReferenceInput.fill(updates.reference);
@@ -332,7 +335,8 @@ export class PurchaseFlowPage {
         await this.gotoPurchaseAgreementsPage();
         await this.searchList(searchKey);
         await this.openRowActions();
-        await this.clickMenuAction(/Delete/i);
+        // await this.clickMenuAction(/Delete/i);
+        await this.erpLocators.purchaseAgreementDeleteButton.click();
         await this.erpLocators.purchaseConfirmDeleteButton.click();
         await this.expectSuccessToast();
     }

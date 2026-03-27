@@ -75,7 +75,7 @@ test.describe("Purchase Agreements E2E", () => {
             reference,
         });
 
-        await purchasePage.editPurchaseAgreement(reference, {
+        await purchasePage.editPurchaseAgreement(vendorName, {
             reference: updatedReference,
             quantity: "6",
             unitPrice: "215",
@@ -107,7 +107,7 @@ test.describe("Purchase Agreements E2E", () => {
             reference,
         });
 
-        await purchasePage.deletePurchaseAgreement(reference);
+        await purchasePage.deletePurchaseAgreement(vendorName);
     });
 
     test("Confirm Purchase Agreement - Moves To Confirmed", async ({ adminPage }) => {

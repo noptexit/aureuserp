@@ -176,6 +176,7 @@ export class ErpLocators {
 
     readonly purchaseQuotationsTable: Locator;
     readonly purchaseQuotationCreateButton: Locator;
+    readonly purchaseQuotationEditButton: Locator;
     readonly purchaseQuotationVendorSelect: Locator;
     readonly purchaseQuotationAgreementSelect: Locator;
     readonly purchaseQuotationAddProductButton: Locator;
@@ -183,6 +184,8 @@ export class ErpLocators {
     readonly purchaseQuotationQuantityInput: Locator;
     readonly purchaseQuotationUnitPriceInput: Locator;
     readonly purchaseQuotationSaveButton: Locator;
+    readonly purchaseQuotationSavechangesButton: Locator;
+    readonly purchaseQuotationDeleteButton: Locator;
     readonly purchaseQuotationConfirmButton: Locator;
     readonly purchaseQuotationBillsTable: Locator;
     readonly purchaseQuotationReceiptsTable: Locator;
@@ -199,6 +202,8 @@ export class ErpLocators {
     readonly purchaseAgreementProductSelect: Locator;
     readonly purchaseAgreementQuantityInput: Locator;
     readonly purchaseAgreementUnitPriceInput: Locator;
+    readonly purchaseAgreementEditButton: Locator;
+    readonly purchaseAgreementDeleteButton: Locator;
     readonly purchaseAgreementSaveButton: Locator;
     readonly purchaseAgreementConfirmButton: Locator;
     readonly purchaseAgreementSearchInput: Locator;
@@ -389,14 +394,18 @@ export class ErpLocators {
         this.purchaseProductDeleteButton = page.getByRole('button', { name: 'Delete' });
 
         this.purchaseQuotationsTable = page.locator("table, div.fi-ta-empty-state");
-        this.purchaseQuotationCreateButton = page.locator("a,button").filter({ hasText: /new request for quotation|new quotation|create quotation|add quotation|create/i }).first();
+        this.purchaseQuotationCreateButton = page.locator("a,button").filter({ hasText: /new request for quotation|New RFQ|create quotation|add quotation|create/i }).first();
+        this.purchaseQuotationEditButton = page.getByRole('link', { name: 'Edit' }).first();
+        this.purchaseQuotationDeleteButton = page.getByRole('button', { name: 'Delete' }).first();
         this.purchaseQuotationVendorSelect = page.locator('[wire\\:key$="form.partner_id"] button.fi-select-input-btn').first();
         this.purchaseQuotationAgreementSelect = page.locator('[wire\\:key$="form.requisition_id"] button.fi-select-input-btn').first();
         this.purchaseQuotationAddProductButton = page.getByRole("button", { name: /Add Product/i }).first();
         this.purchaseQuotationProductSelect = page.locator('[wire\\:key*=".form.products."][wire\\:key*=".product_id."] button.fi-select-input-btn');
         this.purchaseQuotationQuantityInput = page.locator('input[id^="form.products."][id$=".product_qty"]');
         this.purchaseQuotationUnitPriceInput = page.locator('input[id^="form.products."][id$=".price_unit"]');
-        this.purchaseQuotationSaveButton = page.getByRole("button", { name: /^(Create|Save changes|Submit)$/i }).first();
+        // this.purchaseQuotationSaveButton = page.getByRole('button', { name: /^(Create|Save changes|Submit)$/i }).first();
+        this.purchaseQuotationSaveButton = page.locator('#key-bindings-1');
+        this.purchaseQuotationSavechangesButton = page.getByRole('button', { name: 'Save changes' });
         this.purchaseQuotationConfirmButton = page.getByRole("button", { name: /Confirm Order|Confirm/i }).first();
         this.purchaseQuotationBillsTable = page.locator("table, div.fi-ta-empty-state");
         this.purchaseQuotationReceiptsTable = page.locator("table, div.fi-ta-empty-state");
@@ -413,6 +422,8 @@ export class ErpLocators {
         this.purchaseAgreementProductSelect = page.locator('[wire\\:key*=".form.lines."][wire\\:key*=".product_id."] button.fi-select-input-btn');
         this.purchaseAgreementQuantityInput = page.locator('input[id^="form.lines."][id$=".qty"]');
         this.purchaseAgreementUnitPriceInput = page.locator('input[id^="form.lines."][id$=".price_unit"]');
+        this.purchaseAgreementEditButton = page.getByRole('link', { name: 'Edit' });
+        this.purchaseAgreementDeleteButton = page.getByRole('button', { name: 'Delete' });
         this.purchaseAgreementSaveButton = page.getByRole("button", { name: /^(Create|Save changes|Submit)$/i }).first();
         this.purchaseAgreementConfirmButton = page.getByRole("button", { name: /^Confirm$/i }).first();
         this.purchaseAgreementSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
