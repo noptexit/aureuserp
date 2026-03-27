@@ -2,7 +2,7 @@ import { test } from "../../setup";
 import { PurchaseFlowPage } from "../../pages/06_purchaseFlow";
 
 test.describe("Purchase Flow E2E", () => {
-    test.beforeEach(async ({ adminPage }) => {
+    test.beforeAll(async ({ adminPage }) => {
         const purchasePage = new PurchaseFlowPage(adminPage);
         await purchasePage.ensurePurchasesPluginInstalled();
     });
