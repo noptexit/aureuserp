@@ -108,8 +108,9 @@ export class PurchaseFlowPage {
     async editVendor(originalName: string, updates: PurchaseVendorData) {
         await this.gotoVendorsPage();
         await this.searchList(originalName);
-        await this.openRowActions();
-        await this.clickMenuAction(/Edit/i);
+        // await this.openRowActions();
+        // await this.clickMenuAction(/Edit/i);
+        await this.erpLocators.purchaseVendorEditButton.click();
 
         if (updates.name) {
             await this.erpLocators.purchaseVendorNameInput.fill(updates.name);
@@ -126,8 +127,9 @@ export class PurchaseFlowPage {
     async deleteVendor(name: string) {
         await this.gotoVendorsPage();
         await this.searchList(name);
-        await this.openRowActions();
-        await this.clickMenuAction(/Delete/i);
+        // await this.openRowActions();
+        // await this.clickMenuAction(/Delete/i);
+        await this.erpLocators.purchaseVendorDeleteButton.click();
         await this.erpLocators.purchaseConfirmDeleteButton.click();
         await this.expectSuccessToast();
     }
@@ -147,7 +149,8 @@ export class PurchaseFlowPage {
         await this.erpLocators.purchaseProductNameInput.fill(product.name);
         await this.erpLocators.purchaseProductPriceInput.fill(product.price);
 
-        await this.erpLocators.purchaseProductSaveButton.click();
+        // await this.erpLocators.purchaseProductSaveButton.click();
+        await this.erpLocators.purchaseProductCreateButton.click();
         await this.expectSuccessToast();
     }
 
@@ -155,7 +158,7 @@ export class PurchaseFlowPage {
         await this.gotoProductsPage();
         await this.erpLocators.purchaseProductNewCreateButton.click();
         await expect(this.page).toHaveURL(/products\/create/);
-        await this.erpLocators.purchaseProductSaveButton.click();
+        await this.erpLocators.purchaseProductCreateButton.click();
         await this.expectValidationErrors();
     }
 
@@ -163,7 +166,9 @@ export class PurchaseFlowPage {
         await this.gotoProductsPage();
         await this.searchList(originalName);
         await this.openRowActions();
-        await this.clickMenuAction(/Edit/i);
+        await this.erpLocators.purchaseProductEditButton.click();
+        // await this.clickMenuAction(/Edit/i);
+
 
         if (updates.name) {
             await this.erpLocators.purchaseProductNameInput.fill(updates.name);
@@ -181,7 +186,8 @@ export class PurchaseFlowPage {
         await this.gotoProductsPage();
         await this.searchList(name);
         await this.openRowActions();
-        await this.clickMenuAction(/Delete/i);
+        // await this.clickMenuAction(/Delete/i);
+        await this.erpLocators.purchaseProductDeleteButton.click();
         await this.erpLocators.purchaseConfirmDeleteButton.click();
         await this.expectSuccessToast();
     }

@@ -160,13 +160,19 @@ export class ErpLocators {
     readonly purchaseVendorEmailInput: Locator;
     readonly purchaseVendorSaveButton: Locator;
     readonly purchaseVendorSearchInput: Locator;
+    readonly purchaseVendorEditButton: Locator;
+    readonly purchaseVendorDeleteButton: Locator;
+
 
     readonly purchaseProductsTable: Locator;
     readonly purchaseProductNewCreateButton: Locator;
+    readonly purchaseProductCreateButton: Locator;
+    readonly purchaseProductEditButton: Locator;
     readonly purchaseProductNameInput: Locator;
     readonly purchaseProductPriceInput: Locator;
     readonly purchaseProductSaveButton: Locator;
     readonly purchaseProductSearchInput: Locator;
+    readonly purchaseProductDeleteButton: Locator;
 
     readonly purchaseQuotationsTable: Locator;
     readonly purchaseQuotationCreateButton: Locator;
@@ -367,15 +373,20 @@ export class ErpLocators {
         this.purchaseVendorNewCreateButton = page.locator("a,button").filter({ hasText: /new vendor|create vendor|add vendor|create/i }).first();
         this.purchaseVendorNameInput = page.locator('input[id="form.name"]').first();
         this.purchaseVendorEmailInput = page.locator('input[id="form.email"]').first();
-        this.purchaseVendorSaveButton = page.locator('#key-bindings-1');
+        this.purchaseVendorEditButton = page.getByRole('link', { name: 'Edit' }).first();
+        this.purchaseVendorDeleteButton = page.locator('button[id="key-bindings-1"]').first();
+        this.purchaseVendorSaveButton = page.locator('button[id="key-bindings-2"]').first();
         this.purchaseVendorSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
 
         this.purchaseProductsTable = page.locator("table, div.fi-ta-empty-state");
         this.purchaseProductNewCreateButton = page.locator("a,button").filter({ hasText: /new product|create product|add product|create/i }).first();
+        this.purchaseProductCreateButton = page.locator('button[id="key-bindings-1"]').first();
+        this.purchaseProductEditButton = page.getByRole('link', { name: 'Edit' });
         this.purchaseProductNameInput = page.locator('input[id="form.name"]').first();
         this.purchaseProductPriceInput = page.locator('input[id="form.price"]').first();
-        this.purchaseProductSaveButton = page.getByRole("button", { name: /^(Create|Save changes|Submit)$/i }).first();
+        this.purchaseProductSaveButton = page.locator('button[id="key-bindings-2"]').first();
         this.purchaseProductSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
+        this.purchaseProductDeleteButton = page.getByRole('button', { name: 'Delete' });
 
         this.purchaseQuotationsTable = page.locator("table, div.fi-ta-empty-state");
         this.purchaseQuotationCreateButton = page.locator("a,button").filter({ hasText: /new request for quotation|new quotation|create quotation|add quotation|create/i }).first();

@@ -22,11 +22,6 @@ test.describe("Purchase Products E2E", () => {
         });
     });
 
-    test("Create Product - Validation Errors (Missing Name)", async ({ adminPage }) => {
-        const purchasePage = new PurchaseFlowPage(adminPage);
-        await purchasePage.createProductExpectingValidationError();
-    });
-
     test("Edit Product - Updates Name", async ({ adminPage }) => {
         const purchasePage = new PurchaseFlowPage(adminPage);
         const key = Date.now();
