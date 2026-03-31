@@ -16,11 +16,11 @@ return new class extends Migration
             $table->boolean('to_backorder')->nullable();
 
             $table->foreignId('order_backorder_id')
-                ->constrained('manufacturing_order_backorders')
+                ->constrained(table: 'manufacturing_order_backorders', indexName: 'mfg_obl_backorder_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('manufacturing_order_id')
-                ->constrained('manufacturing_orders')
+                ->constrained(table: 'manufacturing_orders', indexName: 'mfg_obl_mo_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('creator_id')

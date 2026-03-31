@@ -13,14 +13,14 @@ return new class extends Migration
     {
         Schema::create('manufacturing_bill_of_material_line_attribute_values', function (Blueprint $table) {
             $table->foreignId('bill_of_material_line_id')
-                ->constrained('manufacturing_bill_of_material_lines')
+                ->constrained(table: 'manufacturing_bill_of_material_lines', indexName: 'mfg_bom_line_attr_line_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('product_attribute_value_id')
-                ->constrained('products_product_attribute_values')
+                ->constrained(table: 'products_product_attribute_values', indexName: 'mfg_bom_line_attr_pav_fk')
                 ->cascadeOnDelete();
 
-            $table->unique(['bill_of_material_line_id', 'product_attribute_value_id']);
+            $table->unique(['bill_of_material_line_id', 'product_attribute_value_id'], 'mfg_bom_line_attr_uq');
         });
     }
 

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->decimal('duration', 15, 4)->nullable();
 
             $table->foreignId('work_center_id')
-                ->constrained('manufacturing_work_centers')
+                ->constrained(table: 'manufacturing_work_centers', indexName: 'mfg_wc_prod_log_wc_fk')
                 ->restrictOnDelete();
 
             $table->foreignId('company_id')
@@ -29,16 +29,16 @@ return new class extends Migration
 
             $table->foreignId('work_order_id')
                 ->nullable()
-                ->constrained('manufacturing_work_orders')
+                ->constrained(table: 'manufacturing_work_orders', indexName: 'mfg_wc_prod_log_wo_fk')
                 ->nullOnDelete();
 
             $table->foreignId('assigned_user_id')
                 ->nullable()
-                ->constrained('users')
+                ->constrained(table: 'users', indexName: 'mfg_wc_prod_log_user_fk')
                 ->nullOnDelete();
 
             $table->foreignId('loss_id')
-                ->constrained('manufacturing_work_center_productivity_losses')
+                ->constrained(table: 'manufacturing_work_center_productivity_losses', indexName: 'mfg_wc_prod_log_loss_fk')
                 ->restrictOnDelete();
 
             $table->foreignId('creator_id')

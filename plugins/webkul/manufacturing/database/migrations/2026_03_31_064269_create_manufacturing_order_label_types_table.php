@@ -18,7 +18,7 @@ return new class extends Migration
 
             $table->string('label_type');
 
-            $table->unique(['manufacturing_order_id', 'label_type']);
+            $table->unique(['manufacturing_order_id', 'label_type'], 'mfg_order_label_type_uq');
         });
     }
 

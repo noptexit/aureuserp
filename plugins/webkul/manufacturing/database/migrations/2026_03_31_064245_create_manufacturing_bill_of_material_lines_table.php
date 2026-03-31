@@ -18,7 +18,7 @@ return new class extends Migration
             $table->boolean('is_manual_consumption')->default(false);
 
             $table->foreignId('bill_of_material_id')
-                ->constrained('manufacturing_bills_of_materials')
+                ->constrained(table: 'manufacturing_bills_of_materials', indexName: 'mfg_bom_lines_bom_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('product_id')

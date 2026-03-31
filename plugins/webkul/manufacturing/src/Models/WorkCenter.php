@@ -81,6 +81,11 @@ class WorkCenter extends Model implements Sortable
         return $this->hasMany(Operation::class, 'work_center_id');
     }
 
+    public function capacities(): HasMany
+    {
+        return $this->hasMany(WorkCenterCapacity::class, 'work_center_id');
+    }
+
     public function workOrders(): HasMany
     {
         return $this->hasMany(WorkOrder::class, 'work_center_id');
@@ -111,6 +116,12 @@ class WorkCenter extends Model implements Sortable
             $workCenter->creator_id ??= $authUser?->id;
             $workCenter->company_id ??= $authUser?->default_company_id;
             $workCenter->working_state ??= WorkCenterWorkingState::NORMAL;
+            $workCenter->time_efficiency ??= 100;
+            $workCenter->default_capacity ??= 1;
+            $workCenter->costs_per_hour ??= 0;
+            $workCenter->setup_time ??= 0;
+            $workCenter->cleanup_time ??= 0;
+            $workCenter->oee_target ??= 90;
         });
     }
 }

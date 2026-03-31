@@ -13,14 +13,14 @@ return new class extends Migration
     {
         Schema::create('manufacturing_work_center_alternatives', function (Blueprint $table) {
             $table->foreignId('work_center_id')
-                ->constrained('manufacturing_work_centers')
+                ->constrained(table: 'manufacturing_work_centers', indexName: 'mfg_wc_alt_wc_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('alternative_work_center_id')
-                ->constrained('manufacturing_work_centers')
+                ->constrained(table: 'manufacturing_work_centers', indexName: 'mfg_wc_alt_alt_wc_fk')
                 ->cascadeOnDelete();
 
-            $table->unique(['work_center_id', 'alternative_work_center_id']);
+            $table->unique(['work_center_id', 'alternative_work_center_id'], 'mfg_wc_alt_uq');
         });
     }
 

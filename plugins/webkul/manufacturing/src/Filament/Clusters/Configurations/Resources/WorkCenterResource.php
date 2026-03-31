@@ -13,14 +13,20 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\Fieldset;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
+use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Resources\Pages\Page;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Fieldset as FormFieldset;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\TextSize;
@@ -42,6 +48,9 @@ use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterRe
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ListWorkCenters;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ViewWorkCenter;
 use Webkul\Manufacturing\Models\WorkCenter;
+use Webkul\Product\Models\Product;
+use Webkul\Support\Filament\Forms\Components\Repeater;
+use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn;
 
 class WorkCenterResource extends Resource
 {
@@ -70,6 +79,11 @@ class WorkCenterResource extends Resource
         return __('manufacturing::filament/clusters/configurations/resources/work-center.navigation.title');
     }
 
+    public static function getSubNavigationPosition(): SubNavigationPosition
+    {
+        return SubNavigationPosition::Start;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -84,82 +98,203 @@ class WorkCenterResource extends Resource
                                     ->maxLength(255)
                                     ->autofocus()
                                     ->placeholder(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.name-placeholder'))
-                                    ->extraInputAttributes(['style' => 'font-size: 1.5rem;height: 3rem;']),
+                                    ->extraInputAttributes(['style' => 'font-size: 1.5rem;height: 3rem;'])
+                                    ->columnSpanFull(),
 
                                 TextInput::make('code')
                                     ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.code'))
                                     ->maxLength(255)
                                     ->placeholder(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.code-placeholder')),
 
-                                Group::make()
-                                    ->schema([
-                                        Select::make('company_id')
-                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.company'))
-                                            ->relationship('company', 'name')
-                                            ->searchable()
-                                            ->preload()
-                                            ->required()
-                                            ->disabled(fn (): bool => filled(Auth::user()?->default_company_id))
-                                            ->default(Auth::user()?->default_company_id),
-                                        Select::make('calendar_id')
-                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.calendar'))
-                                            ->options(fn (): array => Calendar::withTrashed()->pluck('name', 'id')->all())
-                                            ->searchable()
-                                            ->preload(),
-                                    ])
-                                    ->columns(2),
+                                Select::make('working_state')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.working-state'))
+                                    ->options(WorkCenterWorkingState::class)
+                                    ->default(WorkCenterWorkingState::NORMAL)
+                                    ->required(),
+
+                                Select::make('tags')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.tags'))
+                                    ->relationship('tags', 'name')
+                                    ->multiple()
+                                    ->searchable()
+                                    ->preload(),
+
+                                Select::make('alternativeWorkCenters')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.alternative-work-centers'))
+                                    ->relationship('alternativeWorkCenters', 'name')
+                                    ->multiple()
+                                    ->searchable()
+                                    ->preload(),
+
+                                Select::make('calendar_id')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.calendar'))
+                                    ->options(fn (): array => Calendar::withTrashed()->pluck('name', 'id')->all())
+                                    ->searchable()
+                                    ->preload(),
+
+                                Select::make('company_id')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.company'))
+                                    ->relationship('company', 'name')
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->disabled(fn (): bool => filled(Auth::user()?->default_company_id))
+                                    ->default(Auth::user()?->default_company_id),
 
                                 Textarea::make('note')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.note'))
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.description.fields.note'))
+                                    ->placeholder(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.description.fields.note-placeholder'))
                                     ->rows(6)
                                     ->columnSpanFull(),
                             ])
                             ->columns(2),
+
+                        Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.title'))
+                            ->schema([
+                                Repeater::make('capacities')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.fields.records'))
+                                    ->hiddenLabel()
+                                    ->relationship('capacities')
+                                    ->table([
+                                        TableColumn::make('product_id')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.product'))
+                                            ->resizable()
+                                            ->markAsRequired(),
+                                        TableColumn::make('product_uom')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.product-uom'))
+                                            ->resizable(),
+                                        TableColumn::make('capacity')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.capacity'))
+                                            ->resizable(),
+                                        TableColumn::make('time_start')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.setup-time'))
+                                            ->resizable()
+                                            ->wrapHeader(),
+                                        TableColumn::make('time_stop')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.cleanup-time'))
+                                            ->resizable()
+                                            ->wrapHeader(),
+                                    ])
+                                    ->schema([
+                                        Select::make('product_id')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.product'))
+                                            ->relationship('product', 'name')
+                                            ->searchable()
+                                            ->preload()
+                                            ->wrapOptionLabels(false)
+                                            ->live()
+                                            ->required(),
+                                        Placeholder::make('product_uom')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.product-uom'))
+                                            ->content(function (Get $get): string {
+                                                return Product::query()
+                                                    ->with('uom')
+                                                    ->find($get('product_id'))
+                                                    ?->uom
+                                                    ?->name ?? '—';
+                                            }),
+                                        TextInput::make('capacity')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.capacity'))
+                                            ->numeric()
+                                            ->default(1)
+                                            ->required()
+                                            ->minValue(0)
+                                            ->step('0.0001'),
+                                        TextInput::make('time_start')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.setup-time'))
+                                            ->default('00:00')
+                                            ->rule('regex:/^\d+:\d{2}$/')
+                                            ->placeholder('00:00')
+                                            ->afterStateHydrated(function (TextInput $component, mixed $state): void {
+                                                $component->state(static::formatMinutesAsTime($state));
+                                            })
+                                            ->dehydrateStateUsing(fn (?string $state): string => static::parseTimeToMinutes($state)),
+                                        TextInput::make('time_stop')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.cleanup-time'))
+                                            ->default('00:00')
+                                            ->rule('regex:/^\d+:\d{2}$/')
+                                            ->placeholder('00:00')
+                                            ->afterStateHydrated(function (TextInput $component, mixed $state): void {
+                                                $component->state(static::formatMinutesAsTime($state));
+                                            })
+                                            ->dehydrateStateUsing(fn (?string $state): string => static::parseTimeToMinutes($state)),
+                                    ])
+                                    ->addActionLabel(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.actions.add'))
+                                    ->reorderable(false)
+                                    ->defaultItems(0)
+                                    ->columnSpanFull(),
+                            ]),
                     ])
                     ->columnSpan(['lg' => 2]),
 
                 Group::make()
                     ->schema([
-                        Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.title'))
+                        Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.title'))
                             ->schema([
-                                Select::make('working_state')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.working-state'))
-                                    ->options(WorkCenterWorkingState::class)
-                                    ->default(WorkCenterWorkingState::NORMAL)
-                                    ->required(),
-                                TextInput::make('default_capacity')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.default-capacity'))
-                                    ->numeric()
-                                    ->minValue(1),
-                                TextInput::make('time_efficiency')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.time-efficiency'))
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->maxValue(100)
-                                    ->suffix('%'),
-                                TextInput::make('oee_target')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.oee-target'))
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->maxValue(100)
-                                    ->suffix('%'),
-                                TextInput::make('costs_per_hour')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.costs-per-hour'))
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->prefix('$'),
-                                TextInput::make('setup_time')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.setup-time'))
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.time-suffix')),
-                                TextInput::make('cleanup_time')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.cleanup-time'))
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.configuration.fields.time-suffix')),
+                                FormFieldset::make(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fieldsets.production-information'))
+                                    ->schema([
+                                        TextInput::make('time_efficiency')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.time-efficiency'))
+                                            ->numeric()
+                                            ->default(100)
+                                            ->minValue(0)
+                                            ->maxValue(100)
+                                            ->step('0.01')
+                                            ->suffix('%'),
+
+                                        TextInput::make('default_capacity')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.default-capacity'))
+                                            ->numeric()
+                                            ->default(1)
+                                            ->minValue(1)
+                                            ->step('1'),
+
+                                        TextInput::make('oee_target')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.oee-target'))
+                                            ->numeric()
+                                            ->default(90)
+                                            ->minValue(0)
+                                            ->maxValue(100)
+                                            ->step('0.01')
+                                            ->suffix('%'),
+
+                                        TextInput::make('setup_time')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.setup-time'))
+                                            ->default('00:00')
+                                            ->rule('regex:/^\d+:\d{2}$/')
+                                            ->placeholder('00:00')
+                                            ->afterStateHydrated(function (TextInput $component, mixed $state): void {
+                                                $component->state(static::formatMinutesAsTime($state));
+                                            })
+                                            ->dehydrateStateUsing(fn (?string $state): string => static::parseTimeToMinutes($state))
+                                            ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.time-suffix')),
+
+                                        TextInput::make('cleanup_time')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.cleanup-time'))
+                                            ->default('00:00')
+                                            ->rule('regex:/^\d+:\d{2}$/')
+                                            ->placeholder('00:00')
+                                            ->afterStateHydrated(function (TextInput $component, mixed $state): void {
+                                                $component->state(static::formatMinutesAsTime($state));
+                                            })
+                                            ->dehydrateStateUsing(fn (?string $state): string => static::parseTimeToMinutes($state))
+                                            ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.time-suffix')),
+                                    ])
+                                    ->columns(1),
+
+                                FormFieldset::make(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fieldsets.costing-information'))
+                                    ->schema([
+                                        TextInput::make('costs_per_hour')
+                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.costs-per-hour'))
+                                            ->numeric()
+                                            ->default(0)
+                                            ->minValue(0)
+                                            ->step('0.01')
+                                            ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.cost-suffix')),
+                                    ])
+                                    ->columns(1),
                             ])
-                            ->columns(2),
+                            ->columns(1),
                     ])
                     ->columnSpan(['lg' => 1]),
             ])
@@ -325,94 +460,106 @@ class WorkCenterResource extends Resource
     {
         return $schema
             ->components([
-                Group::make()
+                Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.title'))
                     ->schema([
-                        Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.title'))
-                            ->schema([
-                                TextEntry::make('name')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.name'))
-                                    ->size(TextSize::Large)
-                                    ->weight(FontWeight::Bold)
-                                    ->icon('heroicon-o-cog-6-tooth'),
-                                TextEntry::make('code')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.code'))
-                                    ->placeholder('—')
-                                    ->icon('heroicon-m-hashtag'),
-                                Group::make()
-                                    ->schema([
-                                        TextEntry::make('company.name')
-                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.company'))
-                                            ->placeholder('—')
-                                            ->icon('heroicon-o-building-office'),
-                                        TextEntry::make('calendar.name')
-                                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.calendar'))
-                                            ->placeholder('—')
-                                            ->icon('heroicon-o-clock'),
-                                    ])
-                                    ->columns(2),
-                                TextEntry::make('note')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.note'))
-                                    ->placeholder('—')
-                                    ->columnSpanFull(),
-                            ])
-                            ->columns(2),
+                        TextEntry::make('name')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.name'))
+                            ->size(TextSize::Large)
+                            ->weight(FontWeight::Bold)
+                            ->icon('heroicon-o-cog-6-tooth')
+                            ->columnSpan(2),
+                        TextEntry::make('code')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.code'))
+                            ->placeholder('—'),
+                        TextEntry::make('working_state')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.working-state'))
+                            ->badge()
+                            ->formatStateUsing(fn (?WorkCenterWorkingState $state): ?string => $state?->getLabel())
+                            ->color(fn (?WorkCenterWorkingState $state): string => $state?->getColor() ?? 'gray'),
+                        TextEntry::make('tags.name')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.tags'))
+                            ->badge()
+                            ->separator(',')
+                            ->placeholder('—'),
+                        TextEntry::make('alternativeWorkCenters.name')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.alternative-work-centers'))
+                            ->listWithLineBreaks()
+                            ->placeholder('—'),
+                        TextEntry::make('calendar.name')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.calendar'))
+                            ->placeholder('—'),
+                        TextEntry::make('company.name')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.general.entries.company'))
+                            ->placeholder('—'),
                     ])
-                    ->columnSpan(['lg' => 2]),
+                    ->columns(4),
 
-                Group::make()
+                Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.title'))
                     ->schema([
-                        Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.title'))
+                        Fieldset::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.fieldsets.production-information'))
                             ->schema([
-                                TextEntry::make('working_state')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.working-state'))
-                                    ->badge()
-                                    ->formatStateUsing(fn (?WorkCenterWorkingState $state): ?string => $state?->getLabel())
-                                    ->color(fn (?WorkCenterWorkingState $state): string => $state?->getColor() ?? 'gray'),
                                 TextEntry::make('default_capacity')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.default-capacity'))
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.default-capacity'))
+                                    ->formatStateUsing(fn (mixed $state): string => number_format((float) ($state ?? 1), 2))
                                     ->placeholder('—'),
                                 TextEntry::make('time_efficiency')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.time-efficiency'))
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.time-efficiency'))
+                                    ->formatStateUsing(fn (mixed $state): string => number_format((float) ($state ?? 100), 2))
                                     ->suffix('%')
                                     ->placeholder('—'),
                                 TextEntry::make('oee_target')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.oee-target'))
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.oee-target'))
+                                    ->formatStateUsing(fn (mixed $state): string => number_format((float) ($state ?? 90), 2))
                                     ->suffix('%')
                                     ->placeholder('—'),
-                                TextEntry::make('costs_per_hour')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.costs-per-hour'))
-                                    ->numeric(decimalPlaces: 4)
-                                    ->placeholder('—'),
                                 TextEntry::make('setup_time')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.setup-time'))
-                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.time-suffix'))
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.setup-time'))
+                                    ->formatStateUsing(fn (mixed $state): string => static::formatMinutesAsTime($state))
+                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.time-suffix'))
                                     ->placeholder('—'),
                                 TextEntry::make('cleanup_time')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.cleanup-time'))
-                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.configuration.entries.time-suffix'))
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.cleanup-time'))
+                                    ->formatStateUsing(fn (mixed $state): string => static::formatMinutesAsTime($state))
+                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.time-suffix'))
                                     ->placeholder('—'),
                             ])
-                            ->columns(1),
+                            ->columnSpan(['lg' => 2]),
 
-                        Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.title'))
+                        Fieldset::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.fieldsets.costing-information'))
                             ->schema([
-                                TextEntry::make('creator.name')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.entries.created-by'))
-                                    ->placeholder('—')
-                                    ->icon('heroicon-o-user'),
-                                TextEntry::make('created_at')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.entries.created-at'))
-                                    ->dateTime()
-                                    ->icon('heroicon-m-calendar'),
-                                TextEntry::make('updated_at')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.entries.last-updated'))
-                                    ->dateTime()
-                                    ->icon('heroicon-m-clock'),
+                                TextEntry::make('costs_per_hour')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.costs-per-hour'))
+                                    ->formatStateUsing(fn (mixed $state): string => number_format((float) ($state ?? 0), 2))
+                                    ->suffix(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.information.entries.cost-suffix'))
+                                    ->placeholder('—'),
                             ]),
                     ])
-                    ->columnSpan(['lg' => 1]),
+                    ->columns(3),
+
+                Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.description.title'))
+                    ->schema([
+                        TextEntry::make('note')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.description.entries.note'))
+                            ->placeholder('—'),
+                    ]),
+
+                Section::make(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.title'))
+                    ->schema([
+                        TextEntry::make('creator.name')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.entries.created-by'))
+                            ->placeholder('—')
+                            ->icon('heroicon-o-user'),
+                        TextEntry::make('created_at')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.entries.created-at'))
+                            ->dateTime()
+                            ->icon('heroicon-m-calendar'),
+                        TextEntry::make('updated_at')
+                            ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.infolist.sections.record-information.entries.last-updated'))
+                            ->dateTime()
+                            ->icon('heroicon-m-clock'),
+                    ]),
             ])
-            ->columns(3);
+            ->columns(1);
     }
 
     public static function getEloquentQuery(): Builder
@@ -431,5 +578,35 @@ class WorkCenterResource extends Resource
             'view'   => ViewWorkCenter::route('/{record}'),
             'edit'   => EditWorkCenter::route('/{record}/edit'),
         ];
+    }
+
+    public static function getRecordSubNavigation(Page $page): array
+    {
+        return $page->generateNavigationItems([
+            ViewWorkCenter::class,
+            EditWorkCenter::class,
+        ]);
+    }
+
+    protected static function formatMinutesAsTime(mixed $state): string
+    {
+        $minutes = max(0, (int) round((float) ($state ?? 0)));
+        $hours = intdiv($minutes, 60);
+        $remainingMinutes = $minutes % 60;
+
+        return sprintf('%02d:%02d', $hours, $remainingMinutes);
+    }
+
+    protected static function parseTimeToMinutes(?string $state): string
+    {
+        if (! is_string($state) || ! preg_match('/^(?<hours>\d+):(?<minutes>\d{2})$/', $state, $matches)) {
+            return '0';
+        }
+
+        if ((int) $matches['minutes'] > 59) {
+            return '0';
+        }
+
+        return (string) (((int) $matches['hours'] * 60) + (int) $matches['minutes']);
     }
 }

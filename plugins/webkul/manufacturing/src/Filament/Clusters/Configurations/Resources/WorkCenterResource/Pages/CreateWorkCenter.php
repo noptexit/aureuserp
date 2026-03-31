@@ -3,12 +3,32 @@
 namespace Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages;
 
 use Filament\Notifications\Notification;
+use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\CreateRecord;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource;
 
 class CreateWorkCenter extends CreateRecord
 {
     protected static string $resource = WorkCenterResource::class;
+
+    public static function getSubNavigationPosition(): SubNavigationPosition
+    {
+        return SubNavigationPosition::Start;
+    }
+
+    public function getSubNavigation(): array
+    {
+        if (filled($cluster = static::getCluster())) {
+            return $this->generateNavigationItems($cluster::getClusteredComponents());
+        }
+
+        return [];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+    }
 
     protected function getCreatedNotification(): ?Notification
     {

@@ -13,14 +13,14 @@ return new class extends Migration
     {
         Schema::create('manufacturing_work_order_dependencies', function (Blueprint $table) {
             $table->foreignId('work_order_id')
-                ->constrained('manufacturing_work_orders')
+                ->constrained(table: 'manufacturing_work_orders', indexName: 'mfg_wo_dep_wo_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('depends_on_work_order_id')
-                ->constrained('manufacturing_work_orders')
+                ->constrained(table: 'manufacturing_work_orders', indexName: 'mfg_wo_dep_depends_fk')
                 ->cascadeOnDelete();
 
-            $table->unique(['work_order_id', 'depends_on_work_order_id']);
+            $table->unique(['work_order_id', 'depends_on_work_order_id'], 'mfg_wo_dep_uq');
         });
     }
 

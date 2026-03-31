@@ -19,7 +19,7 @@ return new class extends Migration
 
             $table->foreignId('bill_of_material_id')
                 ->nullable()
-                ->constrained('manufacturing_bills_of_materials')
+                ->constrained(table: 'manufacturing_bills_of_materials', indexName: 'mfg_bom_byprod_bom_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('product_id')

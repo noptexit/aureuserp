@@ -11,27 +11,58 @@ return [
             'general' => [
                 'title'  => 'General',
                 'fields' => [
-                    'name'             => 'Name',
-                    'name-placeholder' => 'eg. Assembly Line 1',
-                    'code'             => 'Code',
-                    'code-placeholder' => 'eg. AL1',
-                    'company'          => 'Company',
-                    'calendar'         => 'Working Hours',
-                    'note'             => 'Description',
+                    'name'                     => 'Name',
+                    'name-placeholder'         => 'eg. Assembly Line 1',
+                    'code'                     => 'Code',
+                    'code-placeholder'         => 'eg. AL1',
+                    'working-state'            => 'Working State',
+                    'tags'                     => 'Tag',
+                    'alternative-work-centers' => 'Alternative Work Centers',
+                    'company'                  => 'Company',
+                    'calendar'                 => 'Working Hours',
                 ],
             ],
 
-            'configuration' => [
-                'title'  => 'Configuration',
+            'information' => [
+                'title'     => 'General Information',
+                'fieldsets' => [
+                    'production-information' => 'Production Information',
+                    'costing-information'    => 'Costing Information',
+                ],
                 'fields' => [
-                    'working-state'    => 'Working State',
                     'default-capacity' => 'Default Capacity',
                     'time-efficiency'  => 'Time Efficiency',
                     'oee-target'       => 'OEE Target',
                     'costs-per-hour'   => 'Cost per Hour',
+                    'cost-suffix'      => 'per hour',
                     'setup-time'       => 'Setup Time',
                     'cleanup-time'     => 'Cleanup Time',
                     'time-suffix'      => 'minutes',
+                ],
+            ],
+
+            'description' => [
+                'title'  => 'Description',
+                'fields' => [
+                    'note'             => 'Description',
+                    'note-placeholder' => 'Description of the work center...',
+                ],
+            ],
+
+            'specific-capacity' => [
+                'title'  => 'Specific Capacity',
+                'fields' => [
+                    'records' => 'Specific Capacity',
+                ],
+                'columns' => [
+                    'product'      => 'Product',
+                    'product-uom'  => 'UOM',
+                    'capacity'     => 'Capacity',
+                    'setup-time'   => 'Setup Time',
+                    'cleanup-time' => 'Cleanup Time',
+                ],
+                'actions' => [
+                    'add' => 'Add a line',
                 ],
             ],
         ],
@@ -128,26 +159,39 @@ return [
                 'title' => 'General Information',
 
                 'entries' => [
-                    'name'     => 'Work Center',
-                    'code'     => 'Code',
-                    'company'  => 'Company',
-                    'calendar' => 'Working Hours',
-                    'note'     => 'Description',
+                    'name'                     => 'Work Center Name',
+                    'code'                     => 'Code',
+                    'working-state'            => 'Working State',
+                    'tags'                     => 'Tag',
+                    'alternative-work-centers' => 'Alternative Work Centers',
+                    'company'                  => 'Company',
+                    'calendar'                 => 'Working Hours',
                 ],
             ],
 
-            'configuration' => [
-                'title' => 'Configuration',
+            'information' => [
+                'title'     => 'General Information',
+                'fieldsets' => [
+                    'production-information' => 'Production Information',
+                    'costing-information'    => 'Costing Information',
+                ],
 
                 'entries' => [
-                    'working-state'    => 'Working State',
                     'default-capacity' => 'Default Capacity',
                     'time-efficiency'  => 'Time Efficiency',
                     'oee-target'       => 'OEE Target',
                     'costs-per-hour'   => 'Cost per Hour',
+                    'cost-suffix'      => 'per work center',
                     'setup-time'       => 'Setup Time',
                     'cleanup-time'     => 'Cleanup Time',
                     'time-suffix'      => 'minutes',
+                ],
+            ],
+
+            'description' => [
+                'title'   => 'Description',
+                'entries' => [
+                    'note' => 'Description',
                 ],
             ],
 

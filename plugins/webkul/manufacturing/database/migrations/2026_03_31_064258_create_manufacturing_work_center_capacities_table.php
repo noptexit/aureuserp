@@ -32,7 +32,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique(['work_center_id', 'product_id']);
+            $table->unique(['work_center_id', 'product_id'], 'mfg_wc_caps_wc_prod_uq');
         });
     }
 

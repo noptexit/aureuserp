@@ -20,7 +20,7 @@ return new class extends Migration
 
             $table->foreignId('loss_type_id')
                 ->nullable()
-                ->constrained('manufacturing_work_center_loss_types')
+                ->constrained(table: 'manufacturing_work_center_loss_types', indexName: 'mfg_wc_prod_loss_type_fk')
                 ->nullOnDelete();
 
             $table->foreignId('creator_id')

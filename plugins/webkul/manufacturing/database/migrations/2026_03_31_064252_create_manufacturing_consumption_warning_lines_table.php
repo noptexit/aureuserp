@@ -17,11 +17,11 @@ return new class extends Migration
             $table->decimal('product_expected_quantity', 15, 4)->nullable();
 
             $table->foreignId('consumption_warning_id')
-                ->constrained('manufacturing_consumption_warnings')
+                ->constrained(table: 'manufacturing_consumption_warnings', indexName: 'mfg_cwl_warn_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('manufacturing_order_id')
-                ->constrained('manufacturing_orders')
+                ->constrained(table: 'manufacturing_orders', indexName: 'mfg_cwl_order_fk')
                 ->cascadeOnDelete();
 
             $table->foreignId('product_id')
