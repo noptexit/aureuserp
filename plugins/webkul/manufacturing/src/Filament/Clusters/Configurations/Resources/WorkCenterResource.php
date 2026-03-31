@@ -13,6 +13,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -48,6 +49,7 @@ use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterRe
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ListWorkCenters;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ViewWorkCenter;
 use Webkul\Manufacturing\Models\WorkCenter;
+use Webkul\Manufacturing\Models\WorkCenterTag;
 use Webkul\Product\Models\Product;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn;
@@ -106,18 +108,27 @@ class WorkCenterResource extends Resource
                                     ->maxLength(255)
                                     ->placeholder(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.code-placeholder')),
 
-                                Select::make('working_state')
-                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.working-state'))
-                                    ->options(WorkCenterWorkingState::class)
-                                    ->default(WorkCenterWorkingState::NORMAL)
-                                    ->required(),
-
                                 Select::make('tags')
                                     ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.tags'))
                                     ->relationship('tags', 'name')
                                     ->multiple()
                                     ->searchable()
-                                    ->preload(),
+                                    ->preload()
+                                    ->createOptionForm([
+                                        Group::make()
+                                            ->schema([
+                                                TextInput::make('name')
+                                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.name'))
+                                                    ->required()
+                                                    ->maxLength(255)
+                                                    ->unique(WorkCenterTag::query()->getModel()->getTable()),
+                                                ColorPicker::make('color')
+                                                    ->default('#808080')
+                                                    ->hexColor()
+                                                    ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.color')),
+                                            ])
+                                            ->columns(2),
+                                    ]),
 
                                 Select::make('alternativeWorkCenters')
                                     ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.general.fields.alternative-work-centers'))

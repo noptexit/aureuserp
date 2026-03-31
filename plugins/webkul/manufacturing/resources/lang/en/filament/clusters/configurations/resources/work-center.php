@@ -16,6 +16,7 @@ return [
                     'code'                     => 'Code',
                     'code-placeholder'         => 'eg. AL1',
                     'working-state'            => 'Working State',
+                    'color'                    => 'Color',
                     'tags'                     => 'Tag',
                     'alternative-work-centers' => 'Alternative Work Centers',
                     'company'                  => 'Company',
