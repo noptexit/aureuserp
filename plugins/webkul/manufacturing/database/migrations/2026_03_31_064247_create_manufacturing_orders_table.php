@@ -22,7 +22,7 @@ return new class extends Migration
             $table->decimal('quantity', 15, 4)->default(1);
             $table->decimal('quantity_in_progress', 15, 4)->default(0);
             $table->timestamp('deadline_at')->nullable();
-            $table->timestamp('started_at');
+            $table->timestamp('started_at')->useCurrent();
             $table->timestamp('finished_at')->nullable();
             $table->unsignedBigInteger('production_location_id')->nullable()->index();
             $table->unsignedBigInteger('procurement_group_id')->nullable()->index();
