@@ -13,11 +13,12 @@ use Webkul\Manufacturing\Enums\BillOfMaterialReadyToProduce;
 use Webkul\Manufacturing\Enums\BillOfMaterialType;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\BillsOfMaterialResource;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource;
+use Webkul\Support\Filament\Concerns\HasRepeaterColumnManager;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
 class ManageBillsOfMaterials extends ManageRelatedRecords
 {
-    use HasRecordNavigationTabs;
+    use HasRecordNavigationTabs, HasRepeaterColumnManager;
 
     protected static string $resource = ProductResource::class;
 

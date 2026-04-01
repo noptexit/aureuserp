@@ -5,11 +5,12 @@ namespace Webkul\Manufacturing\Filament\Clusters\Products\Resources\BillsOfMater
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\BillsOfMaterialResource;
+use Webkul\Support\Filament\Concerns\HasRepeaterColumnManager;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
 class EditBillOfMaterial extends EditRecord
 {
-    use HasRecordNavigationTabs;
+    use HasRecordNavigationTabs, HasRepeaterColumnManager;
 
     protected static string $resource = BillsOfMaterialResource::class;
 

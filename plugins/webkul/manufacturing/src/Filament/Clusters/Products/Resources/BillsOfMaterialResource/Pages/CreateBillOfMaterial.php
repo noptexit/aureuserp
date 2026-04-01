@@ -6,9 +6,12 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\CreateRecord;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\BillsOfMaterialResource;
+use Webkul\Support\Filament\Concerns\HasRepeaterColumnManager;
 
 class CreateBillOfMaterial extends CreateRecord
 {
+    use HasRepeaterColumnManager;
+
     protected static string $resource = BillsOfMaterialResource::class;
 
     public static function getSubNavigationPosition(): SubNavigationPosition
