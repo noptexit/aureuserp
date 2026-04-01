@@ -179,7 +179,7 @@
                             </td>
 
                             <td class="px-4 py-3 whitespace-nowrap text-right font-semibold text-gray-950 dark:text-white">
-                                ${{ number_format($this->getUnitBomCost(), 2) }}
+                                ${{ number_format($this->getDisplayedUnitBomCost(), 2) }}
                             </td>
 
                             <td class="px-4 py-3 whitespace-nowrap text-right font-semibold text-gray-950 dark:text-white">

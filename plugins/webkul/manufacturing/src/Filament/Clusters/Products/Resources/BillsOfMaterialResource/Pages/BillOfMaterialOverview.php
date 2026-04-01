@@ -110,6 +110,7 @@ class BillOfMaterialOverview extends Page implements HasForms
             $billOfMaterial->getMatchedLines($selectedAttributeValueIds)
                 ->map(function (BillOfMaterialLine $line) use ($quantityMultiplier): array {
                     $unitCost = (float) ($line->product?->cost ?? 0);
+                    $totalCost = $unitCost * ((float) $line->quantity * $quantityMultiplier);
 
                     return [
                         'label'        => $line->product?->name ?? '—',
@@ -117,8 +118,8 @@ class BillOfMaterialOverview extends Page implements HasForms
                         'uom'          => $line->uom?->name ?? $line->product?->uom?->name ?? '—',
                         'lead_time'    => null,
                         'route'        => '—',
-                        'bom_cost'     => $unitCost * ((float) $line->quantity * $quantityMultiplier),
-                        'product_cost' => $unitCost,
+                        'bom_cost'     => $totalCost,
+                        'product_cost' => $totalCost,
                         'is_parent'    => false,
                     ];
                 }),
@@ -224,6 +225,17 @@ class BillOfMaterialOverview extends Page implements HasForms
             $this->getSelectedVariantAttributeValueIds(),
             $this->getOverviewProduct(),
         );
+    }
+
+    public function getDisplayedUnitBomCost(): float
+    {
+        $overviewQuantity = $this->getOverviewQuantity();
+
+        if ($overviewQuantity <= 0) {
+            return 0.0;
+        }
+
+        return round($this->getTotalBomCost() / $overviewQuantity, 2);
     }
 
     public function hasVariantSelector(): bool
