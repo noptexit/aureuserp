@@ -152,13 +152,19 @@ class BillOfMaterial extends Model
         $quantityMultiplier = $this->getQuantityMultiplier($quantity);
 
         return (float) $this->getMatchedLines($selectedAttributeValueIds)
-            ->sum(fn (BillOfMaterialLine $line): float => ((float) $line->quantity * $quantityMultiplier) * (float) ($line->product?->cost ?? 0));
+            ->sum(fn (BillOfMaterialLine $line): float => round(
+                ((float) $line->quantity * $quantityMultiplier) * (float) ($line->product?->cost ?? 0),
+                2,
+            ));
     }
 
     public function getUnitComponentCost(array $selectedAttributeValueIds = []): float
     {
         return (float) $this->getMatchedLines($selectedAttributeValueIds)
-            ->sum(fn (BillOfMaterialLine $line): float => (float) $line->quantity * (float) ($line->product?->cost ?? 0));
+            ->sum(fn (BillOfMaterialLine $line): float => round(
+                (float) $line->quantity * (float) ($line->product?->cost ?? 0),
+                2,
+            ));
     }
 
     public function getOperationDuration(float $quantity, array $selectedAttributeValueIds = [], ?Product $product = null): float
@@ -170,13 +176,19 @@ class BillOfMaterial extends Model
     public function getOperationCost(float $quantity, array $selectedAttributeValueIds = [], ?Product $product = null): float
     {
         return (float) $this->getMatchedOperations($selectedAttributeValueIds)
-            ->sum(fn (Operation $operation): float => $operation->getExpectedCost($product ?? $this->product, $quantity));
+            ->sum(fn (Operation $operation): float => round(
+                $operation->getExpectedCost($product ?? $this->product, $quantity),
+                2,
+            ));
     }
 
     public function getUnitOperationCost(array $selectedAttributeValueIds = [], ?Product $product = null): float
     {
         return (float) $this->getMatchedOperations($selectedAttributeValueIds)
-            ->sum(fn (Operation $operation): float => $operation->getExpectedCost($product ?? $this->product, (float) ($this->quantity ?? 1)));
+            ->sum(fn (Operation $operation): float => round(
+                $operation->getExpectedCost($product ?? $this->product, (float) ($this->quantity ?? 1)),
+                2,
+            ));
     }
 
     public function getTotalCost(float $quantity, array $selectedAttributeValueIds = [], ?Product $product = null): float
