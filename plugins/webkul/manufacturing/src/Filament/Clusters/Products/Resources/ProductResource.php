@@ -2,6 +2,7 @@
 
 namespace Webkul\Manufacturing\Filament\Clusters\Products\Resources;
 
+use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\Page;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource as BaseProductResource;
 use Webkul\Manufacturing\Filament\Clusters\Products;
@@ -13,12 +14,32 @@ use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource\Pa
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource\Pages\ManageQuantities;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource\Pages\ManageVariants;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource\Pages\ViewProduct;
+use Webkul\Manufacturing\Models\Product;
 
 class ProductResource extends BaseProductResource
 {
+    protected static ?string $model = Product::class;
+
     protected static ?string $cluster = Products::class;
 
     protected static ?int $navigationSort = 1;
+
+    public static function getSubNavigationPosition(): SubNavigationPosition
+    {
+        $route = request()->route()?->getName() ?? session('current_route');
+
+        if ($route && $route !== 'livewire.update') {
+            session(['current_route' => $route]);
+        } else {
+            $route = session('current_route');
+        }
+
+        if ($route === self::getRouteBaseName().'.index') {
+            return SubNavigationPosition::Start;
+        }
+
+        return SubNavigationPosition::Top;
+    }
 
     public static function getRecordSubNavigation(Page $page): array
     {

@@ -29,6 +29,8 @@ class BillOfMaterialFactory extends Factory
             'consumption'                  => BillOfMaterialConsumption::WARNING,
             'quantity'                     => fake()->randomFloat(4, 1, 25),
             'allow_operation_dependencies' => false,
+            'produce_delay'                => 0,
+            'days_to_prepare_mo'           => 0,
             'product_id'                   => Product::query()->value('id') ?? Product::factory(),
             'uom_id'                       => UOM::query()->value('id') ?? UOM::factory(),
             'operation_type_id'            => OperationType::query()->value('id') ?? OperationType::factory(),

@@ -13,18 +13,62 @@ return [
                     'reference'             => 'Reference',
                     'reference-placeholder' => 'eg. BOM-001',
                     'product'               => 'Product',
+                    'product-variant'       => 'Product Variant',
                     'quantity'              => 'Quantity',
                     'uom'                   => 'UOM',
                     'operation-type'        => 'Operation Type',
                     'company'               => 'Company',
+                    'type'                  => 'BoM Type',
                 ],
             ],
-            'settings' => [
-                'title'  => 'Settings',
+            'miscellaneous' => [
+                'title'  => 'Miscellaneous',
                 'fields' => [
-                    'type'                   => 'BOM Type',
-                    'ready-to-produce'       => 'Ready to Produce',
-                    'flexible-consumption'   => 'Flexible Consumption',
+                    'kit-information'                         => 'Kit Information',
+                    'kit-information-content'                 => 'A kit BoM is used to group components for transfers or sales, instead of being produced through a manufacturing order.',
+                    'manufacturing-lead-time'                 => 'Manufacturing Lead Time',
+                    'days-to-prepare-manufacturing-order'     => 'Days to prepare Manufacturing Order',
+                    'days-suffix'                             => 'days',
+                ],
+            ],
+        ],
+        'tabs' => [
+            'components' => [
+                'title'      => 'Components',
+                'add-action' => 'Add a line',
+                'columns'    => [
+                    'component' => 'Component',
+                    'operation' => 'Operation',
+                    'quantity'  => 'Quantity',
+                    'uom'       => 'Product Unit of Measure',
+                ],
+            ],
+            'operations' => [
+                'title'      => 'Operations',
+                'add-action' => 'Add a line',
+                'columns'    => [
+                    'operation'   => 'Operation',
+                    'work-center' => 'Work Center',
+                    'time-mode'   => 'Duration Computation',
+                    'duration'    => 'Duration (minutes)',
+                ],
+            ],
+            'by-products' => [
+                'title'      => 'By-products',
+                'add-action' => 'Add a line',
+                'columns'    => [
+                    'product'   => 'By-product',
+                    'quantity'  => 'Quantity',
+                    'uom'       => 'Unit of Measure',
+                    'operation' => 'Produced in Operation',
+                ],
+            ],
+            'miscellaneous' => [
+                'title'  => 'Miscellaneous',
+                'fields' => [
+                    'ready-to-produce'       => 'Manufacturing Readiness',
+                    'routing'                => 'Routing',
+                    'consumption'            => 'Flexible Consumption',
                     'operation-dependencies' => 'Operation Dependencies',
                 ],
             ],
@@ -108,19 +152,12 @@ return [
                 'entries' => [
                     'reference'      => 'Reference',
                     'product'        => 'Product',
+                    'product-variant'=> 'Product Variant',
                     'quantity'       => 'Quantity',
                     'uom'            => 'UOM',
                     'operation-type' => 'Operation Type',
                     'company'        => 'Company',
-                ],
-            ],
-            'settings' => [
-                'title'   => 'Settings',
-                'entries' => [
-                    'type'                   => 'BOM Type',
-                    'ready-to-produce'       => 'Ready to Produce',
-                    'flexible-consumption'   => 'Flexible Consumption',
-                    'operation-dependencies' => 'Operation Dependencies',
+                    'type'           => 'BoM Type',
                 ],
             ],
             'record-information' => [
@@ -129,6 +166,49 @@ return [
                     'created-by'   => 'Created By',
                     'created-at'   => 'Created At',
                     'last-updated' => 'Last Updated',
+                ],
+            ],
+        ],
+        'tabs' => [
+            'components' => [
+                'title'   => 'Components',
+                'entries' => [
+                    'component' => 'Component',
+                    'operation' => 'Operation',
+                    'quantity'  => 'Quantity',
+                    'uom'       => 'Product Unit of Measure',
+                ],
+            ],
+            'operations' => [
+                'title'   => 'Operations',
+                'entries' => [
+                    'operation'   => 'Operation',
+                    'work-center' => 'Work Center',
+                    'time-mode'   => 'Duration Computation',
+                    'duration'    => 'Duration (minutes)',
+                ],
+            ],
+            'by-products' => [
+                'title'   => 'By-products',
+                'entries' => [
+                    'product'   => 'By-product',
+                    'quantity'  => 'Quantity',
+                    'uom'       => 'Unit of Measure',
+                    'operation' => 'Produced in Operation',
+                ],
+            ],
+            'miscellaneous' => [
+                'title'   => 'Miscellaneous',
+                'entries' => [
+                    'kit-information'                         => 'Kit Information',
+                    'kit-information-content'                 => 'A kit BoM is used to group components for transfers or sales, instead of being produced through a manufacturing order.',
+                    'ready-to-produce'                        => 'Manufacturing Readiness',
+                    'routing'                                 => 'Routing',
+                    'consumption'                             => 'Flexible Consumption',
+                    'operation-dependencies'                  => 'Operation Dependencies',
+                    'manufacturing-lead-time'                 => 'Manufacturing Lead Time',
+                    'days-to-prepare-manufacturing-order'     => 'Days to prepare Manufacturing Order',
+                    'days-suffix'                             => 'days',
                 ],
             ],
         ],

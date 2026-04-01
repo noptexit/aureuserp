@@ -31,6 +31,8 @@ class BillOfMaterial extends Model
         'consumption',
         'quantity',
         'allow_operation_dependencies',
+        'produce_delay',
+        'days_to_prepare_mo',
         'product_id',
         'uom_id',
         'operation_type_id',
@@ -45,6 +47,8 @@ class BillOfMaterial extends Model
         'consumption'                  => BillOfMaterialConsumption::class,
         'quantity'                     => 'decimal:4',
         'allow_operation_dependencies' => 'boolean',
+        'produce_delay'                => 'integer',
+        'days_to_prepare_mo'           => 'integer',
     ];
 
     public function getModelTitle(): string
@@ -119,6 +123,8 @@ class BillOfMaterial extends Model
             $billOfMaterial->type ??= BillOfMaterialType::NORMAL;
             $billOfMaterial->ready_to_produce ??= BillOfMaterialReadyToProduce::ALL_AVAILABLE;
             $billOfMaterial->consumption ??= BillOfMaterialConsumption::WARNING;
+            $billOfMaterial->produce_delay ??= 0;
+            $billOfMaterial->days_to_prepare_mo ??= 0;
         });
     }
 }
