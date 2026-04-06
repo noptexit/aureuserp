@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Models\Location;
-use Webkul\Inventory\Models\Lot;
 use Webkul\Inventory\Models\OperationType;
 use Webkul\Inventory\Models\OrderPoint;
 use Webkul\Manufacturing\Database\Factories\OrderFactory;

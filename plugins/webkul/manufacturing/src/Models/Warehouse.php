@@ -3,6 +3,7 @@
 namespace Webkul\Manufacturing\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Webkul\Inventory\Enums\DeliveryStep;
 use Webkul\Inventory\Enums\ReceptionStep;
 use Webkul\Inventory\Models\Location;
@@ -87,5 +88,25 @@ class Warehouse extends BaseWarehouse
     public function samLocation(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'sam_loc_id');
+    }
+
+    public function suppliedWarehouses(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'inventories_warehouse_resupplies',
+            'supplier_warehouse_id',
+            'supplied_warehouse_id'
+        );
+    }
+
+    public function supplierWarehouses(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'inventories_warehouse_resupplies',
+            'supplied_warehouse_id',
+            'supplier_warehouse_id'
+        );
     }
 }

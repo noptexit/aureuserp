@@ -3,6 +3,7 @@
 namespace Webkul\Manufacturing\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Webkul\Inventory\Models\Move as BaseMove;
 
@@ -77,8 +78,28 @@ class Move extends BaseMove
         return $this->belongsTo(Lot::class, 'order_finished_lot_id');
     }
 
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function originReturnedMove(): BelongsTo
+    {
+        return $this->belongsTo(self::class);
+    }
+
     public function lines(): HasMany
     {
         return $this->hasMany(MoveLine::class, 'move_id');
+    }
+
+    public function moveDestinations(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'inventories_move_destinations', 'origin_move_id', 'destination_move_id');
     }
 }

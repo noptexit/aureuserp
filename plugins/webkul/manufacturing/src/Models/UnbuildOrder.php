@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Models\Location;
-use Webkul\Inventory\Models\Lot;
 use Webkul\Manufacturing\Database\Factories\UnbuildOrderFactory;
 use Webkul\Manufacturing\Enums\UnbuildOrderState;
 use Webkul\Security\Models\User;

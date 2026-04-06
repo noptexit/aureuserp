@@ -22,8 +22,23 @@ class MoveLine extends BaseMoveLine
         return $this->belongsTo(WorkOrder::class, 'work_order_id');
     }
 
+    public function move(): BelongsTo
+    {
+        return $this->belongsTo(Move::class);
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'order_id');
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function lot(): BelongsTo
+    {
+        return $this->belongsTo(Lot::class);
     }
 }
