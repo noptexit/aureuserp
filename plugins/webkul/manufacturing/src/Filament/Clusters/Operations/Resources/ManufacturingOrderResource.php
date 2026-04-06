@@ -42,9 +42,14 @@ use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrd
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\OverviewManufacturingOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\ViewManufacturingOrder;
 use Webkul\Manufacturing\Models\BillOfMaterial;
+use Webkul\Manufacturing\Models\BillOfMaterialLine;
+use Webkul\Manufacturing\Models\Operation;
 use Webkul\Manufacturing\Models\Order;
 use Webkul\Manufacturing\Models\Product;
+use Webkul\Manufacturing\Models\WorkCenter;
 use Webkul\Product\Enums\ProductType;
+use Webkul\Support\Filament\Forms\Components\Repeater;
+use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTableColumn;
 use Webkul\Support\Models\UOM;
 
 class ManufacturingOrderResource extends Resource
@@ -134,17 +139,35 @@ class ManufacturingOrderResource extends Resource
                                         if (! $product) {
                                             $set('uom_id', null);
                                             $set('bill_of_material_id', null);
+                                            $set('rawMaterialMoves', []);
+                                            $set('workOrders', []);
 
                                             return;
                                         }
 
                                         $set('uom_id', $product->uom_id ?: static::getDefaultUomId());
                                         $set('company_id', $product->company_id ?? Auth::user()?->default_company_id);
-                                        $set('bill_of_material_id', static::getDefaultBillOfMaterialId($product));
+                                        $billOfMaterialId = static::getDefaultBillOfMaterialId($product);
+
+                                        if (! $billOfMaterialId) {
+                                            $set('bill_of_material_id', null);
+                                            $set('rawMaterialMoves', []);
+                                            $set('workOrders', []);
+
+                                            return;
+                                        }
+
+                                        if ($get('bill_of_material_id') !== $billOfMaterialId) {
+                                            $set('bill_of_material_id', $billOfMaterialId, shouldCallUpdatedHooks: true);
+
+                                            return;
+                                        }
 
                                         static::applyBillOfMaterialDefaults(
                                             $set,
-                                            BillOfMaterial::query()->withTrashed()->find($get('bill_of_material_id') ?: static::getDefaultBillOfMaterialId($product)),
+                                            BillOfMaterial::query()->withTrashed()->find($billOfMaterialId),
+                                            $product,
+                                            (float) ($get('quantity') ?: 1),
                                         );
                                     })
                                     ->required(),
@@ -175,9 +198,13 @@ class ManufacturingOrderResource extends Resource
                                     ->wrapOptionLabels(false)
                                     ->live()
                                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
+                                        $product = Product::query()->withTrashed()->find($get('product_id'));
+
                                         static::applyBillOfMaterialDefaults(
                                             $set,
                                             BillOfMaterial::query()->withTrashed()->find($state),
+                                            $product,
+                                            (float) ($get('quantity') ?: 1),
                                         );
                                     }),
                             ]),
@@ -204,15 +231,11 @@ class ManufacturingOrderResource extends Resource
                     ->tabs([
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.title'))
                             ->schema([
-                                Placeholder::make('components_process_note')
-                                    ->hiddenLabel()
-                                    ->content(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.process-note')),
+                                static::getComponentsRepeater(),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.title'))
                             ->schema([
-                                Placeholder::make('work_orders_process_note')
-                                    ->hiddenLabel()
-                                    ->content(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.process-note')),
+                                static::getWorkOrdersRepeater(),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.title'))
                             ->schema([
@@ -448,14 +471,23 @@ class ManufacturingOrderResource extends Resource
             ->value('id');
     }
 
-    protected static function applyBillOfMaterialDefaults(Set $set, ?BillOfMaterial $billOfMaterial): void
+    protected static function applyBillOfMaterialDefaults(Set $set, ?BillOfMaterial $billOfMaterial, ?Product $product = null, float $quantity = 1): void
     {
         if (! $billOfMaterial) {
+            $set('rawMaterialMoves', []);
+            $set('workOrders', []);
+
             return;
         }
 
         $set('uom_id', $billOfMaterial->uom_id ?: static::getDefaultUomId());
         $set('company_id', $billOfMaterial->company_id);
+        $set('rawMaterialMoves', static::getComponentRepeaterState($billOfMaterial, $quantity));
+        $set('workOrders', static::getWorkOrderRepeaterState(
+            $billOfMaterial,
+            $product ?? $billOfMaterial->product,
+            $quantity,
+        ));
 
         if (! $billOfMaterial->operation_type_id) {
             return;
@@ -508,6 +540,17 @@ class ManufacturingOrderResource extends Resource
                 ->step('0.0001')
                 ->default(1)
                 ->live(debounce: 300)
+                ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                    $billOfMaterial = BillOfMaterial::query()->withTrashed()->find($get('bill_of_material_id'));
+                    $product = Product::query()->withTrashed()->find($get('product_id'));
+
+                    static::applyBillOfMaterialDefaults(
+                        $set,
+                        $billOfMaterial,
+                        $product,
+                        (float) ($state ?: 1),
+                    );
+                })
                 ->required()
                 ->columnSpan(2),
             Select::make('uom_id')
@@ -516,11 +559,279 @@ class ManufacturingOrderResource extends Resource
                 ->required()
                 ->searchable()
                 ->preload()
-                ->options(UOM::query()->pluck('name', 'id'))
+                ->options(function (Get $get): array {
+                    $product = Product::query()->withTrashed()->find($get('product_id'));
+                    $categoryId = $product?->uom?->category_id;
+
+                    return UOM::query()
+                        ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
+                        ->pluck('name', 'id')
+                        ->all();
+                })
                 ->placeholder('UoM'),
         ])
             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.quantity'))
             ->columns(3);
+    }
+
+    protected static function getComponentsRepeater(): Repeater
+    {
+        return Repeater::make('rawMaterialMoves')
+            ->hiddenLabel()
+            ->defaultItems(0)
+            ->addable(false)
+            ->deletable(true)
+            ->reorderable(false)
+            ->compact()
+            ->table([
+                RepeaterTableColumn::make('product_id')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.component')),
+                RepeaterTableColumn::make('rendered_display_from')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from')),
+                RepeaterTableColumn::make('product_uom_qty')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.to-consume')),
+                RepeaterTableColumn::make('uom_id')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.uom')),
+                RepeaterTableColumn::make('rendered_display_forecast')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.forecast'))
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->schema([
+                Hidden::make('name'),
+                Hidden::make('product_qty'),
+                Hidden::make('quantity'),
+                Hidden::make('source_location_id'),
+                Hidden::make('destination_location_id'),
+                Hidden::make('final_location_id'),
+                Hidden::make('operation_type_id'),
+                Hidden::make('company_id'),
+                Hidden::make('scheduled_at'),
+                Hidden::make('warehouse_id'),
+                Hidden::make('state'),
+                Hidden::make('procure_method'),
+                Hidden::make('reference'),
+                Hidden::make('creator_id'),
+                Hidden::make('bom_line_id'),
+                Hidden::make('display_from'),
+                Hidden::make('display_forecast'),
+                Select::make('product_id')
+                    ->hiddenLabel()
+                    ->options(fn (): array => Product::query()
+                        ->withTrashed()
+                        ->where('type', ProductType::GOODS)
+                        ->whereNull('is_configurable')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    ->wrapOptionLabels(false)
+                    ->live()
+                    ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
+                        $product = Product::query()->withTrashed()->find($state);
+
+                        $uomId = $product?->uom_id ?: static::getDefaultUomId();
+
+                        $set('name', $product?->name);
+                        $set('uom_id', $uomId);
+                        $set('product_qty', (float) ($get('product_uom_qty') ?: 0));
+                        $set('quantity', (float) ($get('product_uom_qty') ?: 0));
+                    })
+                    ->required(),
+                Placeholder::make('rendered_display_from')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ($get('display_from') ?: '—')),
+                TextInput::make('product_uom_qty')
+                    ->hiddenLabel()
+                    ->numeric()
+                    ->minValue(0)
+                    ->default(0)
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(function (Set $set, ?string $state): void {
+                        $quantity = (float) ($state ?: 0);
+
+                        $set('product_qty', $quantity);
+                        $set('quantity', $quantity);
+                    })
+                    ->required(),
+                Select::make('uom_id')
+                    ->hiddenLabel()
+                    ->options(function (Get $get): array {
+                        $product = Product::query()->withTrashed()->find($get('product_id'));
+                        $categoryId = $product?->uom?->category_id;
+
+                        return UOM::query()
+                            ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
+                            ->pluck('name', 'id')
+                            ->all();
+                    })
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    ->wrapOptionLabels(false)
+                    ->required(),
+                Placeholder::make('rendered_display_forecast')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ($get('display_forecast') ?: '—')),
+            ]);
+    }
+
+    protected static function getWorkOrdersRepeater(): Repeater
+    {
+        return Repeater::make('workOrders')
+            ->hiddenLabel()
+            ->defaultItems(0)
+            ->addable(false)
+            ->deletable(true)
+            ->reorderable(false)
+            ->compact()
+            ->table([
+                RepeaterTableColumn::make('operation_id')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.operation')),
+                RepeaterTableColumn::make('work_center_id')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.work-center')),
+                RepeaterTableColumn::make('rendered_display_product')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.product')),
+                RepeaterTableColumn::make('rendered_display_quantity_remaining')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.quantity-remaining')),
+                RepeaterTableColumn::make('expected_duration')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.expected-duration')),
+                RepeaterTableColumn::make('rendered_display_real_duration')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.real-duration')),
+                RepeaterTableColumn::make('rendered_display_lot_serial')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.lot-serial'))
+                    ->toggleable(isToggledHiddenByDefault: true),
+                RepeaterTableColumn::make('started_at')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.start'))
+                    ->toggleable(isToggledHiddenByDefault: true),
+                RepeaterTableColumn::make('finished_at')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.end'))
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->schema([
+                Hidden::make('name'),
+                Hidden::make('product_id'),
+                Hidden::make('uom_id'),
+                Hidden::make('duration'),
+                Hidden::make('costs_per_hour'),
+                Hidden::make('quantity_remaining'),
+                Hidden::make('display_product'),
+                Hidden::make('display_lot_serial'),
+                Select::make('operation_id')
+                    ->hiddenLabel()
+                    ->options(fn (): array => Operation::query()->withTrashed()->pluck('name', 'id')->all())
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    ->wrapOptionLabels(false)
+                    ->live()
+                    ->afterStateUpdated(function (Set $set, ?string $state): void {
+                        $operation = Operation::query()->withTrashed()->find($state);
+
+                        $set('name', $operation?->name);
+                        $set('work_center_id', $operation?->work_center_id);
+                    })
+                    ->required(),
+                Select::make('work_center_id')
+                    ->hiddenLabel()
+                    ->options(fn (): array => WorkCenter::query()->withTrashed()->pluck('name', 'id')->all())
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    ->wrapOptionLabels(false)
+                    ->required(),
+                Placeholder::make('rendered_display_product')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ($get('display_product') ?: '—')),
+                Placeholder::make('rendered_display_quantity_remaining')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => number_format((float) ($get('quantity_remaining') ?: 0), 4)),
+                TextInput::make('expected_duration')
+                    ->hiddenLabel()
+                    ->default('00:00')
+                    ->afterStateHydrated(function (TextInput $component, mixed $state): void {
+                        $component->state(format_float_time((float) ($state ?: 0), 'minutes'));
+                    })
+                    ->dehydrateStateUsing(fn (?string $state): float => parse_float_time($state, 'minutes'))
+                    ->required(),
+                Placeholder::make('rendered_display_real_duration')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => format_float_time((float) ($get('duration') ?: 0), 'minutes')),
+                Placeholder::make('rendered_display_lot_serial')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ($get('display_lot_serial') ?: '—')),
+                DateTimePicker::make('started_at')
+                    ->hiddenLabel()
+                    ->native(false)
+                    ->seconds(false),
+                DateTimePicker::make('finished_at')
+                    ->hiddenLabel()
+                    ->native(false)
+                    ->seconds(false),
+            ]);
+    }
+
+    protected static function getComponentRepeaterState(BillOfMaterial $billOfMaterial, float $quantity): array
+    {
+        $quantityMultiplier = $billOfMaterial->getQuantityMultiplier($quantity);
+        $sourceLocationId = $billOfMaterial->operationType?->source_location_id;
+        $destinationLocationId = $billOfMaterial->operationType?->destination_location_id;
+
+        return $billOfMaterial->lines()
+            ->with(['product', 'uom'])
+            ->orderBy('sort')
+            ->get()
+            ->map(fn (BillOfMaterialLine $line): array => [
+                'name'                    => $line->product?->name ?? '—',
+                'product_id'              => $line->product_id,
+                'uom_id'                  => $line->uom_id,
+                'product_qty'             => round((float) $line->quantity * $quantityMultiplier, 4),
+                'product_uom_qty'         => round((float) $line->quantity * $quantityMultiplier, 4),
+                'quantity'                => round((float) $line->quantity * $quantityMultiplier, 4),
+                'source_location_id'      => $sourceLocationId,
+                'destination_location_id' => $destinationLocationId,
+                'final_location_id'       => $destinationLocationId,
+                'operation_type_id'       => $billOfMaterial->operation_type_id,
+                'company_id'              => $billOfMaterial->company_id,
+                'scheduled_at'            => now(),
+                'bom_line_id'             => $line->id,
+                'display_component'       => $line->product?->name ?? '—',
+                'display_from'            => $billOfMaterial->operationType?->sourceLocation?->full_name ?? '—',
+                'display_to_consume'      => round((float) $line->quantity * $quantityMultiplier, 4),
+                'display_uom'             => $line->uom?->name ?? '—',
+                'display_forecast'        => '—',
+            ])
+            ->values()
+            ->all();
+    }
+
+    protected static function getWorkOrderRepeaterState(BillOfMaterial $billOfMaterial, ?Product $product, float $quantity): array
+    {
+        $product ??= $billOfMaterial->product;
+
+        return $billOfMaterial->operations()
+            ->with(['workCenter'])
+            ->orderBy('sort')
+            ->get()
+            ->map(fn (Operation $operation): array => [
+                'name'                      => $operation->name,
+                'operation_id'              => $operation->id,
+                'work_center_id'            => $operation->work_center_id,
+                'product_id'                => $product?->id,
+                'uom_id'                    => $billOfMaterial->uom_id,
+                'expected_duration'         => format_float_time($operation->getExpectedDuration($product, $quantity), 'minutes'),
+                'duration'                  => 0,
+                'costs_per_hour'            => $operation->workCenter?->costs_per_hour,
+                'quantity_remaining'        => round($quantity, 4),
+                'display_operation'         => $operation->name,
+                'display_work_center'       => $operation->workCenter?->name ?? '—',
+                'display_product'           => $product?->name ?? '—',
+                'display_lot_serial'        => '—',
+                'display_start'             => '—',
+                'display_end'               => '—',
+            ])
+            ->values()
+            ->all();
     }
 
     protected static function getDefaultUomId(): ?int

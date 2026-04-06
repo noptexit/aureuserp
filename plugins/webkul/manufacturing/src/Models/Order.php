@@ -135,6 +135,16 @@ class Order extends Model
         return $this->hasMany(WorkOrder::class, 'manufacturing_order_id');
     }
 
+    public function rawMaterialMoves(): HasMany
+    {
+        return $this->hasMany(Move::class, 'raw_material_order_id');
+    }
+
+    public function finishedMoves(): HasMany
+    {
+        return $this->hasMany(Move::class, 'order_id');
+    }
+
     public function unbuildOrders(): HasMany
     {
         return $this->hasMany(UnbuildOrder::class, 'manufacturing_order_id');

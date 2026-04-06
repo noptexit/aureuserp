@@ -6,9 +6,12 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\CreateRecord;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
+use Webkul\Support\Filament\Concerns\HasRepeaterColumnManager;
 
 class CreateManufacturingOrder extends CreateRecord
 {
+    use HasRepeaterColumnManager;
+
     protected static string $resource = ManufacturingOrderResource::class;
 
     public static function getSubNavigationPosition(): SubNavigationPosition

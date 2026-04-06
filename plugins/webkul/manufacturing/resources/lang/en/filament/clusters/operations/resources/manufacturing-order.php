@@ -27,9 +27,11 @@ return [
                 'title'        => 'Components',
                 'process-note' => 'Components will be generated as the manufacturing process is built.',
                 'columns'      => [
-                    'component' => 'Component',
-                    'quantity'  => 'Quantity',
-                    'uom'       => 'UoM',
+                    'component'  => 'Product',
+                    'from'       => 'From',
+                    'to-consume' => 'To Consume',
+                    'uom'        => 'UoM',
+                    'forecast'   => 'Forecast',
                 ],
             ],
             'work-orders' => [
