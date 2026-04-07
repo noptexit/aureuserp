@@ -166,15 +166,20 @@ class RuleResource extends Resource
                                                             'destinationLocation' => $operation?->destinationLocation?->full_name ?? __('inventories::filament/clusters/configurations/resources/rule.form.sections.general.fields.destination-location'),
                                                         ]);
 
+                                                        $manufactureMessage = __('inventories::filament/clusters/configurations/resources/rule.form.sections.general.fields.action-information.manufacture', [
+                                                            'destinationLocation' => $operation?->destinationLocation?->full_name ?? __('inventories::filament/clusters/configurations/resources/rule.form.sections.general.fields.destination-location'),
+                                                        ]);
+
                                                         $action = ($get('action') instanceof RuleAction)
                                                             ? $get('action')
                                                             : RuleAction::tryFrom($get('action') ?? RuleAction::PULL->value);
 
                                                         return match ($action) {
-                                                            RuleAction::PULL      => new HtmlString($pullMessage),
-                                                            RuleAction::PUSH      => new HtmlString($pushMessage),
-                                                            RuleAction::PULL_PUSH => new HtmlString($pullMessage.'</br></br>'.$pushMessage),
-                                                            default               => new HtmlString($buyMessage),
+                                                            RuleAction::PULL        => new HtmlString($pullMessage),
+                                                            RuleAction::PUSH        => new HtmlString($pushMessage),
+                                                            RuleAction::PULL_PUSH   => new HtmlString($pullMessage.'</br></br>'.$pushMessage),
+                                                            RuleAction::BUY         => new HtmlString($buyMessage),
+                                                            RuleAction::MANUFACTURE => new HtmlString($manufactureMessage),
                                                         };
                                                     }),
                                             ]),

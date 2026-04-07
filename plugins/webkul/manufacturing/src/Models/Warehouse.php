@@ -177,7 +177,7 @@ class Warehouse extends BaseWarehouse
     protected function createManufacturingOperationTypes(): void
     {
         $this->pbm_type_id = OperationType::create([
-            'sort'                    => 1,
+            'sort'                    => 18,
             'name'                    => 'Pick Components',
             'type'                    => \Webkul\Inventory\Enums\OperationType::INTERNAL,
             'sequence_code'           => 'PC',
@@ -208,7 +208,7 @@ class Warehouse extends BaseWarehouse
         ])->id;
 
         $this->sam_type_id = OperationType::create([
-            'sort'                    => 3,
+            'sort'                    => 20,
             'name'                    => 'Store Finished Product',
             'type'                    => \Webkul\Inventory\Enums\OperationType::INTERNAL,
             'sequence_code'           => 'SFP',
@@ -239,7 +239,7 @@ class Warehouse extends BaseWarehouse
         ])->id;
 
         $this->manu_type_id = OperationType::create([
-            'sort'                    => 2,
+            'sort'                    => 19,
             'name'                    => 'Manufacturing',
             'type'                    => \Webkul\Inventory\Enums\OperationType::MANUFACTURE,
             'sequence_code'           => 'MO',
@@ -315,7 +315,7 @@ class Warehouse extends BaseWarehouse
             'route_sort'               => 10,
             'group_propagation_option' => GroupPropagation::PROPAGATE,
             'action'                   => RuleAction::PULL,
-            'procure_method'           => ProcureMethod::MAKE_TO_STOCK,
+            'procure_method'           => ProcureMethod::MAKE_TO_ORDER,
             'auto'                     => RuleAuto::MANUAL,
             'propagate_cancel'         => false,
             'propagate_carrier'        => false,
@@ -334,7 +334,7 @@ class Warehouse extends BaseWarehouse
             'route_sort'               => 10,
             'group_propagation_option' => GroupPropagation::PROPAGATE,
             'action'                   => RuleAction::PUSH,
-            'procure_method'           => ProcureMethod::MAKE_TO_STOCK,
+            'procure_method'           => ProcureMethod::MAKE_TO_ORDER,
             'auto'                     => RuleAuto::MANUAL,
             'propagate_cancel'         => false,
             'propagate_carrier'        => false,
