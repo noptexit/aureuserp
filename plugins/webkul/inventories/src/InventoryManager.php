@@ -16,6 +16,7 @@ use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
 use Webkul\Inventory\Models\MoveLine;
 use Webkul\Inventory\Models\Operation;
+use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Rule;
 use Webkul\PluginManager\Package;
@@ -570,7 +571,10 @@ class InventoryManager
                 continue;
             }
 
-            $rule = $this->getPushRule($move);
+            $rule = $this->getPushRule($move->product, $move->destinationLocation, [
+                'packaging' => $move->productPackaging,
+                'warehouse' => $move->warehouse,
+            ]);
 
             if (! $rule) {
                 continue;
@@ -670,21 +674,46 @@ class InventoryManager
     /**
      * Traverse up the location tree to find a matching push rule.
      */
-    public function getPushRule(Move $move, array $filters = [])
+    public function getPushRule(Product $product, Location $destinationLocation, array $values = [])
     {
         $foundRule = null;
 
-        $location = $move->destinationLocation;
+        $location = $destinationLocation;
 
         $filters['action'] = [RuleAction::PUSH, RuleAction::PULL_PUSH];
 
         while (! $foundRule && $location) {
             $filters['source_location_id'] = $location->id;
 
-            $foundRule = $this->searchPushRule(
-                $move->productPackaging,
-                $move->product,
-                $move->warehouse,
+            $foundRule = $this->searchRule(
+                $values['packaging'] ?? null,
+                $product,
+                $values['warehouse'] ?? null,
+                $filters
+            );
+
+            $location = $location->parent;
+        }
+
+        return $foundRule;
+    }
+
+    /**
+     * Traverse up the location tree to find a matching pull rule.
+     */
+    public function getRule(Product $product, Location $location, array $values = [])
+    {
+        $foundRule = null;
+
+        $filters['action'] = ['!=', RuleAction::PUSH];
+
+        while (! $foundRule && $location) {
+            $filters['destination_location_id'] = $location->id;
+
+            $foundRule = $this->searchRule(
+                $values['packaging'] ?? null,
+                $product,
+                $values['warehouse'] ?? null,
                 $filters
             );
 
@@ -697,7 +726,7 @@ class InventoryManager
     /**
      * Search for a push rule based on the provided filters.
      */
-    public function searchPushRule($productPackaging, $product, $warehouse, array $filters)
+    public function searchRule($productPackaging, $product, $warehouse, array $filters)
     {
         if ($warehouse) {
             $filters['warehouse_id'] = $warehouse->id;
@@ -722,7 +751,21 @@ class InventoryManager
             }
 
             $foundRule = Rule::whereIn('route_id', $routeIds)
-                ->where($filters)
+                ->where(function ($query) use ($filters) {
+                    foreach ($filters as $column => $value) {
+                        if (is_array($value)) {
+                            if (count($value) === 2 && $value[0] === '!=') {
+                                [, $val] = $value;
+
+                                $query->where($column, '!=', $val);
+                            } else {
+                                $query->whereIn($column, $value);
+                            }
+                        } else {
+                            $query->where($column, $value);
+                        }
+                    }
+                })
                 ->orderBy('route_sort', 'asc')
                 ->orderBy('sort', 'asc')
                 ->first();

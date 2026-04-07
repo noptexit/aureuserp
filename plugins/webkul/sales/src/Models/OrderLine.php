@@ -164,6 +164,17 @@ class OrderLine extends Model implements Sortable
         return $this->belongsTo(Route::class, 'route_id');
     }
 
+    public function getExpectedDateAttribute()
+    {
+        if ($this->state == OrderState::SALE && $this->order->date_order) {
+            $orderDate = $this->order->date_order;
+        } else {
+            $orderDate = now();
+        }
+
+        return $orderDate->addDays($this->customer_lead ?? 0);
+    }
+
     protected static function boot()
     {
         parent::boot();
