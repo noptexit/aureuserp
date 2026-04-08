@@ -1,5 +1,5 @@
 import { test } from "../../setup";
-import { PurchaseFlowPage } from "../../pages/06_purchaseFlow";
+import { PurchaseFlowPage } from "../../pages/05_purchaseManagement";
 
 test.describe("Purchase RFQ E2E", () => {
     test.beforeAll(async ({ adminPage }) => {
