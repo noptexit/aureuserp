@@ -10,6 +10,7 @@ use Webkul\Account\Facades\Account as AccountFacade;
 use Webkul\Account\Facades\Tax;
 use Webkul\Account\Models\Move as AccountMove;
 use Webkul\Inventory\Enums as InventoryEnums;
+use Webkul\Product\Enums as ProductEnums;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move as InventoryMove;
@@ -17,6 +18,7 @@ use Webkul\Inventory\Models\Operation as InventoryOperation;
 use Webkul\Inventory\Models\Product as InventoryProduct;
 use Webkul\Inventory\Models\Rule;
 use Webkul\Inventory\Models\Warehouse;
+use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Partner\Models\Partner;
 use Webkul\PluginManager\Package;
 use Webkul\Sale\Enums\AdvancedPayment;
@@ -62,7 +64,7 @@ class SaleManager
 
     public function confirmSaleOrder(Order $record): Order
     {
-        $this->applyPullRules($record);
+        $this->applyInventoryRules($record);
 
         $record->update([
             'state'          => OrderState::SALE,
@@ -917,7 +919,44 @@ class SaleManager
         }
     }
 
-    public function prepareProcurementValues(OrderLine $line): array
+    public function getQtyProcurement(OrderLine $line, $previousProductUomQty = false)
+    {
+        $qty = 0.0;
+
+        [$outgoingMoves, $incomingMoves] = $this->getOutgoingIncomingMoves($line, strict: false);
+
+        foreach ($outgoingMoves as $move) {
+            $qtyToCompute = $move->state === InventoryEnums\MoveState::DONE ? $move->quantity : $move->product_uom_qty;
+
+            $qty += $move->uom->computeQuantity($qtyToCompute, $line->uom, roundingMethod: 'HALF-UP');
+        }
+
+        foreach ($incomingMoves as $move) {
+            $qtyToCompute = $move->state === InventoryEnums\MoveState::DONE ? $move->quantity : $move->product_uom_qty;
+
+            $qty -= $move->uom->computeQuantity($qtyToCompute, $line->uom, roundingMethod: 'HALF-UP');
+        }
+
+        return $qty;
+    }
+
+    public function adjustUomQuantities($uom, $qty, $productUom)
+    {
+        $procurementUom = $uom;
+
+        //TODO: Save this config
+        if (true) {
+            $computedQty = $uom->computeQuantity($qty, $productUom, roundingMethod: 'HALF-UP');
+
+            $procurementUom = $productUom;
+        } else {
+            $computedQty = $uom->computeQuantity($qty, $procurementUom, roundingMethod: 'HALF-UP');
+        }
+
+        return [$computedQty, $procurementUom];
+    }
+
+    public function prepareProcurementValues(OrderLine $line, $procurementGroup = null): array
     {
         $location = Location::where('type', InventoryEnums\LocationType::CUSTOMER)->first();
 
@@ -927,28 +966,108 @@ class SaleManager
         $datePlanned = $deadline->subDays(0);
 
         return [
-            'state'                => InventoryEnums\MoveState::DRAFT,
-            'reference'            => null,
-            'name'                 => $line->name,
-            'scheduled_at'         => $datePlanned,
-            'deadline'             => $deadline,
-            'product_qty'          => $line->product_qty,
-            'product_uom_qty'      => $line->product_uom_qty,
-            'quantity'             => $line->product_qty,
-            'uom_id'               => $line->product_uom_id,
-            'origin'               => $line->origin,
-            'product_id'           => $line->product_id,
-            'route_ids'            => $line->route_id,
-            'warehouse_id'         => $line->warehouse_id,
-            'partner_id'           => $line->order->partner_id,
-            'company_id'           => $line->company_id,
-            'final_location_id'    => $location->id,
-            'product_packaging_id' => $line->product_packaging_id,
-            'sale_order_line_id'   => $line->id,
+            'procurement_group'  => $procurementGroup,
+            'sale_order_line_id' => $line->id,
+            'scheduled_at'       => $datePlanned,
+            'planned'            => $datePlanned,
+            'deadline'           => $deadline,
+            'route_ids'          => $line->route_id,
+            'warehouse'          => $line->warehouse,
+            'partner'            => $line->order->partner,
+            'final_location'     => $location,
+            'company'            => $line->company,
+            'packaging'          => $line->productPackaging,
         ];
     }
 
-    public function applyPullRules(Order $record): void
+    public function createProcurements(OrderLine $line, $productQty, $procurementUom, $origin, $values)
+    {
+        $product = InventoryProduct::find($line->product_id);
+
+        return [
+            'product'     => $product,
+            'product_qty' => $productQty,
+            'product_uom' => $procurementUom,
+            'location'    => $values['final_location'],
+            'name'        => $line->product->name,
+            'origin'      => $origin,
+            'company'     => $line->company,
+            'values'      => $values,
+        ];
+    }
+    
+    public function applyInventoryRules(Order $record, $previousProductUomQty = false): void
+    {
+        if (! Package::isPluginInstalled('inventories')) {
+            return;
+        }
+
+        $rulesToRun = [];
+
+        $location = Location::where('type', InventoryEnums\LocationType::CUSTOMER)->first();
+
+        $procurements = collect();
+
+        foreach ($record->lines as $line) {
+            // if (
+            //     $line->state !== OrderState::SALE
+            //     || $line->order->locked
+            //     || $line->product?->type !== ProductEnums\ProductType::GOODS
+            // ) {
+            //     continue;
+            // }
+
+            $qty = $this->getQtyProcurement($line, $previousProductUomQty);
+
+            if (float_compare($qty, $line->product_uom_qty, precisionDigits: 2) == 0) {
+                continue;
+            }
+
+            $procurementGroup = $record->procurementGroup;
+
+            if (! $procurementGroup) {
+                $procurementGroup = $record->procurementGroup()->create([
+                    'name'          => $record->name,
+                    'move_type'     => $record->picking_policy,
+                    'partner_id'    => $record->partner_shipping_id,
+                    'sale_order_id' => $record->id,
+                ]);
+
+                $record->procurement_group_id = $procurementGroup->id;
+                $record->save();
+            } else {
+                if ($procurementGroup->partner_id !== $record->partner_shipping_id) {
+                    $procurementGroup->update([
+                        'partner_id' => $record->partner_shipping_id,
+                    ]);
+                }
+
+                if ($procurementGroup->move_type !== $record->picking_policy) {
+                    $procurementGroup->update([
+                        'move_type' => $record->picking_policy,
+                    ]);
+                }
+            }
+
+            $values = $this->prepareProcurementValues($line, $procurementGroup);
+
+            $productQty = $line->product_uom_qty - $qty;
+
+            $origin = $line->order->client_order_ref 
+                ? "{$line->order->name} - {$line->order->client_order_ref}" 
+                : $line->order->name;
+
+            [$productQty, $procurementUom] = $this->adjustUomQuantities($line->uom, $productQty, $line->product->uom);
+
+            $procurements->push($this->createProcurements($line, $productQty, $procurementUom, $origin, $values));
+        }
+
+        if ($procurements->count()) {
+            InventoryFacade::runProcurements($procurements);
+        }
+    }
+
+    public function applyInventoryRulesOld(Order $record, $previousProductUomQty = false): void
     {
         if (! Package::isPluginInstalled('inventories')) {
             return;

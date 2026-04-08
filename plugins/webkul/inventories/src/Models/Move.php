@@ -210,6 +210,11 @@ class Move extends Model
         return $this->sourceLocation->shouldBypassReservation() || ! $this->product->is_storable;
     }
 
+    public function procurementGroup(): BelongsTo
+    {
+        return $this->belongsTo(ProcurementGroup::class, 'procurement_group_id');
+    }
+
     public function purchaseOrderLine(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrderLine::class, 'purchase_order_line_id');

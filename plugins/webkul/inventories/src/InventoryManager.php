@@ -11,6 +11,7 @@ use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\RuleAuto;
+use Webkul\Inventory\Enums\GroupPropagation;
 use Webkul\Inventory\Filament\Clusters\Operations\Resources\OperationResource;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
@@ -60,7 +61,7 @@ class InventoryManager
             }
         }
 
-        $this->applyPushRules($record);
+        $this->applyPushRules($record->moves);
 
         return $record;
     }
@@ -562,11 +563,11 @@ class InventoryManager
     /**
      * Apply push rules for the operation.
      */
-    public function applyPushRules(Operation $record): void
+    public function applyPushRules($moves): void
     {
         $rules = [];
 
-        foreach ($record->moves as $move) {
+        foreach ($moves as $move) {
             if ($move->origin_returned_move_id) {
                 continue;
             }
@@ -586,8 +587,9 @@ class InventoryManager
 
             if (! isset($rules[$ruleId])) {
                 $rules[$ruleId] = [
-                    'rule'  => $rule,
-                    'moves' => [$pushedMove],
+                    'rule'      => $rule,
+                    'operation' => $pushedMove->operation,
+                    'moves'     => [$pushedMove],
                 ];
             } else {
                 $rules[$ruleId]['moves'][] = $pushedMove;
@@ -595,8 +597,91 @@ class InventoryManager
         }
 
         foreach ($rules as $ruleData) {
-            $this->createPushOperation($record, $ruleData['rule'], $ruleData['moves']);
+            $this->createPushOperation($ruleData['operation'], $ruleData['rule'], $ruleData['moves']);
         }
+    }
+
+    public function preparePushMoveCopyValues(Rule $rule, Move $moveToCopy, $newScheduledAt)
+    {
+        $companyId = $rule->company_id;
+
+        $copiedQuantity = $moveToCopy->quantity;
+
+        if (float_compare($moveToCopy->product_uom_qty, 0, precisionRounding: $moveToCopy->product_uom->rounding) < 0) {
+            $copiedQuantity = $moveToCopy->product_uom_qty;
+        }
+
+        if (! $companyId) {
+            $companyId = $rule->warehouse?->company_id
+                ?? $rule->operationType?->warehouse?->company_id;
+        }
+
+        return [
+            'state'                   => MoveState::DRAFT,
+            'reference'               => null,
+            'product_uom_qty'         => $copiedQuantity,
+            'product_qty'             => $moveToCopy->uom->computeQuantity($copiedQuantity, $moveToCopy->product->uom, true, 'HALF-UP'),
+            'origin'                  => $moveToCopy->origin ?? $moveToCopy->operation->name ?? '/',
+            'operation_id'            => null,
+            'source_location_id'      => $moveToCopy->destination_location_id,
+            'destination_location_id' => $rule->destination_location_id,
+            'final_location_id'       => $moveToCopy->final_location_id,
+            'rule_id'                 => $rule->id,
+            'scheduled_at'            => $newScheduledAt,
+            'company_id'              => $companyId,
+            'operation_type_id'       => $rule->operation_type_id,
+            'propagate_cancel'        => $rule->propagate_cancel,
+            'warehouse_id'            => $rule->warehouse_id,
+            'procure_method'          => ProcureMethod::MAKE_TO_ORDER,
+        ];
+    }
+
+    /**
+     * Run a push rule on a move.
+     */
+    public function runPushRule(Rule $rule, Move $move)
+    {
+        $newScheduledAt = $move->scheduled_at->addDays($rule->delay);
+
+        if ($rule->auto == RuleAuto::TRANSPARENT) {
+            $move->update([
+                'scheduled_at' => $newScheduledAt,
+                'destination_location_id' => $rule->destination_location_id,
+            ]);
+
+            if ($move->move_line_ids && $move->move_line_ids->isNotEmpty()) {
+                $putAwayLocation = $move->destinationLocation->getPutAwayStrategy($move->product);
+
+                foreach ($move->lines as $moveLine) {
+                    $moveLine->update([
+                        'destination_location_id' => $putAwayLocation?->id ?? $move->destination_location_id,
+                    ]);
+                }
+            }
+
+            //TODO: Check this
+            if ($rule->destination_location_id !== $move->destination_location_id) {
+                return $this->applyPushRules($move);
+            }
+        } else {
+            $newMoveValues = $this->preparePushMoveCopyValues($rule, $move, $newScheduledAt);
+
+            $newMove = $move->replicate()->fill($newMoveValues);
+
+            $newMove->save();
+
+            if ($newMove->shouldBypassReservation()) {
+                $newMove->update([
+                    'procure_method' => ProcureMethod::MAKE_TO_STOCK,
+                ]);
+            }
+
+            if (! $newMove->sourceLocation->shouldBypassReservation()) {
+                $move->moveDestinations()->attach($newMove->id);
+            }
+        }
+
+        return $newMove;
     }
 
     /**
@@ -626,49 +711,6 @@ class InventoryManager
         $newOperation->refresh();
 
         $this->computeTransfer($newOperation);
-    }
-
-    /**
-     * Run a push rule on a move.
-     */
-    public function runPushRule(Rule $rule, Move $move)
-    {
-        if ($rule->auto !== RuleAuto::MANUAL) {
-            return;
-        }
-
-        $newMove = $move->replicate()->fill([
-            'state'                   => MoveState::DRAFT,
-            'reference'               => null,
-            'product_qty'             => $move->uom->computeQuantity($move->quantity, $move->product->uom, true, 'HALF-UP'),
-            'product_uom_qty'         => $move->quantity,
-            'origin'                  => $move->origin ?? $move->operation->name ?? '/',
-            'operation_id'            => null,
-            'source_location_id'      => $move->destination_location_id,
-            'destination_location_id' => $rule->destination_location_id,
-            'final_location_id'       => $move->final_location_id,
-            'rule_id'                 => $rule->id,
-            'scheduled_at'            => $move->scheduled_at->addDays($rule->delay),
-            'company_id'              => $rule->company_id,
-            'operation_type_id'       => $rule->operation_type_id,
-            'propagate_cancel'        => $rule->propagate_cancel,
-            'warehouse_id'            => $rule->warehouse_id,
-            'procure_method'          => ProcureMethod::MAKE_TO_ORDER,
-        ]);
-
-        $newMove->save();
-
-        if ($newMove->shouldBypassReservation()) {
-            $newMove->update([
-                'procure_method' => ProcureMethod::MAKE_TO_STOCK,
-            ]);
-        }
-
-        if (! $newMove->sourceLocation->shouldBypassReservation()) {
-            $move->moveDestinations()->attach($newMove->id);
-        }
-
-        return $newMove;
     }
 
     /**
@@ -776,5 +818,98 @@ class InventoryManager
         }
 
         return null;
+    }
+
+    public function runProcurements($procurements)
+    {
+        $actionsToRun = [];
+
+        $procurementErrors = [];
+        
+        foreach ($procurements as $procurement) {
+            $procurement['values']['company'] = $procurement['values']['company'] ?? $procurement['location']->company;
+            $procurement['values']['priority'] = $procurement['values']['priority'] ?? '0';
+            $procurement['values']['planned'] = $procurement['values']['planned'] ?? now();
+
+            $rule = $this->getRule($procurement['product'], $procurement['location'], $procurement['values']);
+
+            if (! $rule) {
+                $error = __('No rule has been found to replenish ":product" in ":location".\nVerify the routes configuration on the product.', [
+                    'product' => $procurement['product']->name,
+                    'location' => $procurement['location']->full_name,
+                ]);
+
+                $procurementErrors[] = ['procurement' => $procurement, 'error' => $error];
+            } else {
+                $action = $rule->action === RuleAction::PULL_PUSH ? RuleAction::PULL : $rule->action;
+
+                if (! isset($actionsToRun[$action->value])) {
+                    $actionsToRun[$action->value] = [];
+                }
+
+                $actionsToRun[$action->value][] = [$procurement, $rule];
+            }
+        }
+
+        foreach ($actionsToRun as $action => $procurements) {
+            $method = 'run'.ucfirst($action).'Rule';
+
+            try {
+                $this->$method($procurements);
+            } catch (\Exception $e) {
+                $procurementErrors[] = $e->getMessage();
+            }
+        }
+
+        dd($actionsToRun, $procurementErrors);
+    }
+
+    /**
+     * Run a pull rule on a line.
+     */
+    public function runPullRule($procurements)
+    {
+        foreach ($procurements as [$procurement, $rule]) {
+            if (! $rule->source_location_id) {
+                throw new \Exception(__('No source location defined on stock rule: :name!', [
+                    'name' => $rule->name
+                ]));
+            }
+        }
+
+        usort($procurements, function($procurement) {
+            return float_compare($procurement[0]->product_qty, 0.0, precisionRounding: $procurement[0]->uom->rounding) > 0 ? 1 : 0;
+        });
+
+        foreach ($procurements as [$procurement, $rule]) {
+            $procureMethod = $rule->procure_method;
+
+            if ($rule->procure_method === ProcureMethod::MTS_ELSE_MTO) {
+                $procureMethod = ProcureMethod::MAKE_TO_STOCK;
+            }
+
+            $moveValues = $this->prepareMoveValues($procurement);
+
+            $moveValues['procure_method'] = $procureMethod;
+        }
+    }
+
+    /**
+     * Run a buy rule on a line.
+     */
+    public function runBuyRule($procurements)
+    {
+    }
+
+    /**
+     * Run a manufacture rule on a line.
+     */
+    public function runManufactureRule($procurements)
+    {
+    }
+
+    public function prepareMoveValues($procurement)
+    {
+        dd($procurement);
     }
 }

@@ -65,7 +65,12 @@ class InventoryServiceProvider extends PackageServiceProvider
                 '2025_04_09_101755_add_inventories_columns_to_sales_orders_table_from_inventories',
                 '2025_04_09_101814_add_inventories_columns_to_sales_order_lines_table_from_inventories',
                 '2025_08_13_120000_alter_description_column_in_inventories_locations_table',
-                '2026_03_17_055610_fix_corrupted_location_parent_paths'
+                '2026_03_17_055610_fix_corrupted_location_parent_paths',
+                '2026_04_08_042911_create_procurement_groups_table',
+                '2026_04_08_043248_add_procurement_group_id_inventories_operations_table',
+                '2026_04_08_043311_add_procurement_group_id_inventories_moves_table',
+                '2026_04_08_043411_add_procurement_group_id_column_in_sales_orders_table_from_inventories',
+                '2026_04_08_043511_add_sale_order_id_column_in_inventories_procurement_groups_table_from_inventories',
             ])
             ->runsMigrations()
             ->hasSettings([

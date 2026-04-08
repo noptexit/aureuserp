@@ -95,6 +95,11 @@ class Location extends Model
             || ($this->parent_id && $this->parent->is_stock_location);
     }
 
+    public function getPutAwayStrategy(Product $product): self
+    {
+        return $this;
+    }
+
     public function shouldBypassReservation(): bool
     {
         return in_array($this->type, [

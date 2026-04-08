@@ -18,6 +18,7 @@ use Webkul\Chatter\Traits\HasLogActivity;
 use Webkul\Field\Traits\HasCustomFields;
 use Webkul\Inventory\Models\Operation;
 use Webkul\Inventory\Models\Warehouse;
+use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Partner\Models\Partner;
 use Webkul\Sale\Database\Factories\OrderFactory;
 use Webkul\Sale\Enums\InvoiceStatus;
@@ -79,6 +80,7 @@ class Order extends Model
         'amount_tax',
         'amount_total',
         'warehouse_id',
+        'procurement_group_id',
     ];
 
     public function getLogAttributeLabels(): array
@@ -207,6 +209,11 @@ class Order extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
+    public function procurementGroup(): BelongsTo
+    {
+        return $this->belongsTo(ProcurementGroup::class, 'procurement_group_id');
     }
 
     public function operations(): HasMany
