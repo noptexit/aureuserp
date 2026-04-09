@@ -14,6 +14,7 @@ use Webkul\Chatter\Traits\HasLogActivity;
 use Webkul\Field\Traits\HasCustomFields;
 use Webkul\Inventory\Database\Factories\OperationFactory;
 use Webkul\Inventory\Enums\MoveType;
+use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\OperationState;
 use Webkul\Partner\Models\Partner;
 use Webkul\Purchase\Models\Order as PurchaseOrder;
@@ -183,6 +184,36 @@ class Operation extends Model
         return $this->belongsTo(SaleOrder::class, 'sale_order_id');
     }
 
+    protected static function newFactory(): OperationFactory
+    {
+        return OperationFactory::new();
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($operation) {
+            $operation->creator_id ??= Auth::id();
+
+            $operation->user_id ??= Auth::id();
+        });
+
+        static::saving(function ($operation) {
+            $operation->updateName();
+        });
+
+        static::created(function ($operation) {
+            $operation->update(['name' => $operation->name]);
+        });
+
+        static::updated(function ($operation) {
+            if ($operation->wasChanged('operation_type_id')) {
+                $operation->updateChildrenNames();
+            }
+        });
+    }
+
     public function updateName()
     {
         if (! $this->operationType->warehouse) {
@@ -203,31 +234,20 @@ class Operation extends Model
         }
     }
 
-    protected static function newFactory(): OperationFactory
+    public function computeState()
     {
-        return OperationFactory::new();
-    }
+        if (in_array($this->state, [OperationState::DONE, OperationState::CANCELED])) {
+            return;
+        }
 
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($operation) {
-            $operation->creator_id ??= Auth::id();
-        });
-
-        static::saving(function ($operation) {
-            $operation->updateName();
-        });
-
-        static::created(function ($operation) {
-            $operation->update(['name' => $operation->name]);
-        });
-
-        static::updated(function ($operation) {
-            if ($operation->wasChanged('operation_type_id')) {
-                $operation->updateChildrenNames();
-            }
-        });
+        if ($this->moves->every(fn ($move) => $move->state === MoveState::CONFIRMED)) {
+            $this->state = OperationState::CONFIRMED;
+        } elseif ($this->moves->every(fn ($move) => $move->state === MoveState::DONE)) {
+            $this->state = OperationState::DONE;
+        } elseif ($this->moves->every(fn ($move) => $move->state === MoveState::CANCELED)) {
+            $this->state = OperationState::CANCELED;
+        } elseif ($this->moves->contains(fn ($move) => $move->state === MoveState::ASSIGNED || $move->state === MoveState::PARTIALLY_ASSIGNED)) {
+            $this->state = OperationState::ASSIGNED;
+        }
     }
 }

@@ -531,7 +531,7 @@ class PurchaseOrder
             if (! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])) {
                 $operation->refresh();
 
-                Inventory::computeTransfer($operation);
+                Inventory::todoTransfer($operation);
             }
         }
     }
@@ -711,8 +711,6 @@ class PurchaseOrder
         if ($existingDraftOperation) {
             Move::create([
                 'operation_id'            => $existingDraftOperation->id,
-                'name'                    => $existingDraftOperation->name,
-                'reference'               => $existingDraftOperation->name,
                 'description_picking'     => $line->product->picking_description ?? $line->name,
                 'state'                   => InventoryEnums\MoveState::DRAFT,
                 'scheduled_at'            => $line->planned_at,
@@ -724,13 +722,7 @@ class PurchaseOrder
                 'product_uom_qty'         => $qty,
                 'quantity'                => $qty,
                 'uom_id'                  => $line->product->uom_id,
-                'partner_id'              => $existingDraftOperation->partner_id,
-                'warehouse_id'            => $existingDraftOperation->destinationLocation->warehouse_id,
-                'source_location_id'      => $existingDraftOperation->source_location_id,
-                'destination_location_id' => $existingDraftOperation->destination_location_id,
-                'operation_type_id'       => $existingDraftOperation->operation_type_id,
                 'final_location_id'       => $line->final_location_id,
-                'company_id'              => $existingDraftOperation->destinationLocation->company_id,
                 'purchase_order_line_id'  => $line->id,
             ]);
         } else {
@@ -744,16 +736,12 @@ class PurchaseOrder
                 'source_location_id'      => $supplierLocation->id,
                 'destination_location_id' => $record->operationType->destination_location_id,
                 'company_id'              => $record->company_id,
-                'user_id'                 => Auth::id(),
-                'creator_id'              => Auth::id(),
             ]);
 
             $operation->save();
 
             Move::create([
                 'operation_id'            => $operation->id,
-                'name'                    => $operation->name,
-                'reference'               => $operation->name,
                 'description_picking'     => $line->product->picking_description ?? $line->name,
                 'state'                   => InventoryEnums\MoveState::DRAFT,
                 'scheduled_at'            => $line->planned_at,
@@ -765,13 +753,7 @@ class PurchaseOrder
                 'product_uom_qty'         => $qty,
                 'quantity'                => $qty,
                 'uom_id'                  => $line->product->uom_id,
-                'partner_id'              => $operation->partner_id,
-                'warehouse_id'            => $operation->destinationLocation->warehouse_id,
-                'source_location_id'      => $operation->source_location_id,
-                'destination_location_id' => $operation->destination_location_id,
-                'operation_type_id'       => $operation->operation_type_id,
                 'final_location_id'       => $line->final_location_id,
-                'company_id'              => $operation->destinationLocation->company_id,
                 'purchase_order_line_id'  => $line->id,
             ]);
 
@@ -779,7 +761,7 @@ class PurchaseOrder
 
             $operation->refresh();
 
-            Inventory::computeTransfer($operation);
+            Inventory::todoTransfer($operation);
 
             $url = PurchaseOrderResource::getUrl('view', ['record' => $record]);
 
@@ -828,8 +810,8 @@ class PurchaseOrder
 
                 $move->lines()->delete();
             }
-
-            Inventory::computeTransferState($operation);
+            
+            $operation->refresh()->computeState();
         });
     }
 

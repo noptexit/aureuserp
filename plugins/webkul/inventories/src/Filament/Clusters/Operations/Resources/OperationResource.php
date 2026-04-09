@@ -861,40 +861,6 @@ class OperationResource extends Resource
                     ->default(0),
             ])
             ->columns(4)
-            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, $record) {
-                $product = Product::find($data['product_id']);
-
-                $data = array_merge($data, [
-                    'creator_id'              => Auth::id(),
-                    'company_id'              => Auth::user()->default_company_id,
-                    'warehouse_id'            => $record->destinationLocation->warehouse_id,
-                    'state'                   => $record->state->value,
-                    'name'                    => $product->name,
-                    'procure_method'          => ProcureMethod::MAKE_TO_STOCK,
-                    'uom_id'                  => $data['uom_id'] ?? $product->uom_id,
-                    'operation_type_id'       => $record->operation_type_id,
-                    'quantity'                => null,
-                    'source_location_id'      => $record->source_location_id,
-                    'destination_location_id' => $record->destination_location_id,
-                    'scheduled_at'            => $record->scheduled_at ?? now(),
-                    'reference'               => $record->name,
-                ]);
-
-                return $data;
-            })
-            ->mutateRelationshipDataBeforeSaveUsing(function (array $data, $record) {
-                if (isset($data['quantity'])) {
-                    $record->fill([
-                        'quantity' => $data['quantity'] ?? null,
-                    ]);
-
-                    Inventory::computeTransferMove($record);
-
-                    Inventory::computeTransferState($record->operation);
-                }
-
-                return $data;
-            })
             ->extraItemActions([
                 Action::make('openProduct')
                     ->tooltip('Open product')
@@ -1090,13 +1056,6 @@ class OperationResource extends Resource
                             ->searchable()
                             ->preload()
                             ->createOptionForm(fn (Schema $schema): Schema => PackageResource::form($schema))
-                            ->createOptionAction(function (Action $action) use ($move) {
-                                $action->mutateDataUsing(function (array $data) use ($move) {
-                                    $data['company_id'] = $move->company_id;
-
-                                    return $data;
-                                });
-                            })
                             ->disabled(fn (): bool => in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
                             ->visible(static::getOperationSettings()->enable_packages),
                         TextInput::make('qty')
@@ -1127,18 +1086,8 @@ class OperationResource extends Resource
                             $data['package_id'] = $productQuantity?->package_id;
                         }
 
-                        $data['reference'] = $move->reference;
-                        $data['state'] = $move->state;
                         $data['uom_qty'] = static::calculateProductQuantity($data['uom_id'] ?? $move->uom_id, $data['qty']);
-                        $data['scheduled_at'] = $move->scheduled_at;
-                        $data['operation_id'] = $move->operation_id;
                         $data['move_id'] = $move->id;
-                        $data['source_location_id'] = $move->source_location_id;
-                        $data['uom_id'] ??= $move->uom_id;
-                        $data['creator_id'] = Auth::id();
-                        $data['product_id'] = $move->product_id;
-                        $data['company_id'] = $move->company_id;
-                        $data['destination_location_id'] = $data['destination_location_id'] ?? $move->destination_location_id;
 
                         return $data;
                     })
@@ -1177,7 +1126,7 @@ class OperationResource extends Resource
                     'quantity' => $totalQty,
                 ]);
 
-                Inventory::computeTransferMove($move);
+                $move->computeLines();
 
                 $set('quantity', $totalQty);
             });

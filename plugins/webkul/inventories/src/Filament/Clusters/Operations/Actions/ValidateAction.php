@@ -33,19 +33,19 @@ class ValidateAction extends Action
             })
             ->requiresConfirmation(function (Operation $record) {
                 return $record->operationType->create_backorder === CreateBackorder::ASK
-                    && Inventory::canCreateBackOrder($record);
+                    && $this->canCreateBackOrder($record);
             })
             ->modalHeading(fn (Operation $record) => (
                 $record->operationType->create_backorder === CreateBackorder::ASK
-                && Inventory::canCreateBackOrder($record)
+                && $this->canCreateBackOrder($record)
             ) ? __('inventories::filament/clusters/operations/actions/validate.modal-heading') : null)
             ->modalDescription(fn (Operation $record) => (
                 $record->operationType->create_backorder === CreateBackorder::ASK
-                && Inventory::canCreateBackOrder($record)
+                && $this->canCreateBackOrder($record)
             ) ? __('inventories::filament/clusters/operations/actions/validate.modal-description') : null)
             ->extraModalFooterActions(fn (Operation $record) => (
                 $record->operationType->create_backorder === CreateBackorder::ASK
-                && Inventory::canCreateBackOrder($record)
+                && $this->canCreateBackOrder($record)
             ) ? [
                 Action::make('no-backorder')
                     ->label(__('inventories::filament/clusters/operations/actions/validate.extra-modal-footer-actions.no-backorder.label'))
@@ -65,7 +65,9 @@ class ValidateAction extends Action
                     return;
                 }
 
-                Inventory::createBackOrder($record);
+                if ($this->canCreateBackOrder($record)) {
+                    Inventory::createBackOrder($record);
+                }
 
                 Inventory::validateTransfer($record);
 
@@ -79,9 +81,18 @@ class ValidateAction extends Action
             });
     }
 
+    public function canCreateBackOrder(Operation $record): bool
+    {
+        if ($record->operationType->create_backorder === CreateBackorder::NEVER) {
+            return false;
+        }
+
+        return $record->moves->sum('product_uom_qty') > $record->moves->sum('quantity');
+    }
+
     protected function hasMoveErrors(Operation $record): bool
     {
-        $record = Inventory::computeTransfer($record);
+        $record = Inventory::todoTransfer($record);
 
         foreach ($record->moves as $move) {
             if ($this->hasMoveLineErrors($move)) {

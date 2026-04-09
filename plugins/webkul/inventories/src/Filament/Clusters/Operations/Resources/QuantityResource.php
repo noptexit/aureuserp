@@ -23,7 +23,6 @@ use Filament\Tables\Filters\QueryBuilder\Constraints\RelationshipConstraint\Oper
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Filament\Clusters\Operations;
@@ -414,8 +413,6 @@ class QuantityResource extends Resource
 
                         $data['location_id'] = $data['location_id'] ?? Warehouse::first()->lot_stock_location_id;
 
-                        $data['creator_id'] = Auth::id();
-
                         $data['company_id'] = $product->company_id;
 
                         $data['inventory_quantity_set'] = true;
@@ -487,7 +484,6 @@ class QuantityResource extends Resource
                             ], [
                                 'quantity'               => -$record->product->on_hand_quantity,
                                 'company_id'             => $record->company_id,
-                                'creator_id'             => Auth::id(),
                                 'incoming_at'            => now(),
                                 'inventory_quantity_set' => false,
                             ]

@@ -32,7 +32,10 @@ class CheckAvailabilityAction extends Action
                     return true;
                 }
 
-                return ! $this->getRecord()->moves->contains(fn ($move) => in_array($move->state, [MoveState::CONFIRMED, MoveState::PARTIALLY_ASSIGNED]));
+                return ! $this->getRecord()->moves->contains(fn ($move) => in_array($move->state, [
+                    MoveState::CONFIRMED,
+                    MoveState::PARTIALLY_ASSIGNED
+                ]));
             });
     }
 }

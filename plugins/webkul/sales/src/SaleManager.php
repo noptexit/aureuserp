@@ -10,7 +10,6 @@ use Webkul\Account\Facades\Account as AccountFacade;
 use Webkul\Account\Facades\Tax;
 use Webkul\Account\Models\Move as AccountMove;
 use Webkul\Inventory\Enums as InventoryEnums;
-use Webkul\Product\Enums as ProductEnums;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move as InventoryMove;
@@ -18,7 +17,6 @@ use Webkul\Inventory\Models\Operation as InventoryOperation;
 use Webkul\Inventory\Models\Product as InventoryProduct;
 use Webkul\Inventory\Models\Rule;
 use Webkul\Inventory\Models\Warehouse;
-use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Partner\Models\Partner;
 use Webkul\PluginManager\Package;
 use Webkul\Sale\Enums\AdvancedPayment;
@@ -722,7 +720,7 @@ class SaleManager
             if (! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])) {
                 $operation->refresh();
 
-                InventoryFacade::computeTransfer($operation);
+                InventoryFacade::todoTransfer($operation);
             }
         }
     }
@@ -1133,7 +1131,7 @@ class SaleManager
             $move->lines()->delete();
         }
 
-        InventoryFacade::computeTransferState($record->operation);
+        $record->operation->refresh()->computeState();
     }
 
     /**
@@ -1151,8 +1149,6 @@ class SaleManager
             'scheduled_at'            => now()->addDays($rule->delay),
             'company_id'              => $rule->company_id,
             'sale_order_id'           => $record->id,
-            'user_id'                 => Auth::id(),
-            'creator_id'              => Auth::id(),
         ]);
 
         foreach ($moves as $move) {
@@ -1165,7 +1161,7 @@ class SaleManager
 
         $newOperation->refresh();
 
-        InventoryFacade::computeTransfer($newOperation);
+        InventoryFacade::todoTransfer($newOperation);
     }
 
     /**

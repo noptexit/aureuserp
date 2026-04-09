@@ -22,6 +22,7 @@ class CancelAction extends Action
         $this
             ->label(__('inventories::filament/clusters/operations/actions/cancel.label'))
             ->color('gray')
+            ->requiresConfirmation()
             ->action(function (Operation $record, Component $livewire): void {
                 $record = Inventory::cancelTransfer($record);
 

@@ -3,22 +3,16 @@
 namespace Webkul\Inventory;
 
 use Illuminate\Support\Facades\Auth;
-use Webkul\Inventory\Enums\CreateBackorder;
-use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\OperationState;
 use Webkul\Inventory\Enums\ProcureMethod;
-use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\RuleAuto;
-use Webkul\Inventory\Enums\GroupPropagation;
 use Webkul\Inventory\Filament\Clusters\Operations\Resources\OperationResource;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
-use Webkul\Inventory\Models\MoveLine;
 use Webkul\Inventory\Models\Operation;
 use Webkul\Inventory\Models\Product;
-use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Rule;
 use Webkul\PluginManager\Package;
 use Webkul\Purchase\Facades\PurchaseOrder as PurchaseOrderFacade;
@@ -28,24 +22,52 @@ class InventoryManager
 {
     public function checkTransferAvailability(Operation $record): Operation
     {
-        return $this->computeTransfer($record);
+        if ($record->state !== OperationState::DRAFT) {
+            return $record;
+        }
+
+        $record->moves->each(fn (Move $move) => $move->computeLines());
+
+        $record->computeState();
+
+        $record->save();
+
+        return $record;
     }
 
     public function todoTransfer(Operation $record): Operation
     {
-        return $this->computeTransfer($record);
+        if ($record->state !== OperationState::DRAFT) {
+            return $record;
+        }
+
+        $record->moves->each(fn (Move $move) => $move->update(['state' => MoveState::CONFIRMED]));
+
+        $record->computeState();
+
+        $record->save();
+
+        return $record;
     }
 
     public function validateTransfer(Operation $record): Operation
     {
-        $record = $this->computeTransfer($record);
+        $record->moves->each(fn (Move $move) => $move->computeLines());
 
-        // Update each move and its lines, adjusting quantities.
         foreach ($record->moves as $move) {
-            $this->validateTransferMove($move);
+            $move->update([
+                'state'     => MoveState::DONE,
+                'is_picked' => true,
+            ]);
+
+            foreach ($move->lines as $moveLine) {
+                $moveLine->update(['state' => MoveState::DONE]);
+
+                $moveLine->transferInventories();
+            }
         }
 
-        $record = $this->computeTransferState($record);
+        $record->refresh()->computeState();
 
         $record->save();
 
@@ -66,120 +88,18 @@ class InventoryManager
         return $record;
     }
 
-    public function validateTransferMove(Move $move): Move
-    {
-        $move->update([
-            'state'     => MoveState::DONE,
-            'is_picked' => true,
-        ]);
-
-        foreach ($move->lines()->get() as $moveLine) {
-            $this->validateTransferMoveLine($moveLine);
-        }
-
-        return $move;
-    }
-
-    public function validateTransferMoveLine(MoveLine $moveLine): MoveLine
-    {
-        $moveLine->update(['state' => MoveState::DONE]);
-
-        // Process source quantity
-        $sourceQuantity = ProductQuantity::where('product_id', $moveLine->product_id)
-            ->where('location_id', $moveLine->source_location_id)
-            ->where('lot_id', $moveLine->lot_id)
-            ->where('package_id', $moveLine->package_id)
-            ->first();
-
-        if ($sourceQuantity) {
-            $remainingQty = $sourceQuantity->quantity - $moveLine->uom_qty;
-
-            if ($remainingQty == 0) {
-                $sourceQuantity->delete();
-            } else {
-                $reservedQty = $this->calculateReservedQty($moveLine->sourceLocation, $moveLine->uom_qty);
-
-                $sourceQuantity->update([
-                    'quantity'                => $remainingQty,
-                    'reserved_quantity'       => $sourceQuantity->reserved_quantity - $reservedQty,
-                    'inventory_diff_quantity' => $sourceQuantity->inventory_diff_quantity + $moveLine->uom_qty,
-                ]);
-            }
-        } else {
-            ProductQuantity::create([
-                'product_id'              => $moveLine->product_id,
-                'location_id'             => $moveLine->source_location_id,
-                'lot_id'                  => $moveLine->lot_id,
-                'package_id'              => $moveLine->package_id,
-                'quantity'                => -$moveLine->uom_qty,
-                'inventory_diff_quantity' => $moveLine->uom_qty,
-                'company_id'              => $moveLine->sourceLocation->company_id,
-                'creator_id'              => Auth::id(),
-                'incoming_at'             => now(),
-            ]);
-        }
-
-        // Process destination quantity
-        $destinationQuantity = ProductQuantity::where('product_id', $moveLine->product_id)
-            ->where('location_id', $moveLine->destination_location_id)
-            ->where('lot_id', $moveLine->lot_id)
-            ->where('package_id', $moveLine->result_package_id)
-            ->first();
-
-        $reservedQty = $this->calculateReservedQty($moveLine->destinationLocation, $moveLine->uom_qty);
-
-        if ($destinationQuantity) {
-            $destinationQuantity->update([
-                'quantity'                => $destinationQuantity->quantity + $moveLine->uom_qty,
-                'reserved_quantity'       => $destinationQuantity->reserved_quantity + $reservedQty,
-                'inventory_diff_quantity' => $destinationQuantity->inventory_diff_quantity - $moveLine->uom_qty,
-            ]);
-        } else {
-            ProductQuantity::create([
-                'product_id'              => $moveLine->product_id,
-                'location_id'             => $moveLine->destination_location_id,
-                'package_id'              => $moveLine->result_package_id,
-                'lot_id'                  => $moveLine->lot_id,
-                'quantity'                => $moveLine->uom_qty,
-                'reserved_quantity'       => $reservedQty,
-                'inventory_diff_quantity' => -$moveLine->uom_qty,
-                'incoming_at'             => now(),
-                'creator_id'              => Auth::id(),
-                'company_id'              => $moveLine->destinationLocation->company_id,
-            ]);
-        }
-
-        // Update package and lot if applicable.
-        if ($moveLine->result_package_id && $moveLine->resultPackage) {
-            $moveLine->resultPackage->update([
-                'location_id' => $moveLine->destination_location_id,
-                'pack_date'   => now(),
-            ]);
-        }
-
-        if ($moveLine->lot_id && $moveLine->lot) {
-            $moveLine->lot->update([
-                'location_id' => $moveLine->lot->total_quantity >= $moveLine->uom_qty
-                    ? $moveLine->destination_location_id
-                    : null,
-            ]);
-        }
-
-        return $moveLine;
-    }
-
     public function cancelTransfer(Operation $record): Operation
     {
         foreach ($record->moves as $move) {
             $move->update([
-                'state'        => MoveState::CANCELED,
-                'quantity'     => 0,
+                'state'    => MoveState::CANCELED,
+                'quantity' => 0,
             ]);
 
             $move->lines()->delete();
         }
 
-        $record = $this->computeTransferState($record);
+        $record->computeState();
 
         $record->save();
 
@@ -220,7 +140,7 @@ class InventoryManager
 
         $newOperation->refresh();
 
-        $newOperation = $this->computeTransfer($newOperation);
+        $newOperation = $this->todoTransfer($newOperation);
 
         if (Package::isPluginInstalled('purchases')) {
             $newOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
@@ -248,10 +168,6 @@ class InventoryManager
      */
     public function createBackOrder(Operation $record): void
     {
-        if (! $this->canCreateBackOrder($record)) {
-            return;
-        }
-
         $newOperation = $record->replicate()->fill([
             'state'         => OperationState::DRAFT,
             'origin'        => $record->origin ?? $record->name,
@@ -283,7 +199,7 @@ class InventoryManager
 
         $newOperation->refresh();
 
-        $newOperation = $this->computeTransfer($newOperation);
+        $newOperation = $this->todoTransfer($newOperation);
 
         if (Package::isPluginInstalled('purchases')) {
             $newOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
@@ -306,258 +222,6 @@ class InventoryManager
             'body' => "The backorder <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$newOperation->name}</a> has been created.",
             'type' => 'comment',
         ]);
-    }
-
-    public function computeTransfer(Operation $record): Operation
-    {
-        if (in_array($record->state, [OperationState::DONE, OperationState::CANCELED])) {
-            return $record;
-        }
-
-        foreach ($record->moves as $move) {
-            $this->computeTransferMove($move);
-        }
-
-        $record = $this->computeTransferState($record);
-
-        $record->save();
-
-        return $record;
-    }
-
-    public function computeTransferMove(Move $record): Move
-    {
-        $lines = $record->lines()->orderBy('created_at')->get();
-
-        if (! is_null($record->quantity)) {
-            $remainingQty = $record->uom->computeQuantity($record->quantity, $record->product->uom, true, 'HALF-UP');
-        } else {
-            $remainingQty = $record->product_qty;
-        }
-
-        $updatedLines = collect();
-
-        $availableQuantity = 0;
-
-        $isSupplierSource = $record->sourceLocation->type === LocationType::SUPPLIER;
-
-        $productQuantities = collect();
-
-        if (! $isSupplierSource) {
-            $parentPath = $record->sourceLocation->parent_path;
-
-            if (
-                ! $parentPath
-                || trim($parentPath, '/') === ''
-            ) {
-                $sourceLocationIds = collect([$record->source_location_id]);
-            } else {
-                $sourceLocationIds = Location::where('parent_path', 'LIKE', $parentPath.'%')
-                    ->pluck('id');
-            }
-
-            $productQuantities = ProductQuantity::query()
-                ->with(['location', 'lot', 'package'])
-                ->where('product_id', $record->product_id)
-                ->whereIn('location_id', $sourceLocationIds)
-                ->when(
-                    $record->sourceLocation->type !== LocationType::SUPPLIER
-                        && $record->product->tracking === ProductTracking::LOT,
-                    fn ($query) => $query->whereNotNull('lot_id')
-                )
-                ->get();
-        }
-
-        foreach ($lines as $line) {
-            $currentLocationQty = null;
-
-            if (! $isSupplierSource) {
-                $currentLocationQty = $productQuantities
-                    ->where('location_id', $line->source_location_id)
-                    ->where('lot_id', $line->lot_id)
-                    ->where('package_id', $line->package_id)
-                    ->first()?->quantity ?? 0;
-
-                if ($currentLocationQty <= 0) {
-                    $line->delete();
-
-                    continue;
-                }
-            }
-
-            if ($remainingQty > 0) {
-                $newQty = $isSupplierSource
-                    ? min($line->uom_qty, $remainingQty)
-                    : min($line->uom_qty, $currentLocationQty, $remainingQty);
-
-                if ($newQty != $line->uom_qty) {
-                    $line->update([
-                        'qty'     => $record->product->uom->computeQuantity($newQty, $record->uom, true, 'HALF-UP'),
-                        'uom_qty' => $newQty,
-                        'state'   => MoveState::ASSIGNED,
-                    ]);
-                }
-
-                $updatedLines->push($line->source_location_id.'-'.$line->lot_id.'-'.$line->package_id);
-
-                $remainingQty = round($remainingQty - $newQty, 4);
-
-                $availableQuantity += $newQty;
-            } else {
-                $line->delete();
-            }
-        }
-
-        if ($remainingQty > 0) {
-            if ($isSupplierSource) {
-                while ($remainingQty > 0) {
-                    $newQty = $remainingQty;
-
-                    if ($record->product->tracking == ProductTracking::SERIAL) {
-                        $newQty = 1;
-                    }
-
-                    $record->lines()->create([
-                        'qty'                     => $record->product->uom->computeQuantity($newQty, $record->uom, true, 'HALF-UP'),
-                        'uom_qty'                 => $newQty,
-                        'source_location_id'      => $record->source_location_id,
-                        'state'                   => MoveState::ASSIGNED,
-                        'reference'               => $record->reference,
-                        'picking_description'     => $record->description_picking,
-                        'is_picked'               => $record->is_picked,
-                        'scheduled_at'            => $record->scheduled_at,
-                        'operation_id'            => $record->operation_id,
-                        'product_id'              => $record->product_id,
-                        'uom_id'                  => $record->uom_id,
-                        'destination_location_id' => $record->destination_location_id,
-                        'company_id'              => $record->company_id,
-                        'creator_id'              => Auth::id(),
-                    ]);
-
-                    $remainingQty = round($remainingQty - $newQty, 4);
-
-                    $availableQuantity += $newQty;
-                }
-            } else {
-                foreach ($productQuantities as $productQuantity) {
-                    if ($remainingQty <= 0) {
-                        break;
-                    }
-
-                    if ($updatedLines->contains($productQuantity->location_id.'-'.$productQuantity->lot_id.'-'.$productQuantity->package_id)) {
-                        continue;
-                    }
-
-                    if ($productQuantity->quantity <= 0) {
-                        continue;
-                    }
-
-                    $newQty = min($productQuantity->quantity, $remainingQty);
-
-                    $availableQuantity += $newQty;
-
-                    $record->lines()->create([
-                        'qty'                     => $record->product->uom->computeQuantity($newQty, $record->uom, true, 'HALF-UP'),
-                        'uom_qty'                 => $newQty,
-                        'lot_name'                => $productQuantity->lot?->name,
-                        'lot_id'                  => $productQuantity->lot_id,
-                        'package_id'              => $productQuantity->package_id,
-                        'result_package_id'       => $newQty == $productQuantity->quantity ? $productQuantity->package_id : null,
-                        'source_location_id'      => $productQuantity->location_id,
-                        'state'                   => MoveState::ASSIGNED,
-                        'reference'               => $record->reference,
-                        'picking_description'     => $record->description_picking,
-                        'is_picked'               => $record->is_picked,
-                        'scheduled_at'            => $record->scheduled_at,
-                        'operation_id'            => $record->operation_id,
-                        'product_id'              => $record->product_id,
-                        'uom_id'                  => $record->uom_id,
-                        'destination_location_id' => $record->destination_location_id,
-                        'company_id'              => $record->company_id,
-                        'creator_id'              => Auth::id(),
-                    ]);
-
-                    $remainingQty = round($remainingQty - $newQty, 4);
-                }
-            }
-        }
-
-        $requestedQty = $record->product_qty;
-
-        if ($availableQuantity <= 0) {
-            $record->update([
-                'state'    => MoveState::CONFIRMED,
-                'quantity' => null,
-            ]);
-
-            $record->lines()->update([
-                'state' => MoveState::CONFIRMED,
-            ]);
-        } elseif ($availableQuantity < $requestedQty) {
-            $record->update([
-                'state'    => MoveState::PARTIALLY_ASSIGNED,
-                'quantity' => $record->product->uom->computeQuantity($availableQuantity, $record->uom, true, 'HALF-UP'),
-            ]);
-
-            $record->lines()->update([
-                'state' => MoveState::PARTIALLY_ASSIGNED,
-            ]);
-        } else {
-            $record->update([
-                'state'    => MoveState::ASSIGNED,
-                'quantity' => $record->product->uom->computeQuantity($availableQuantity, $record->uom, true, 'HALF-UP'),
-            ]);
-        }
-
-        return $record;
-    }
-
-    public function computeTransferState(Operation $record): Operation
-    {
-        $record->refresh();
-
-        if (in_array($record->state, [OperationState::DONE, OperationState::CANCELED])) {
-            return $record;
-        }
-
-        if ($record->moves->every(fn ($move) => $move->state === MoveState::CONFIRMED)) {
-            $record->state = OperationState::CONFIRMED;
-        } elseif ($record->moves->every(fn ($move) => $move->state === MoveState::DONE)) {
-            $record->state = OperationState::DONE;
-        } elseif ($record->moves->every(fn ($move) => $move->state === MoveState::CANCELED)) {
-            $record->state = OperationState::CANCELED;
-        } elseif ($record->moves->contains(
-            fn ($move) => $move->state === MoveState::ASSIGNED ||
-                $move->state === MoveState::PARTIALLY_ASSIGNED
-        )) {
-            $record->state = OperationState::ASSIGNED;
-        }
-
-        return $record;
-    }
-
-    /**
-     * Check if a back order can be processed.
-     */
-    public function canCreateBackOrder(Operation $record): bool
-    {
-        if ($record->operationType->create_backorder === CreateBackorder::NEVER) {
-            return false;
-        }
-
-        return $record->moves->sum('product_uom_qty') > $record->moves->sum('quantity');
-    }
-
-    /**
-     * Calculate reserved quantity for a location.
-     */
-    private function calculateReservedQty($location, $qty): int
-    {
-        if ($location->type === LocationType::INTERNAL && ! $location->is_stock_location) {
-            return $qty;
-        }
-
-        return 0;
     }
 
     /**
@@ -697,8 +361,6 @@ class InventoryManager
             'destination_location_id' => $rule->destination_location_id,
             'scheduled_at'            => now()->addDays($rule->delay),
             'company_id'              => $rule->company_id,
-            'user_id'                 => Auth::id(),
-            'creator_id'              => Auth::id(),
         ]);
 
         foreach ($moves as $move) {
@@ -710,7 +372,7 @@ class InventoryManager
 
         $newOperation->refresh();
 
-        $this->computeTransfer($newOperation);
+        $this->todoTransfer($newOperation);
     }
 
     /**
