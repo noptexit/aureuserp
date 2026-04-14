@@ -707,7 +707,7 @@ class SaleManager
             'partner'            => $line->order->partner,
             'final_location'     => $location,
             'company'            => $line->company,
-            'packaging'          => $line->productPackaging,
+            'product_packaging'  => $line->productPackaging,
         ];
     }
 

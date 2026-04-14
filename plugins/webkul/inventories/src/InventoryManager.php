@@ -572,13 +572,6 @@ class InventoryManager
     }
 
     /**
-     * Run a buy rule on a line.
-     */
-    public function runBuyRule($procurements)
-    {
-    }
-
-    /**
      * Run a manufacture rule on a line.
      */
     public function runManufactureRule($procurements)
@@ -633,8 +626,8 @@ class InventoryManager
             'propagate_cancel' => $rule->propagate_cancel,
             'description_picking' => $pickingDescription,
             'priority' => $procurement['values']['priority'] ?? '0',
-            'orderpoint_id' => $procurement['values']['orderpoint_id'] ?? null,
-            'product_packaging_id' => $procurement['values']['product_packaging_id'] ?? null,
+            'orderpoint_id' => $procurement['values']['orderpoint']?->is ?? null,
+            'product_packaging_id' => $procurement['values']['product_packaging']?->id ?? null,
         ];
 
         if (isset( $procurement['values']['sale_order_line_id'])) {
@@ -1084,6 +1077,50 @@ class InventoryManager
             }
 
             return $leastImportantMove->state ?? MoveState::DRAFT;
+        }
+    }
+
+    /**
+     * Run a buy rule on a line.
+     */
+    public function runBuyRule($procurements)
+    {
+        $procurementsByPoDomain = [];
+        
+        $errors = [];
+
+        foreach ($procurements as [$procurement, $rule]) {
+            $procurementDatePlanned = \DateTime::createFromFormat(
+                'Y-m-d H:i:s',
+                $procurement['values']['planned']
+            );
+
+            $supplier = false;
+
+            $company = $rule->company ?: $procurement['company'];
+
+            if (! empty($procurement['values']['supplierinfo'])) {
+                $supplier = $procurement['values']['supplierinfo'];
+            } elseif (
+                ! empty($procurement['values']['orderpoint']) &&
+                $procurement['values']['orderpoint']->supplier
+            ) {
+                $supplier = $procurement['values']['orderpoint']->supplier;
+            } else {
+                $supplier = $procurement['product']
+                    ->getSeller([
+                        'partner'    => $procurement['values']['supplier'] ?? null,
+                        'quantity'   => $procurement['product_qty'],
+                        'date'       => max(
+                            $procurementDatePlanned->format('Y-m-d'),
+                            now()->format('Y-m-d')
+                        ),
+                        'uom'        => $procurement['product_uom'],
+                        'company'    => $company,
+                        'params'     => ['force_uom' => $procurement['values']['force_uom'] ?? null],
+                    ]);
+            }
+
         }
     }
 }
