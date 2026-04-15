@@ -2,6 +2,7 @@
 
 namespace Webkul\Inventory;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\MoveState;
@@ -19,7 +20,9 @@ use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Models\Rule;
 use Webkul\PluginManager\Package;
 use Webkul\Purchase\Models\PurchaseOrder;
+use Webkul\Purchase\Models\OrderLine as PurchaseOrderLine;
 use Webkul\Purchase\Facades\PurchaseOrder as PurchaseOrderFacade;
+use Webkul\Purchase\Enums as PurchaseOrderEnums;
 use Webkul\Sale\Facades\SaleOrder as SaleFacade;
 
 class InventoryManager
@@ -1086,7 +1089,7 @@ class InventoryManager
      */
     public function runBuyRule($procurements)
     {
-        $procurementsByPoDomain = [];
+        $procurementsByPoFilters = [];
         
         $errors = [];
 
@@ -1141,7 +1144,6 @@ class InventoryManager
 
                 foreach ($moves as $move) {
                     if ($move->propagate_cancel) {
-                        $move->actionCancel();
                         $this->cancelMoves(collect([$move]));
                     }
 
@@ -1157,42 +1159,38 @@ class InventoryManager
 
             $procurement['values']['propagate_cancel'] = $rule->propagate_cancel;
 
-            $domain = $rule->makePoGetDomain($company, $procurement['values'], $partner);
+            $filters = $this->getPurchaseOrderFilters($rule, $company, $procurement['values'], $partner);
 
-            $procurementsByPoDomain[$domain][] = [$procurement, $rule];
+            $filtersKey = serialize($filters);
+
+            $procurementsByPoFilters[$filtersKey][] = [$procurement, $rule];
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw new \Exception(implode(', ', $errors));
         }
 
-        foreach ($procurementsByPoDomain as $domain => $procurementsRules) {
-            $procurements = array_column($procurementsRules, 0);
-            $rules = array_column($procurementsRules, 1);
+        foreach ($procurementsByPoFilters as $filtersKey => $procurementsRules) {
+            $procurements = collect($procurementsRules)->pluck(0);
 
-            $origins = array_unique(
-                array_filter(
-                    array_map(fn($procurement) => $procurement['origin'], $procurements),
-                    fn ($origin) => ! empty($origin)
-                )
-            );
+            $rules = collect($procurementsRules)->pluck(1);
 
-            $purchaseOrder = PurchaseOrder::where(json_decode($domain, true))->first();
+            $filters = unserialize($filtersKey);
 
-            $company = $rules[0]->company ?: $procurements[0]['company'];
+            $origins = $procurements->pluck('origin')->unique()->filter()->all();
+
+            $purchaseOrder = PurchaseOrder::where($filters)->first();
+
+            $company = $rules->first()->company ?: $procurements->first()['company'];
 
             if (! $purchaseOrder) {
-                $positiveValues = array_filter(
-                    array_map(fn($procurement) => $procurement['values'], $procurements),
-                    fn($values) => float_compare(
-                        $values['product_qty'],
-                        0,
-                        precisionRounding: $values['product_uom']->rounding
-                    ) >= 0
-                );
+                $positiveValues = $procurements
+                    ->filter(fn($procurement) => bccomp(round($procurement['product_qty'], $procurement['product_uom']->rounding), 0.0) >= 0)
+                    ->pluck('values')
+                    ->all();
 
                 if (! empty($positiveValues)) {
-                    $vals = $this->preparePurchaseOrderValues($rules[0], $company, $origins, $positiveValues);
+                    $vals = $this->preparePurchaseOrderValues($rules->first(), $company, $origins, $positiveValues);
 
                     $purchaseOrder = PurchaseOrder::create($vals);
                 }
@@ -1207,6 +1205,52 @@ class InventoryManager
                     $purchaseOrder->update(['origin' => implode(', ', $origins)]);
                 }
             }
+
+            $procurementsToMerge = $this->getProcurementsToMerge($procurements->all());
+
+            $procurements = $this->mergeProcurements($procurementsToMerge);
+
+            $purchaseOrderLinesByProduct = $purchaseOrder->orderLines
+                ->filter(fn($line) => ! $line->display_type && $line->uom_id === $line->product->uom_po_id)
+                ->groupBy('product_id');
+
+            $purchaseOrderLineValues = [];
+
+            foreach ($procurements as $procurement) {
+                $purchaseOrderLines = $purchaseOrderLinesByProduct->get($procurement['product_id'], collect());
+
+                $purchaseOrderLine  = $purchaseOrderLines->findCandidate($procurement);
+
+                if ($purchaseOrderLine) {
+                    $values = $this->updatePurchaseOrderLine(
+                        $procurement['product'],
+                        $procurement['product_qty'],
+                        $procurement['product_uom'],
+                        $company,
+                        $procurement['values'],
+                        $purchaseOrderLine,
+                    );
+
+                    $purchaseOrderLine->update($values);
+                } else {
+                    if (bccomp(round($procurement['product_qty'], $procurement['product_uom']->rounding), 0) <= 0) {
+                        continue;
+                    }
+
+                    $purchaseOrderLineValues[] = PurchaseOrderLine::preparePurchaseOrderLineFromProcurement($procurement, $purchaseOrder);
+
+                    $orderDatePlanned = Carbon::parse($procurement['values']['planned'])
+                        ->subDays($procurement['values']['supplier']?->delay ?? 0);
+
+                    if ($orderDatePlanned->toDateString() < Carbon::parse($purchaseOrder->ordered_at)->toDateString()) {
+                        $purchaseOrder->update(['ordered_at' => $orderDatePlanned]);
+                    }
+                }
+            }
+        }
+
+        if (! empty($purchaseOrderLineValues)) {
+            PurchaseOrderLine::insert($purchaseOrderLineValues);
         }
     }
 
@@ -1215,4 +1259,54 @@ class InventoryManager
         return [
         ];
     }
+
+    public function getPurchaseOrderFilters($rule, $company, $values, $partner)
+    {
+        $gpo = $rule->group_propagation_option;
+
+        $group = match(true) {
+            $gpo === GroupPropagation::FIXED     => $rule->procurement_group_id,
+            $gpo === GroupPropagation::PROPAGATE => $values['procurement_group']?->id ?? false,
+            default                              => false,
+        };
+
+        $filters = [
+            ['partner_id', '=', $partner->id],
+            ['state', '=', PurchaseOrderEnums\OrderState::DRAFT],
+            ['operation_type_id', '=', $rule->operation_type_id],
+            ['company_id', '=', $company->id],
+            ['user_id', '=', $partner->user_id],
+        ];
+
+        if (! empty($values['orderpoint'])) {
+            $procurementDate = Carbon::parse($values['planned'])
+                ->subDays($values['supplier']->delay ?? 0)
+                ->toDateString();
+
+            $filters[] = ['ordered_at', '<=', Carbon::parse($procurementDate)->endOfDay()];
+            $filters[] = ['ordered_at', '>=', Carbon::parse($procurementDate)->startOfDay()];
+        }
+
+        if ($group) {
+            $filters[] = ['procurement_group_id', '=', $group->id];
+        }
+
+        return $filters;
+    }
+
+    public function getProcurementsToMerge($procurements)
+    {
+
+        return [];
+    }
+
+    public function mergeProcurements($procurements)
+    {
+
+        return [];
+    }
+
+    public function updatePurchaseOrderLine($product, $quantity, $uom, $company, $values, $purchaseOrderLine)
+    {
+        return [];
 }
