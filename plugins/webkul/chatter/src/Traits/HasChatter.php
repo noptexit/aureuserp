@@ -180,27 +180,25 @@ trait HasChatter
     public function chatterMessageOwner(): Model
     {
         $class = get_class($this);
+
         $parentWebkulClass = null;
 
-        // Walk up the inheritance chain
         while (($parent = get_parent_class($class)) !== false) {
-            // Check if parent is a Webkul class
             if (str_starts_with($parent, 'Webkul\\')) {
                 $parentWebkulClass = $parent;
+
                 $class = $parent;
 
                 continue;
             }
-            // Stop if we've left the Webkul namespace
+
             break;
         }
 
-        // If we found a parent Webkul class, return an instance of it
-        // Otherwise return current model
         if ($parentWebkulClass && $parentWebkulClass !== get_class($this)) {
             try {
-                // Create a new instance of the parent class and query with it
                 $parentModel = new $parentWebkulClass;
+
                 $parentInstance = $parentModel->newQuery()->find($this->getKey());
 
                 return $parentInstance ?? $this;
@@ -446,12 +444,8 @@ trait HasChatter
     public function addFollower(Partner $partner): Follower
     {
         return $this->followers()->firstOrCreate(
-            [
-                'partner_id' => $partner->id,
-            ],
-            [
-                'followed_at' => now(),
-            ],
+            ['partner_id' => $partner->id],
+            ['followed_at' => now()],
         );
     }
 
