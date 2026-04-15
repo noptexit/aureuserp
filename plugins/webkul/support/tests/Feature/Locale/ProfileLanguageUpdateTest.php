@@ -34,7 +34,7 @@ function loginAsUser(array $attributes = []): User
 }
 
 it('loads profile form pre-filled with current user language', function () {
-    $user = loginAsUser(['language' => 'ar']);
+    loginAsUser(['language' => 'ar']);
 
     Livewire::test(Profile::class)
         ->assertFormSet(['language' => 'ar'], 'editProfileForm');

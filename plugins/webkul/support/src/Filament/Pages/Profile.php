@@ -215,6 +215,7 @@ class Profile extends Page implements HasForms
 
             if (array_key_exists('language', $data) && $data['language']) {
                 $supported = array_keys(config('app.supported_locales', []));
+
                 if (in_array($data['language'], $supported, true)) {
                     $fill['language'] = $data['language'];
                 }
@@ -228,6 +229,7 @@ class Profile extends Page implements HasForms
 
             if ($languageChanged) {
                 app()->setLocale($fill['language']);
+                
                 session()->put('locale', $fill['language']);
             }
 
