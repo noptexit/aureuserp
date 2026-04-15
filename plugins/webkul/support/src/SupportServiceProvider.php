@@ -87,8 +87,6 @@ class SupportServiceProvider extends PackageServiceProvider
 
         $this->registerFilamentDefaults();
 
-        $this->registerLanguageSwitch();
-
         $this->registerRtlSupport();
     }
 
@@ -97,6 +95,8 @@ class SupportServiceProvider extends PackageServiceProvider
         Panel::configureUsing(function (Panel $panel): void {
             $panel->plugin(SupportPlugin::make());
         });
+
+        $this->registerLanguageSwitch();
 
         $this->registerHooks();
 

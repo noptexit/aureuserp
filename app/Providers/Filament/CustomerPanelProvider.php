@@ -36,11 +36,7 @@ class CustomerPanelProvider extends PanelProvider
             ])
             ->topNavigation()
             ->renderHook(
-                PanelsRenderHook::USER_MENU_BEFORE,
-                fn () => view('filament.components.language-switcher'),
-            )
-            ->renderHook(
-                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
+                PanelsRenderHook::GLOBAL_SEARCH_END,
                 fn () => view('filament.components.language-switcher'),
             )
             ->middleware([
