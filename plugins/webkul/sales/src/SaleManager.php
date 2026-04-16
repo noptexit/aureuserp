@@ -789,9 +789,7 @@ class SaleManager
             $procurements->push($this->createProcurements($line, $productQty, $procurementUom, $origin, $values));
         }
 
-        if ($procurements->count()) {
-            InventoryFacade::runProcurements($procurements);
-        }
+        InventoryFacade::runProcurements($procurements);
     }
 
     protected function cancelInventoryOperation(Order $record): void

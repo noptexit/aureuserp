@@ -11,11 +11,11 @@ use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\RuleAuto;
 use Webkul\Inventory\Enums\GroupPropagation;
+use Webkul\Inventory\Enums\ReservationMethod;
 use Webkul\Inventory\Filament\Clusters\Operations\Resources\OperationResource;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
 use Webkul\Inventory\Models\Operation;
-use Webkul\Inventory\Models\OperationType;
 use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Models\Rule;
 use Webkul\PluginManager\Package;
@@ -55,13 +55,13 @@ class InventoryManager
 
         $record->save();
 
+        //TODO: Run order points for replenishment
+
         return $record;
     }
 
     public function confirmMoves($moves, $merge = true, $mergeInto = null)
     {
-        // $moves->each(fn (Move $move) => $move->update(['state' => MoveState::CONFIRMED]));
-
         $movesToCreateProcurement = collect();
 
         $movesToConfirm = collect();
@@ -92,9 +92,130 @@ class InventoryManager
             }
         }
 
-        $procurementRequests = [];
+        $procurements = collect();
 
         $quantities = $this->prepareProcurementQty($movesToCreateProcurement);
+
+        foreach ($movesToCreateProcurement->zip($quantities) as [$move, $quantity]) {
+            $values = $move->prepareProcurementValues();
+
+            $origin = $move->prepareProcurementOrigin();
+
+            $procurements->push([
+                'product'     => $move->product,
+                'product_qty' => $quantity,
+                'product_uom' => $move->uom,
+                'location'    => $move->sourceLocation,
+                'name'        => $move->rule?->name ?? '/',
+                'origin'      => $origin,
+                'company'     => $move->company,
+                'values'      => $values,
+            ]);
+        }
+
+        $this->runProcurements($procurements);
+
+        $movesToConfirm->each(fn (Move $move) => $move->update(['state' => MoveState::CONFIRMED]));
+
+        $movesWaiting->each(fn (Move $move) => $move->update(['state' => MoveState::WAITING]));
+
+        $movesToConfirm->merge($movesWaiting)
+            ->filter(fn ($move) => $move->operationType?->reservation_method === ReservationMethod::AT_CONFIRM)
+            ->each(fn (Move $move) => $move->update(['reservation_date' => now()]));
+
+        foreach ($movesToAssign as $movesGroup) {
+            $this->assignOperation(collect($movesGroup));
+        }
+
+        if ($merge) {
+            $moves = $this->mergeMoves($moves, mergeInto: $mergeInto);
+        }
+
+        $negReturnMoves = $moves->filter(fn (Move $move) =>
+            float_compare($move->product_uom_qty, 0, precisionRounding: $move->uom->rounding) < 0
+        );
+
+        $negToPush = $negReturnMoves->filter(
+            fn($move) => $move->final_location_id && $move->destination_location_id !== $move->final_location_id
+        );
+
+        $newPushMoves = collect();
+
+        if ($negToPush->isNotEmpty()) {
+            $newPushMoves = $this->applyPushRules($negToPush);
+        }
+
+        foreach ($negReturnMoves as $move) {
+            [$move->source_location_id, $move->destination_location_id, $move->final_location_id] = [
+                $move->destination_location_id,
+                $move->source_location_id,
+                $move->source_location_id,
+            ];
+
+            $originMoveIds = [];
+            $destinationMoveIds = [];
+
+            foreach ($move->moveOrigins->merge($move->moveDestinations) as $relatedMove) {
+                $fromLocationId = $relatedMove->source_location_id;
+
+                $toLocationId = $relatedMove->destination_location_id;
+
+                if (float_compare($relatedMove->product_uom_qty, 0, precisionRounding: $relatedMove->uom->rounding) < 0) {
+                    [$fromLocationId, $toLocationId] = [$toLocationId, $fromLocationId];
+                }
+
+                if ($toLocationId === $move->source_location_id) {
+                    $originMoveIds[] = $relatedMove->id;
+                } elseif ($move->destination_location_id === $fromLocationId) {
+                    $destinationMoveIds[] = $relatedMove->id;
+                }
+            }
+
+            $move->moveOrigins()->sync($originMoveIds);
+            $move->moveDestinations()->sync($destinationMoveIds);
+
+            $move->product_uom_qty *= -1;
+
+            if ($move->operationType->return_operation_type_id) {
+                $move->operation_type_id = $move->operationType->return_operation_type_id;
+            }
+
+            $move->procure_method = ProcureMethod::MAKE_TO_STOCK;
+            $move->save();
+        }
+
+        $this->assignOperation($negReturnMoves);
+
+        $movesToAssign = $moves->filter(fn($move) => 
+            in_array($move->state, [MoveState::CONFIRMED, MoveState::PARTIALLY_ASSIGNED])
+            && (
+                $move->shouldBypassReservation()
+                || $move->pickingType->reservation_method === ReservationMethod::AT_CONFIRM
+                || ($move->reservation_date && $move->reservation_date <= now()->toDateString())
+            )
+        );
+
+        $this->assignMoves($movesToAssign);
+
+        if ($newPushMoves->isNotEmpty()) {
+            $negPushMoves = $newPushMoves->filter(
+                fn($move) => float_compare($move->product_uom_qty, 0, precisionRounding: $move->uom->rounding) < 0
+            );
+
+            $this->confirmMoves($newPushMoves->diff($negPushMoves));
+
+            $this->confirmMoves(
+                $negPushMoves,
+                mergeInto: $negPushMoves->flatMap->moveOrigins->flatMap->moveDestinations
+            );
+        }
+
+        return $moves;
+    }
+
+    public function assignMoves($moves)
+    {
+
     }
 
     public function prepareProcurementQty($moves)
@@ -109,7 +230,7 @@ class InventoryManager
             if ($move->rule?->procure_method === ProcureMethod::MTS_ELSE_MTO) {
                 $mtsoMoveIds[$move->id] = true;
 
-                $mtsoProductsByLocations[$move->location_id][] = $move->product_id;
+                $mtsoProductsByLocations[$move->source_location_id][] = $move->product_id;
             }
         }
 
@@ -150,7 +271,7 @@ class InventoryManager
                 continue;
             }
 
-            $freeQty = max($forecastedQuantitiesByLocation[$move->location_id][$move->product_id] ?? 0, 0);
+            $freeQty = max($forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] ?? 0, 0);
 
             $quantity = max($move->product_qty - $freeQty, 0);
 
@@ -162,8 +283,8 @@ class InventoryManager
 
             $quantities[] = $productUomQty;
 
-            $forecastedQuantitiesByLocation[$move->location_id][$move->product_id] =
-                ($forecastedQuantitiesByLocation[$move->location_id][$move->product_id] ?? 0)
+            $forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] =
+                ($forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] ?? 0)
                 - min($move->product_qty, $freeQty);
         }
 
@@ -347,57 +468,61 @@ class InventoryManager
     /**
      * Apply push rules for the operation.
      */
-    public function applyPushRules($moves): void
+    public function applyPushRules($moves)
     {
-        $rules = [];
+        $newMoves = collect();
 
         foreach ($moves as $move) {
-            if ($move->origin_returned_move_id) {
-                continue;
-            }
+            $warehouse = $move->warehouse ?? $move->operation?->operationType->warehouse;
 
             $rule = $this->getPushRule($move->product, $move->destinationLocation, [
+                'routes' => $move->routes,
                 'packaging' => $move->productPackaging,
-                'warehouse' => $move->warehouse,
+                'warehouse' => $warehouse,
             ]);
 
-            if (! $rule) {
-                continue;
+            if (
+                $rule
+                && (
+                    ! $move->origin_returned_move_id
+                    || $move->originReturnedMove->destination_location_id !== $rule->destination_location_id
+                )
+            ) {
+                $newMove = $this->runPushRule($rule, $move);
+
+                if ($newMove) {
+                    $newMoves->push($newMove);
+                }
             }
 
-            $pushedMove = $this->runPushRule($rule, $move);
+            $movesToPropagate = collect();
 
-            if (! isset($rules[$rule->id])) {
-                $rules[$rule->id] = [
-                    'rule'      => $rule,
-                    'operation' => $pushedMove->operation,
-                    'moves'     => [$pushedMove],
-                ];
-            } else {
-                $rules[$rule->id]['moves'][] = $pushedMove;
+            $movesToMts = collect();
+
+            foreach ($move->moveDestinations->diff(collect([$newMove])) as $m) {
+                if ($newMove && $move->final_location_id && $m->source_location_id === $move->final_location_id) {
+                    $movesToPropagate->push($m);
+                } elseif (! $m->location->isChildOf($move->destination_location_id)) {
+                    $movesToMts->push($m);
+                }
             }
+
+            foreach ($movesToMts as $m) {
+                $m->moveOrigins()->detach($move->id);
+                
+                $m->procure_method = ProcureMethod::MAKE_TO_STOCK;
+                $m->computeState();
+                $m->save();
+            }
+
+            $move->moveDestinations()->detach($movesToPropagate->pluck('id')->all());
+
+            $newMove->moveDestinations()->syncWithoutDetaching($movesToPropagate->pluck('id')->all());
         }
 
-        foreach ($rules as $ruleData) {
-            $operation = Operation::create([
-                'state'                   => OperationState::DRAFT,
-                'origin'                  => $ruleData['operation']->name,
-                'operation_type_id'       => $ruleData['rule']->operation_type_id,
-                'source_location_id'      => $ruleData['rule']->source_location_id,
-                'destination_location_id' => $ruleData['rule']->destination_location_id,
-                'scheduled_at'            => now()->addDays($ruleData['rule']->delay),
-                'company_id'              => $ruleData['rule']->company_id,
-            ]);
+        $this->confirmMoves($newMoves);
 
-            foreach ($ruleData['moves'] as $move) {
-                $move->update([
-                    'operation_id' => $operation->id,
-                    'reference'    => $operation->name,
-                ]);
-            }
-
-            $this->confirmTransfer($operation->fresh());
-        }
+        return $newMoves;
     }
 
     /**
@@ -423,9 +548,8 @@ class InventoryManager
                 }
             }
 
-            //TODO: Check this
             if ($rule->destination_location_id !== $move->destination_location_id) {
-                return $this->applyPushRules($move);
+                return $this->applyPushRules(collect([$move]))->first();
             }
         } else {
             $newMoveValues = $this->preparePushMoveCopyValues($rule, $move, $newScheduledAt);
@@ -601,6 +725,10 @@ class InventoryManager
 
     public function runProcurements($procurements)
     {
+        if ($procurements->isEmpty()) {
+            return;
+        }
+
         $actionsToRun = [];
 
         $procurementErrors = [];
@@ -687,9 +815,7 @@ class InventoryManager
                 $moves->push($move);
             }
 
-            $this->assignOperation($moves);
-
-            $this->mergeMoves($moves);
+            $this->confirmMoves($moves);
         }
     }
 
@@ -1112,7 +1238,7 @@ class InventoryManager
                     $this->cancelMoves(
                         $move->moveDestinations->filter(
                             fn($move) => $move->state !== MoveState::DONE &&
-                                $move->location_dest_id === $move->moveDestinations->first()?->location_id
+                                $move->destination_location_id === $move->moveDestinations->first()?->source_location_id
                         )
                     );
 

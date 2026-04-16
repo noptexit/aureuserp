@@ -256,7 +256,7 @@ class Move extends Model
 
             $move->quantity ??= null;
 
-            $move->computeState();
+            $move->state = MoveState::DRAFT;
         });
 
         static::saving(function ($move) {
@@ -291,11 +291,6 @@ class Move extends Model
     public function computeWarehouseId()
     {
         $this->warehouse_id ??= $this->operation?->destinationLocation->warehouse_id;
-    }
-
-    public function computeState()
-    {
-        $this->state ??= $this->operation?->state->value;
     }
 
     public function computeName()
@@ -348,6 +343,11 @@ class Move extends Model
         $this->scheduled_at ??= $this->operation?->scheduled_at ?? now();
     }
 
+    public function prepareProcurementOrigin()
+    {
+        return $this->procurementGroup?->name ?? ($this->origin ?: $this->operation?->name ?: '/');
+    }
+
     public function prepareProcurementValues(): array
     {
         $procurementGroup = $this->procurementGroup ?: false;
@@ -390,20 +390,49 @@ class Move extends Model
         $moveDestinations = collect();
 
         if ($this->procure_method === ProcureMethod::MAKE_TO_ORDER) {
-            $moveDestinations = collect($this);
+            $moveDestinations = collect([$this]);
         }
 
         return [
             'planned'           => $datesInfo['planned'] ?? null,
-            'ordered_at'        => $datesInfo['date_order'] ?? null,
+            'ordered_at'        => $datesInfo['ordered_at'] ?? null,
             'deadline'          => $this->deadline,
             'move_destinations' => $moveDestinations,
-            'group_id'          => $procurementGroup,
+            'procurement_group' => $procurementGroup,
             'routes'            => $this->routes,
             'warehouse'         => $warehouse,
             'order_point'       => $this->orderPoint,
             'product_packaging' => $this->productPackaging,
         ];
+    }
+
+    public function computeState()
+    {
+        $rounding = $this->uom->rounding;
+
+        if (
+            in_array($this->state, [MoveState::CANCELED, MoveState::DONE])
+            || ($this->state === MoveState::DRAFT && ! $this->quantity)
+        ) {
+            return;
+        } elseif (float_compare($this->quantity, $this->product_uom_qty, precisionRounding: $rounding) >= 0) {
+            $this->state = MoveState::ASSIGNED;
+        } elseif ($this->quantity && float_compare($this->quantity, $this->product_uom_qty, precisionRounding: $rounding) <= 0) {
+            $this->state = MoveState::PARTIALLY_ASSIGNED;
+        } elseif (
+            ($this->procure_method === ProcureMethod::MAKE_TO_ORDER && $this->moveOrigins->isEmpty())
+            || (
+                $this->moveOrigins->isNotEmpty() &&
+                $this->moveOrigins->some(
+                    fn($orig) => float_compare($orig->product_uom_qty, 0, precisionRounding: $orig->productUom->rounding) > 0
+                    && ! in_array($orig->state, [MoveState::DONE, MoveState::CANCELED])
+                )
+            )
+        ) {
+            $this->state = MoveState::WAITING;
+        } else {
+            $this->state = MoveState::CONFIRMED;
+        }
     }
 
     public function computeLines()

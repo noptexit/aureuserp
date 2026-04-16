@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Inventory\Database\Factories\OperationTypeFactory;
-use Webkul\Inventory\Enums;
+use Webkul\Inventory\Enums\OperationType as OperationTypeEnum;
 use Webkul\Inventory\Enums\CreateBackorder;
 use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\ReservationMethod;
@@ -62,7 +62,7 @@ class OperationType extends Model implements Sortable
     ];
 
     protected $casts = [
-        'type'                               => Enums\OperationType::class,
+        'type'                               => OperationTypeEnum::class,
         'reservation_method'                 => ReservationMethod::class,
         'create_backorder'                   => CreateBackorder::class,
         'move_type'                          => MoveType::class,

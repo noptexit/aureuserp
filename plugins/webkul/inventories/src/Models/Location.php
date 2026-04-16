@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Webkul\Inventory\Database\Factories\LocationFactory;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Product\Enums\ProductRemoval;
@@ -98,6 +99,11 @@ class Location extends Model
     public function getPutAwayStrategy(Product $product): self
     {
         return $this;
+    }
+
+    public function isChildOf(self $otherLocation): bool
+    {
+        return Str::startsWith($this->parent_path, $otherLocation->parent_path);
     }
 
     public function shouldBypassReservation(): bool
