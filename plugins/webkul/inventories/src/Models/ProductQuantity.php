@@ -253,6 +253,104 @@ class ProductQuantity extends Model
             ]],
         ];
     }
+    
+    public static function updateReservedQuantity(
+        Product $product,
+        Location $location,
+        float $quantity,
+        ?Lot $lot = null,
+        ?Package $package = null
+    ): void {
+        static::updateAvailableQuantity(
+            product: $product,
+            location: $location,
+            reservedQuantity: $quantity,
+            lot: $lot,
+            package: $package,
+        );
+    }
+
+    public static function updateAvailableQuantity(
+        Product $product,
+        Location $location,
+        mixed $quantity = false,
+        mixed $reservedQuantity = false,
+        ?Lot $lot = null,
+        ?Package $package = null,
+        ?Carbon $incomingDate = null,
+    ): array {
+        if (! $quantity && ! $reservedQuantity) {
+            throw new \Exception(__('Quantity or Reserved Quantity should be set.'));
+        }
+
+        $quants = static::gather($product, $location, lot: $lot, package: $package, strict: true);
+
+        if ($lot && $quantity > 0) {
+            $quants = $quants->filter(fn($q) => $q->lot_id);
+        }
+
+        if ($location->shouldBypassReservation()) {
+            $incomingDates = [];
+        } else {
+            $incomingDates = $quants
+                ->filter(fn($q) => $q->incoming_date && float_compare($q->quantity, 0, precisionRounding: $q->product->uom->rounding) > 0)
+                ->pluck('incoming_date')
+                ->map(fn($date) => Carbon::parse($date))
+                ->all();
+        }
+
+        if ($incomingDate) {
+            $incomingDates[] = $incomingDate;
+        }
+
+        $incomingDate = ! empty($incomingDates) ? min($incomingDates) : now();
+
+        $quant = null;
+
+        if ($quants->isNotEmpty()) {
+            $quant = self::whereIn('id', $quants->pluck('id'))
+                ->orderBy('lot_id')
+                ->lockForUpdate()
+                ->first();
+        }
+
+        if ($quant) {
+            $vals = ['incoming_date' => $incomingDate];
+
+            if ($quantity) {
+                $vals['quantity'] = $quant->quantity + $quantity;
+            }
+
+            if ($reservedQuantity) {
+                $vals['reserved_quantity'] = $quant->reserved_quantity + $reservedQuantity;
+            }
+
+            $quant->update($vals);
+        } else {
+            $vals = [
+                'product_id'    => $product->id,
+                'location_id'   => $location->id,
+                'lot_id'        => $lot?->id,
+                'package_id'    => $package?->id,
+                'incoming_date' => $incomingDate,
+            ];
+
+            if ($quantity) {
+                $vals['quantity'] = $quantity;
+            }
+
+            if ($reservedQuantity) {
+                $vals['reserved_quantity'] = $reservedQuantity;
+            }
+
+            self::create($vals);
+        }
+
+        return [
+            static::getAvailableQuantity($product, $location, lot: $lot, package: $package, strict: true, allowNegative: true),
+            $incomingDate,
+        ];
+    }
 
     public function updateScheduledAt()
     {
@@ -521,6 +619,40 @@ class ProductQuantity extends Model
         }
 
         return $reservedQuants;
+    }
+
+    public static function getQuantsByProductsLocations($productIds, $locationIds, array $extraDomain = []): array
+    {
+        $result = [];
+
+        if ($productIds->isEmpty() || $locationIds->isEmpty()) {
+            return $result;
+        }
+
+        $domain = [
+            ['product_id', 'in', $productIds->all()],
+            ['location_id', 'child_of', $locationIds->all()],
+        ];
+
+        if (! empty($extraDomain)) {
+            $domain = array_merge($domain, $extraDomain);
+        }
+
+        $neededQuants = static::where($domain)
+            ->orderBy('lot_id')
+            ->get()
+            ->groupBy(fn($quant) => implode('_', [
+                $quant->product_id,
+                $quant->location_id,
+                $quant->lot_id,
+                $quant->package_id,
+            ]));
+
+        foreach ($neededQuants as $key => $quants) {
+            $result[$key] = $quants;
+        }
+
+        return $result;
     }
 
     protected static function newFactory(): ProductQuantityFactory

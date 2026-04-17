@@ -16,7 +16,9 @@ use Webkul\Inventory\Database\Factories\OperationFactory;
 use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\OperationState;
+use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Partner\Models\Partner;
+use Webkul\PluginManager\Package;
 use Webkul\Purchase\Models\Order as PurchaseOrder;
 use Webkul\Sale\Models\Order as SaleOrder;
 use Webkul\Security\Models\User;
@@ -170,6 +172,11 @@ class Operation extends Model
         return $this->hasManyThrough(Package::class, MoveLine::class, 'operation_id', 'id', 'id', 'result_package_id');
     }
 
+    public function packageLevels(): HasMany
+    {
+        return $this->hasMany(PackageLevel::class, 'operation_id');
+    }
+
     public function procurementGroup(): BelongsTo
     {
         return $this->belongsTo(ProcurementGroup::class, 'procurement_group_id');
@@ -202,10 +209,6 @@ class Operation extends Model
             $operation->state ??= OperationState::DRAFT;
         });
 
-        static::saving(function ($operation) {
-            $operation->updateName();
-        });
-
         static::created(function ($operation) {
             $operation->update(['name' => $operation->name]);
         });
@@ -215,6 +218,27 @@ class Operation extends Model
                 $operation->updateChildrenNames();
             }
         });
+
+        static::saving(function ($operation) {
+            $operation->updateName();
+
+            $operation->autoConfirm();
+        });
+    }
+
+    public function autoConfirm()
+    {
+        if (in_array($this->state,[OperationState::DONE, OperationState::CANCELED])) {
+            return;
+        }
+
+        if ($this->moves->isEmpty() && $this->packageLevels->isEmpty()) {
+            return;
+        }
+
+        $movesToConfirm = $this->moves->filter(fn ($move) => $move->state === MoveState::DRAFT);
+
+        InventoryFacade::confirmMoves($movesToConfirm);
     }
 
     public function updateName()

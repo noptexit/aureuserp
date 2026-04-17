@@ -443,7 +443,7 @@ class Move extends Model
         ];
     }
 
-    public function prepareLines($quantity = null, $reservedQuantity = null): array
+    public function prepareLineValues($quantity = null, $reservedQuantity = null): array
     {
         $values = [
             'move_id'                 => $this->id,
@@ -462,15 +462,15 @@ class Move extends Model
                 roundingMethod: 'HALF-UP'
             );
 
-            $uomQuantity = $this->floatRound($uomQuantity, precisionDigits: 2);
+            $uomQuantity = float_round($uomQuantity, precisionDigits: 2);
 
-            $uomQuantityBackToProductUom = $this->product_uom->computeQuantity(
+            $uomQuantityBackToProductUom = $this->uom->computeQuantity(
                 $uomQuantity,
                 $this->product->uom,
                 roundingMethod: 'HALF-UP'
             );
 
-            if ($this->floatCompare($quantity, $uomQuantityBackToProductUom, precisionDigits: 2) === 0) {
+            if (float_compare($quantity, $uomQuantityBackToProductUom, precisionDigits: 2) === 0) {
                 $values = array_merge($values, [
                     'qty' => $uomQuantity,
                 ]);
@@ -675,7 +675,7 @@ class Move extends Model
                 ) {
                     array_push($moveLineVals, ...$this->addSerialMoveLineToValsList($reservedQuant, $quantity));
                 } else {
-                    $moveLineVals[] = $this->prepareLines(quantity: $quantity, reservedQuantity: $reservedQuant);
+                    $moveLineVals[] = $this->prepareLineValues(quantity: $quantity, reservedQuantity: $reservedQuant);
                 }
             }
         }
@@ -692,7 +692,7 @@ class Move extends Model
     public function addSerialMoveLineToValsList(ProductQuantity $reservedQuant, float $quantity): array
     {
         return array_map(
-            fn () => $this->prepareLines(quantity: 1, reservedQuantity: $reservedQuant),
+            fn () => $this->prepareLineValues(quantity: 1, reservedQuantity: $reservedQuant),
             range(0, (int) $quantity - 1)
         );
     }

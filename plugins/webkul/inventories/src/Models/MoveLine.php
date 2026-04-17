@@ -132,10 +132,46 @@ class MoveLine extends Model
             $moveLine->computeState();
         });
 
+        static::created(function ($moveLine) {
+            if ($moveLine->state === MoveState::DONE) {
+                return;
+            }
+
+            $reservation = ! $moveLine->move->shouldBypassReservation();
+
+            if ($moveLine->quantity && ! $reservation) {
+                return;
+            }
+
+            ProductQuantity::updateReservedQuantity(
+                product: $moveLine->product,
+                location: $moveLine->sourceLocation,
+                quantity: $moveLine->uom_qty,
+                lot: $moveLine->lot,
+                package: $moveLine->package,
+            );
+
+            $moveLine->move->computeState();
+
+            $moveLine->move->save();
+        });
+
+        static::deleting(function ($moveLine) {
+            ProductQuantity::updateReservedQuantity(
+                product: $moveLine->product,
+                location: $moveLine->sourceLocation,
+                quantity: -$moveLine->uom_qty,
+                lot: $moveLine->lot,
+                package: $moveLine->package,
+            );
+        });
+
         static::saving(function ($moveLine) {
             $moveLine->computeOperationId();
 
             $moveLine->computeReference();
+
+            $moveLine->computeUOMQty();
 
             $moveLine->computePickingDescription();
 
@@ -168,6 +204,11 @@ class MoveLine extends Model
     public function computeReference()
     {
         $this->reference ??= $this->move?->reference;
+    }
+
+    public function computeUOMQty()
+    {
+        $this->uom_qty = $this->uom->computeQuantity($this->qty, $this->product->uom, roundingMethod: 'HALF-UP');
     }
 
     public function computePickingDescription()
