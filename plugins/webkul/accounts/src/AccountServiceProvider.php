@@ -3,6 +3,8 @@
 namespace Webkul\Account;
 
 use Filament\Panel;
+use Filament\Support\Assets\Css;
+use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Foundation\AliasLoader;
 use Livewire\Livewire;
 use Webkul\Account\Facades\Account as AccountFacade;
@@ -115,6 +117,15 @@ class AccountServiceProvider extends PackageServiceProvider
         include __DIR__.'/helpers.php';
 
         Livewire::component('invoice-summary', InvoiceSummary::class);
+
+        $this->registerCustomCss();
+    }
+
+    public function registerCustomCss(): void
+    {
+        FilamentAsset::register([
+            Css::make('accounts', __DIR__.'/../resources/dist/accounts.css'),
+        ], 'accounts');
     }
 
     public function packageRegistered(): void
