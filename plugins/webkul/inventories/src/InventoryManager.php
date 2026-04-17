@@ -213,11 +213,6 @@ class InventoryManager
         return $moves;
     }
 
-    public function assignMoves($moves)
-    {
-
-    }
-
     public function prepareProcurementQty($moves)
     {
         $quantities = [];
@@ -289,6 +284,105 @@ class InventoryManager
         }
 
         return $quantities;
+    }
+
+    public function assignMoves($moves)
+    {
+
+    }
+
+    public function getAvailableMoveLines($move, $assignedMovesIds, $partiallyAssignedMovesIds): array
+    {
+        $groupedMoveLinesIn = $this->getAvailableMoveLinesIn($move);
+
+        $groupedMoveLinesOut = $this->getAvailableMoveLinesOut($move, $assignedMovesIds, $partiallyAssignedMovesIds);
+
+        $availableMoveLines = [];
+
+        foreach ($groupedMoveLinesIn as $key => $quantity) {
+            $availableMoveLines[$key] = $quantity - ($groupedMoveLinesOut[$key] ?? 0);
+        }
+
+        $rounding = $move->product->uom->rounding;
+
+        return array_filter(
+            $availableMoveLines,
+            fn($quantity) => float_compare($quantity, 0, precisionRounding: $rounding) > 0
+        );
+    }
+
+    public function getAvailableMoveLinesIn($move): array
+    {
+        $moveLines = $move->moveOrigins
+            ->flatMap->moveDestinations
+            ->flatMap->moveOrigins
+            ->filter(fn($m) => $m->state === MoveState::DONE)
+            ->flatMap->lines;
+
+        $grouped = $moveLines->groupBy(fn($ml) => implode('_', [
+            $ml->destination_location_id,
+            $ml->lot_id,
+            $ml->result_package_id,
+        ]));
+
+        $groupedMoveLinesIn = [];
+
+        foreach ($grouped as $key => $lines) {
+            $quantity = 0;
+
+            foreach ($lines as $ml) {
+                $quantity += $ml->uom->computeQuantity($ml->quantity, $ml->product->uom);
+            }
+
+            $groupedMoveLinesIn[$key] = $quantity;
+        }
+
+        return $groupedMoveLinesIn;
+    }
+
+    public function getAvailableMoveLinesOut($move, $assignedMovesIds, $partiallyAssignedMovesIds): array
+    {
+        $movesOutSiblings = $move->moveOrigins
+            ->flatMap->moveDestinations
+            ->filter(fn($m) => $m->id !== $move->id);
+
+        $moveLinesDone = $movesOutSiblings
+            ->filter(fn($m) => $m->state === MoveState::DONE)
+            ->flatMap->lines;
+
+        $movesOutSiblingsToConsider = $movesOutSiblings
+            ->filter(fn($m) => $assignedMovesIds->contains($m->id) || $partiallyAssignedMovesIds->contains($m->id));
+
+        $reservedMovesOutSiblings = $movesOutSiblings
+            ->filter(fn($m) => in_array($m->state, [MoveState::PARTIALLY_ASSIGNED, MoveState::ASSIGNED]));
+
+        $moveLinesReserved = $reservedMovesOutSiblings
+            ->merge($movesOutSiblingsToConsider)
+            ->flatMap->lines;
+
+        $keysOutGroupBy = fn($ml) => implode('_', [
+            $ml->source_location_id,
+            $ml->lot_id,
+            $ml->package_id,
+        ]);
+
+        $groupedMoveLinesOut = [];
+
+        foreach ($moveLinesDone->groupBy($keysOutGroupBy) as $key => $lines) {
+            $quantity = 0;
+
+            foreach ($lines as $ml) {
+                $quantity += $ml->uom->computeQuantity($ml->quantity, $ml->product->uom);
+            }
+
+            $groupedMoveLinesOut[$key] = $quantity;
+        }
+
+        foreach ($moveLinesReserved->groupBy($keysOutGroupBy) as $key => $lines) {
+            $groupedMoveLinesOut[$key] = $lines->sum('uom_qty');
+        }
+
+        return $groupedMoveLinesOut;
     }
 
     public function validateTransfer(Operation $record): Operation
