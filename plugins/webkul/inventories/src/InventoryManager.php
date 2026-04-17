@@ -284,7 +284,10 @@ class InventoryManager
         return $quantities;
     }
 
-    public function assignMoves($moves) {}
+    public function assignMoves($moves)
+    {
+        
+    }
 
     public function validateTransfer(Operation $record): Operation
     {
