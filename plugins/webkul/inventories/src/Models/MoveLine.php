@@ -179,9 +179,9 @@ class MoveLine extends Model
             $moveLine->move->saveQuietly();
         });
 
-        static::updated(function ($moveLine) {
+        static::updating(function ($moveLine) {
             if ($moveLine->product->is_storable && $moveLine->state !== MoveState::DONE) {
-                if ($moveLine->wasChanged('qty') || $moveLine->wasChanged('uom_id')) {
+                if ($moveLine->isDirty('qty') || $moveLine->isDirty('uom_id')) {
                     $newReservedQty = $moveLine->uom->computeQuantity($moveLine->qty, $moveLine->product->uom, roundingMethod: 'HALF-UP');
 
                     if (float_compare($newReservedQty, 0, precisionRounding: $moveLine->product->uom->rounding) < 0) {
@@ -191,8 +191,8 @@ class MoveLine extends Model
                     $newReservedQty = $moveLine->uom_qty;
                 }
 
-                if (! float_is_zero($newReservedQty, precisionRounding: $moveLine->product->uom->rounding)) {
-                    $moveLine->synchronizeQuantity(-$moveLine->uom_qty, $moveLine->sourceLocation, action: 'reserved');
+                if (! float_is_zero($moveLine->getOriginal('uom_qty'), precisionRounding: $moveLine->product->uom->rounding)) {
+                    $moveLine->synchronizeQuantity(-$moveLine->getOriginal('uom_qty'), $moveLine->sourceLocation, action: 'reserved');
                 }
 
                 if (! $moveLine->move->shouldBypassReservation($moveLine->sourceLocation)) {
@@ -207,7 +207,9 @@ class MoveLine extends Model
                     );
                 }
             }
+        });
 
+        static::updated(function ($moveLine) {
             $moveLine->move->computeQuantity();
 
             $moveLine->move->computeState();
@@ -223,6 +225,12 @@ class MoveLine extends Model
                 lot: $moveLine->lot,
                 package: $moveLine->package,
             );
+
+            $moveLine->move->computeQuantity();
+
+            $moveLine->move->computeState();
+
+            $moveLine->move->saveQuietly();
         });
     }
 
