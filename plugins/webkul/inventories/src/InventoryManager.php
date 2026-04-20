@@ -166,6 +166,7 @@ class InventoryManager
             ];
 
             $originMoveIds = [];
+            
             $destinationMoveIds = [];
 
             foreach ($move->moveOrigins->merge($move->moveDestinations) as $relatedMove) {
@@ -185,6 +186,7 @@ class InventoryManager
             }
 
             $move->moveOrigins()->sync($originMoveIds);
+
             $move->moveDestinations()->sync($destinationMoveIds);
 
             $move->product_uom_qty *= -1;
@@ -1336,6 +1338,7 @@ class InventoryManager
                         ]);
 
                         $posMove->moveDestinations()->syncWithoutDetaching($moveDestinationIds);
+
                         $posMove->moveOrigins()->syncWithoutDetaching($moveOriginIds);
 
                         $mergedMoves->push($posMove);

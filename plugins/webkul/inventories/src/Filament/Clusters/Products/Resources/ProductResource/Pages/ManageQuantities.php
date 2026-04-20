@@ -258,6 +258,7 @@ class ManageQuantities extends ManageRelatedRecords
                         }
 
                         $record->update([
+                            'quantity' => $state,
                             'inventory_diff_quantity' => $state - $previousQuantity,
                         ]);
                     })
