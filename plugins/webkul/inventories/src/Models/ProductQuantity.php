@@ -286,7 +286,7 @@ class ProductQuantity extends Model
         $quants = static::gather($product, $location, lot: $lot, package: $package, strict: true);
 
         if ($lot && $quantity > 0) {
-            $quants = $quants->filter(fn($q) => $q->lot_id);
+            $quants = $quants->filter(fn ($q) => $q->lot_id);
         }
 
         if ($location->shouldBypassReservation()) {

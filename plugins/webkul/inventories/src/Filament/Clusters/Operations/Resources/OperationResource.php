@@ -1128,15 +1128,9 @@ class OperationResource extends Resource
             ->action(function (Set $set, Move $move, Schema $schema): void {
                 $schema->saveRelationships();
 
-                $totalQty = $move->lines()->sum('qty');
+                $move->refresh();
 
-                $move->fill([
-                    'quantity' => $totalQty,
-                ]);
-
-                $move->computeLines();
-
-                $set('quantity', $totalQty);
+                $set('quantity', $move->quantity);
             });
     }
 

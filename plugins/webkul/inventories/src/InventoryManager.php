@@ -500,8 +500,6 @@ class InventoryManager
 
     public function validateTransfer(Operation $record): Operation
     {
-        $record->moves->each(fn (Move $move) => $move->computeLines());
-
         foreach ($record->moves as $move) {
             $move->update([
                 'state'     => MoveState::DONE,

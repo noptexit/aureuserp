@@ -221,9 +221,11 @@ class Move extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function shouldBypassReservation(): bool
+    public function shouldBypassReservation($forceLocation = null): bool
     {
-        return $this->sourceLocation->shouldBypassReservation() || ! $this->product->is_storable;
+        $location = $forceLocation ?? $this->sourceLocation;
+
+        return $location->shouldBypassReservation() || ! $this->product->is_storable;
     }
 
     public function procurementGroup(): BelongsTo
@@ -255,14 +257,10 @@ class Move extends Model
 
             $move->company_id ??= $move->operation?->company_id;
 
-            $move->quantity ??= null;
-
             $move->state ??= MoveState::DRAFT;
         });
 
         static::saving(function ($move) {
-            $move->quantity ??= null;
-
             $move->computeWarehouseId();
 
             $move->computeName();
@@ -286,8 +284,16 @@ class Move extends Model
             $move->computeDestinationLocationId();
             
             $move->computeScheduledAt();
+        });
 
-            // $move->computeLines();
+        static::updated(function ($move) {
+            if ($move->wasChanged('quantity')) {
+                $move->setQuantity();
+            }
+        });
+
+        static::deleting(function ($move) {
+            $move->lines->each->delete();
         });
     }
 
@@ -356,6 +362,180 @@ class Move extends Model
         return $this->procurementGroup?->name ?? ($this->origin ?: $this->operation?->name ?: '/');
     }
 
+    public function setQuantity()
+    {
+        $processDecrease = function (Move $move, float $quantity) {
+            $toDelete = collect();
+
+            foreach ($move->lines->sortBy('id')->reverse() as $ml) {
+                if (float_is_zero($quantity, precisionRounding: $move->uom->rounding)) {
+                    break;
+                }
+
+                $qtyMlDec = min($ml->qty, $ml->uom->computeQuantity($quantity, $ml->uom, round: false));
+
+                if (float_is_zero($qtyMlDec, precisionRounding: $ml->uom->rounding)) {
+                    continue;
+                }
+
+                if (
+                    float_compare($ml->qty, $qtyMlDec, precisionRounding: $ml->uom->rounding) === 0 &&
+                    ! in_array($ml->state, [MoveState::DONE, MoveState::CANCELED])
+                ) {
+                    $toDelete->push($ml->id);
+                } else {
+                    $ml->decrement('qty', $qtyMlDec);
+                }
+
+                $quantity -= $move->uom->computeQuantity($qtyMlDec, $move->uom, round: false);
+            }
+
+            MoveLine::whereIn('id', $toDelete)->get()->each->delete();
+        };
+
+        $processIncrease = function (Move $move, float $quantity) {
+            $move->setQuantityDone($move->quantity);
+        };
+
+        $errors = [];
+
+        $uomQty = float_round($this->quantity, precisionRounding: $this->uom->rounding, roundingMethod: 'HALF-UP');
+
+        $qty = float_round($this->quantity, precisionDigits: 2, roundingMethod: 'HALF-UP');
+
+        if (float_compare($uomQty, $qty, precisionDigits: 2) !== 0) {
+            $errors[] = __('The quantity done for the product :product doesn\'t respect the rounding precision defined on the unit of measure :unit. Please change the quantity done or the rounding precision of your unit of measure.', [
+                'product' => $this->product->name,
+                'unit'    => $this->uom->name,
+            ]);
+        } else {
+            $deltaQty = $this->quantity - $this->getQuantitySml();
+
+            if (float_compare($deltaQty, 0, precisionRounding: $this->uom->rounding) > 0) {
+                $processIncrease($this, $deltaQty);
+            } elseif (float_compare($deltaQty, 0, precisionRounding: $this->uom->rounding) < 0) {
+                $processDecrease($this, abs($deltaQty));
+            }
+        }
+
+        if (! empty($errors)) {
+            throw new \Exception(implode("\n", $errors));
+        }
+    }
+
+    public function setQuantityDone(float $quantity)
+    {
+        $this->setQuantityDonePrepareVals($quantity);
+    }
+
+    public function setQuantityDonePrepareVals(float $qty): void
+    {
+        $toDelete = collect();
+
+        $toUpdate = [];
+
+        $toCreate = [];
+
+        foreach ($this->lines as $ml) {
+            $mlQty = $ml->qty;
+
+            if (float_is_zero($qty, precisionRounding: $this->uom->rounding)) {
+                $toDelete->push($ml->id);
+
+                continue;
+            }
+
+            if (float_compare($mlQty, 0, precisionRounding: $ml->uom->rounding) <= 0) {
+                continue;
+            }
+
+            if ($ml->uom->id !== $this->uom->id) {
+                $mlQty = $ml->uom->computeQuantity($mlQty, $this->uom, round: false);
+            }
+
+            $takenQty = min($qty, $mlQty);
+
+            if ($ml->uom->id !== $this->uom->id) {
+                $takenQty = $this->uom->computeQuantity($takenQty, $ml->uom, round: false);
+            }
+
+            $takenQty = float_round($takenQty, precisionRounding: $ml->uom->rounding);
+
+            $toUpdate[] = ['id' => $ml->id, 'qty' => $takenQty];
+
+            if ($ml->uom->id !== $this->uom->id) {
+                $takenQty = $ml->uom->computeQuantity($takenQty, $this->uom, round: false);
+            }
+
+            $qty -= $takenQty;
+        }
+
+        if (float_compare($qty, 0.0, precisionRounding: $this->uom->rounding) > 0) {
+            if ($this->product->tracking !== ProductTracking::SERIAL) {
+                $vals = $this->prepareLineValues(quantity: 0);
+
+                $vals['qty'] = $qty;
+
+                $toCreate[] = $vals;
+            } else {
+                $uomQty = $this->uom->computeQuantity($qty, $this->product->uom);
+
+                for ($i = 0; $i < (int) $uomQty; $i++) {
+                    $vals = $this->prepareLineValues(quantity: 0);
+
+                    $vals['qty'] = 1;
+
+                    $vals['product_uom_id'] = $this->product->uom->id;
+
+                    $toCreate[] = $vals;
+                }
+            }
+        }
+
+        MoveLine::whereIn('id', $toDelete)->get()->each->delete();
+
+        foreach ($toUpdate as $update) {
+            $moveLine = MoveLine::find($update['id']);
+
+            $moveLine->update(['qty' => $update['qty']]);
+        }
+
+        foreach ($toCreate as $vals) {
+            $this->lines()->create($vals);
+        }
+    }
+
+    public function computeQuantity()
+    {
+        $moveLineIds = $this->lines->pluck('id')->all();
+
+        $data = MoveLine::whereIn('id', $moveLineIds)
+            ->groupBy('move_id', 'uom_id')
+            ->selectRaw('move_id, uom_id, SUM(qty) as qty_sum')
+            ->get();
+
+        $sumQty = [];
+
+        foreach ($data as $row) {
+            $uom = $this->uom;
+            
+            $sumQty[$row->move_id] = ($sumQty[$row->move_id] ?? 0.0) + $row->uom->computeQuantity($row->qty_sum, $uom, round: false);
+        }
+
+        $this->quantity = $sumQty[$this->id] ?? 0.0;
+    }
+
+    public function getQuantitySml()
+    {
+        $quantity = 0;
+
+        $this->lines->each(function ($moveLine) use (&$quantity) {
+            $quantity += $moveLine->uom->computeQuantity($moveLine->qty, $this->product->uom, round: false);
+        });
+
+        return $quantity;
+    }
+
     public function computeState()
     {
         $rounding = $this->uom->rounding;
@@ -374,7 +554,7 @@ class Move extends Model
             || (
                 $this->moveOrigins->isNotEmpty() &&
                 $this->moveOrigins->some(
-                    fn($orig) => float_compare($orig->product_uom_qty, 0, precisionRounding: $orig->productUom->rounding) > 0
+                    fn($orig) => float_compare($orig->product_uom_qty, 0, precisionRounding: $orig->uom->rounding) > 0
                     && ! in_array($orig->state, [MoveState::DONE, MoveState::CANCELED])
                 )
             )
@@ -695,144 +875,5 @@ class Move extends Model
             fn () => $this->prepareLineValues(quantity: 1, reservedQuantity: $reservedQuant),
             range(0, (int) $quantity - 1)
         );
-    }
-
-    public function computeLines()
-    {
-        if (! $this->state) {
-            return;
-        }
-
-        if (in_array($this->state, [MoveState::DRAFT, MoveState::DONE, MoveState::CANCELED])) {
-            return;
-        }
-
-        $lines = $this->lines()->orderBy('created_at')->get();
-
-        $remainingQty = ! is_null($this->quantity)
-            ? $this->uom->computeQuantity($this->quantity, $this->product->uom, true, 'HALF-UP')
-            : $this->product_qty;
-
-        $isSupplierSource = $this->sourceLocation->type === LocationType::SUPPLIER;
-
-        $processedKeys = collect();
-
-        $availableQty = 0;
-
-        $productQuantities = collect();
-
-        if (! $isSupplierSource) {
-            $parentPath = $this->sourceLocation->parent_path;
-            $sourceLocationIds = ($parentPath && trim($parentPath, '/') !== '')
-                ? Location::where('parent_path', 'LIKE', $parentPath . '%')->pluck('id')
-                : collect([$this->source_location_id]);
-
-            $productQuantities = ProductQuantity::query()
-                ->with(['location', 'lot', 'package'])
-                ->where('product_id', $this->product_id)
-                ->whereIn('location_id', $sourceLocationIds)
-                ->when(
-                    $this->product->tracking === ProductTracking::LOT,
-                    fn($query) => $query->whereNotNull('lot_id')
-                )
-                ->get();
-        }
-
-        foreach ($lines as $line) {
-            if (! $isSupplierSource) {
-                $locationQty = $productQuantities
-                    ->where('location_id', $line->source_location_id)
-                    ->where('lot_id', $line->lot_id)
-                    ->where('package_id', $line->package_id)
-                    ->first()?->quantity ?? 0;
-
-                if ($locationQty <= 0) {
-                    $line->delete();
-
-                    continue;
-                }
-            }
-
-            if ($remainingQty <= 0) {
-                $line->delete();
-
-                continue;
-            }
-
-            $newQty = $isSupplierSource
-                ? min($line->uom_qty, $remainingQty)
-                : min($line->uom_qty, $locationQty, $remainingQty);
-
-            if ($newQty != $line->uom_qty) {
-                $line->update([
-                    'qty'     => $this->product->uom->computeQuantity($newQty, $this->uom, true, 'HALF-UP'),
-                    'uom_qty' => $newQty,
-                    'state'   => MoveState::ASSIGNED,
-                ]);
-            }
-
-            $processedKeys->push("{$line->source_location_id}-{$line->lot_id}-{$line->package_id}");
-            $availableQty += $newQty;
-            $remainingQty = round($remainingQty - $newQty, 4);
-        }
-
-        if ($remainingQty > 0 && $isSupplierSource) {
-            while ($remainingQty > 0) {
-                $newQty = $this->product->tracking === ProductTracking::SERIAL ? 1 : $remainingQty;
-
-                $this->lines()->create([
-                    'qty'     => $this->product->uom->computeQuantity($newQty, $this->uom, true, 'HALF-UP'),
-                    'uom_qty' => $newQty,
-                    'state'   => MoveState::ASSIGNED,
-                ]);
-
-                $availableQty += $newQty;
-                $remainingQty = round($remainingQty - $newQty, 4);
-            }
-        } elseif ($remainingQty > 0) {
-            foreach ($productQuantities as $productQuantity) {
-                if ($remainingQty <= 0) break;
-
-                $key = "{$productQuantity->location_id}-{$productQuantity->lot_id}-{$productQuantity->package_id}";
-
-                if ($processedKeys->contains($key) || $productQuantity->quantity <= 0) {
-                    continue;
-                }
-
-                $newQty = min($productQuantity->quantity, $remainingQty);
-
-                $this->lines()->create([
-                    'qty'                => $this->product->uom->computeQuantity($newQty, $this->uom, true, 'HALF-UP'),
-                    'uom_qty'            => $newQty,
-                    'lot_name'           => $productQuantity->lot?->name,
-                    'lot_id'             => $productQuantity->lot_id,
-                    'package_id'         => $productQuantity->package_id,
-                    'result_package_id'  => $newQty == $productQuantity->quantity ? $productQuantity->package_id : null,
-                    'source_location_id' => $productQuantity->location_id,
-                    'state'              => MoveState::ASSIGNED,
-                ]);
-
-                $availableQty += $newQty;
-                $remainingQty  = round($remainingQty - $newQty, 4);
-            }
-        }
-
-        [$state, $quantity] = match(true) {
-            $availableQty <= 0                 => [MoveState::CONFIRMED, null],
-            $availableQty < $this->product_qty => [
-                MoveState::PARTIALLY_ASSIGNED,
-                $this->product->uom->computeQuantity($availableQty, $this->uom, true, 'HALF-UP')
-            ],
-            default                            => [
-                MoveState::ASSIGNED,
-                $this->product->uom->computeQuantity($availableQty, $this->uom, true, 'HALF-UP')
-            ],
-        };
-
-        $this->updateQuietly(['state' => $state, 'quantity' => $quantity]);
-
-        if ($state !== MoveState::ASSIGNED) {
-            $this->lines()->update(['state' => $state]);
-        }
     }
 }
