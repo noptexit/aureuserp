@@ -1,6 +1,9 @@
 name: Playwright Tests
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -54,9 +57,9 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.discover_playwright_test_groups.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.discover_playwright_test_groups.outputs.matrix) }}
 
-    name: Playwright Tests | ${{ matrix.group }} (${{ matrix.folder }})
+    name: Playwright Group | ${{ matrix.group }} (${{ matrix.folder }})
 
     services:
       mysql:
@@ -189,11 +192,12 @@ jobs:
           retention-days: 1
 
   merge_playwright_reports:
-    if: ${{ !cancelled() }}
+    if: ${{ always() && !cancelled() }}
     needs:
       - discover_playwright_test_groups
       - aureus_playwright_test
     runs-on: ubuntu-latest
+    name: Playwright Report
 
     steps:
       - name: Checkout
@@ -227,3 +231,27 @@ jobs:
           name: playwright-report-${{ github.run_id }}-${{ github.run_number }}
           path: tests/e2e-pw/playwright-report
           retention-days: 1
+
+  playwright_status:
+    if: ${{ always() && !cancelled() }}
+    needs:
+      - aureus_playwright_test
+      - merge_playwright_reports
+    runs-on: ubuntu-latest
+    name: Playwright Tests | Shard 1 Of 1
+
+    steps:
+      - name: Evaluate Workflow Status
+        run: |
+          echo "Grouped test result: ${{ needs.aureus_playwright_test.result }}"
+          echo "Report merge result: ${{ needs.merge_playwright_reports.result }}"
+
+          if [ "${{ needs.aureus_playwright_test.result }}" != "success" ]; then
+            echo "One or more Playwright test groups failed."
+            exit 1
+          fi
+
+          if [ "${{ needs.merge_playwright_reports.result }}" != "success" ]; then
+            echo "Playwright report merge did not complete successfully."
+            exit 1
+          fi
