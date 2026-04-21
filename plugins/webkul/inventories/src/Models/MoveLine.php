@@ -14,6 +14,7 @@ use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Security\Models\User;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\ProcureMethod;
+use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Support\Models\Company;
 use Webkul\Support\Models\UOM;
 
@@ -465,83 +466,34 @@ class MoveLine extends Model
         InventoryFacade::assignMoves($moveToReassign->unique('id'));
     }
 
-    public function transferInventories()
+    public function createAndAssignProductionLot()
     {
-        $sourceQuantity = ProductQuantity::where('product_id', $this->product_id)
-            ->where('location_id', $this->source_location_id)
-            ->where('lot_id', $this->lot_id)
-            ->where('package_id', $this->package_id)
-            ->first();
+        $lotVals = [$this->prepareNewLotVals()];
 
-        if ($sourceQuantity) {
-            $remainingQty = $sourceQuantity->quantity - $this->uom_qty;
+        if ($this->product->tracking === ProductTracking::LOT) {
+            $existingLot = Lot::where('product_id', $this->product_id)
+                ->where('name', $this->lot_name)
+                ->first();
 
-            if ($remainingQty == 0) {
-                $sourceQuantity->delete();
-            } else {
-                $reservedQty = $this->calculateReservedQty($this->sourceLocation, $this->uom_qty);
+            if ($existingLot) {
+                $this->update(['lot_id' => $existingLot->id]);
 
-                $sourceQuantity->update([
-                    'quantity'                => $remainingQty,
-                    'reserved_quantity'       => $sourceQuantity->reserved_quantity - $reservedQty,
-                    'inventory_diff_quantity' => $sourceQuantity->inventory_diff_quantity + $this->uom_qty,
-                ]);
+                return;
             }
-        } else {
-            ProductQuantity::create([
-                'product_id'              => $this->product_id,
-                'location_id'             => $this->source_location_id,
-                'lot_id'                  => $this->lot_id,
-                'package_id'              => $this->package_id,
-                'quantity'                => -$this->uom_qty,
-                'inventory_diff_quantity' => $this->uom_qty,
-                'company_id'              => $this->sourceLocation->company_id,
-                'incoming_at'             => now(),
-            ]);
         }
 
-        $destinationQuantity = ProductQuantity::where('product_id', $this->product_id)
-            ->where('location_id', $this->destination_location_id)
-            ->where('lot_id', $this->lot_id)
-            ->where('package_id', $this->result_package_id)
-            ->first();
+        $lot = Lot::create($lotVals[0]);
 
-        $reservedQty = $this->calculateReservedQty($this->destinationLocation, $this->uom_qty);
+        $this->update(['lot_id' => $lot->id]);
+    }
 
-        if ($destinationQuantity) {
-            $destinationQuantity->update([
-                'quantity'                => $destinationQuantity->quantity + $this->uom_qty,
-                'reserved_quantity'       => $destinationQuantity->reserved_quantity + $reservedQty,
-                'inventory_diff_quantity' => $destinationQuantity->inventory_diff_quantity - $this->uom_qty,
-            ]);
-        } else {
-            ProductQuantity::create([
-                'product_id'              => $this->product_id,
-                'location_id'             => $this->destination_location_id,
-                'package_id'              => $this->result_package_id,
-                'lot_id'                  => $this->lot_id,
-                'quantity'                => $this->uom_qty,
-                'reserved_quantity'       => $reservedQty,
-                'inventory_diff_quantity' => -$this->uom_qty,
-                'incoming_at'             => now(),
-                'company_id'              => $this->destinationLocation->company_id,
-            ]);
-        }
-
-        if ($this->result_package_id && $this->resultPackage) {
-            $this->resultPackage->update([
-                'location_id' => $this->destination_location_id,
-                'pack_date'   => now(),
-            ]);
-        }
-
-        if ($this->lot_id && $this->lot) {
-            $this->lot->update([
-                'location_id' => $this->lot->total_quantity >= $this->uom_qty
-                    ? $this->destination_location_id
-                    : null,
-            ]);
-        }
+    public function prepareNewLotVals(): array
+    {
+        return [
+            'name'       => $this->lot_name,
+            'product_id' => $this->product_id,
+            'company_id' => $this->company_id,
+        ];
     }
 
     private function calculateReservedQty($location, $qty): int

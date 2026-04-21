@@ -938,42 +938,6 @@ class InventoryManager
         return $backOrderOperation;
     }
 
-    public function validateTransfer(Operation $record): Operation
-    {
-        foreach ($record->moves as $move) {
-            $move->update([
-                'state'     => MoveState::DONE,
-                'is_picked' => true,
-            ]);
-
-            foreach ($move->lines as $moveLine) {
-                $moveLine->update(['state' => MoveState::DONE]);
-
-                $moveLine->transferInventories();
-            }
-        }
-
-        $record->refresh()->computeState();
-
-        $record->save();
-
-        if (Package::isPluginInstalled('purchases')) {
-            foreach ($record->purchaseOrders as $purchaseOrder) {
-                PurchaseOrderFacade::computePurchaseOrder($purchaseOrder);
-            }
-        }
-
-        if (Package::isPluginInstalled('sales')) {
-            if ($record->saleOrder) {
-                SaleFacade::computeSaleOrder($record->saleOrder);
-            }
-        }
-
-        $this->applyPushRules($record->moves);
-
-        return $record;
-    }
-
     /**
      * Apply push rules for the operation.
      */

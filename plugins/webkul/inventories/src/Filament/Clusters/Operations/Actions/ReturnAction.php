@@ -2,6 +2,7 @@
 
 namespace Webkul\Inventory\Filament\Clusters\Operations\Actions;
 
+use Closure;
 use Filament\Actions\Action;
 use Livewire\Component;
 use Webkul\Inventory\Enums\OperationState;
@@ -11,6 +12,8 @@ use Webkul\Inventory\Models\Operation;
 
 class ReturnAction extends Action
 {
+    protected bool | Closure $hasDatabaseTransactions = true;
+
     public static function getDefaultName(): ?string
     {
         return 'inventories.operations.return';
