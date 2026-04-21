@@ -231,6 +231,19 @@ class Move extends Model
         return $location->shouldBypassReservation() || ! $this->product->is_storable;
     }
 
+    public function skipPush()
+    {
+        return $this->is_inventory
+            || (
+                $this->moveDestinations->isNotEmpty()
+                && $this->moveDestinations->some(fn ($move) => $move->sourceLocation->isChildOf($this->destinationLocation))
+            )
+            || (
+                $this->location_final_id
+                && $this->finalLocation->isChildOf($this->destinationLocation)
+            );
+    }
+
     public function procurementGroup(): BelongsTo
     {
         return $this->belongsTo(ProcurementGroup::class, 'procurement_group_id');

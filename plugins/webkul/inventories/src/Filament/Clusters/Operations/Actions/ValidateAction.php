@@ -2,6 +2,7 @@
 
 namespace Webkul\Inventory\Filament\Clusters\Operations\Actions;
 
+use Closure;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Livewire\Component;
@@ -14,6 +15,8 @@ use Webkul\Inventory\Models\ProductQuantity;
 
 class ValidateAction extends Action
 {
+    protected bool | Closure $hasDatabaseTransactions = true;
+
     public static function getDefaultName(): ?string
     {
         return 'inventories.operations.validate';
@@ -55,7 +58,7 @@ class ValidateAction extends Action
                             return;
                         }
 
-                        Inventory::validateTransfer($record);
+                        Inventory::doneTransfer($record, $this->canCreateBackOrder($record));
 
                         $livewire->updateForm();
                     }),
@@ -69,7 +72,7 @@ class ValidateAction extends Action
                     Inventory::createBackOrder($record);
                 }
 
-                Inventory::validateTransfer($record);
+                Inventory::doneTransfer($record, $this->canCreateBackOrder($record));
 
                 $livewire->updateForm();
             })
