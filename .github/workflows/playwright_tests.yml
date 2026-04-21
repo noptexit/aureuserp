@@ -3,6 +3,7 @@ name: Playwright Tests
 on:
   push:
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -233,6 +234,30 @@ jobs:
           retention-days: 1
 
   playwright_status:
+    if: ${{ always() && !cancelled() }}
+    needs:
+      - aureus_playwright_test
+      - merge_playwright_reports
+    runs-on: ubuntu-latest
+    name: Playwright Tests
+
+    steps:
+      - name: Evaluate Workflow Status
+        run: |
+          echo "Grouped test result: ${{ needs.aureus_playwright_test.result }}"
+          echo "Report merge result: ${{ needs.merge_playwright_reports.result }}"
+
+          if [ "${{ needs.aureus_playwright_test.result }}" != "success" ]; then
+            echo "One or more Playwright test groups failed."
+            exit 1
+          fi
+
+          if [ "${{ needs.merge_playwright_reports.result }}" != "success" ]; then
+            echo "Playwright report merge did not complete successfully."
+            exit 1
+          fi
+
+  playwright_status_legacy:
     if: ${{ always() && !cancelled() }}
     needs:
       - aureus_playwright_test
