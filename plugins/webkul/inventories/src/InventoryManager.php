@@ -32,6 +32,19 @@ use Webkul\Sale\Facades\SaleOrder as SaleFacade;
 
 class InventoryManager
 {
+    public function confirmTransfer(Operation $record): Operation
+    {
+        $this->confirmMoves($record->moves->filter(fn (Move $move) => $move->state === MoveState::DRAFT));
+
+        $record->refresh();
+
+        $record->computeState();
+
+        $record->save();
+
+        return $record;
+    }
+
     public function assignTransfer(Operation $record): Operation
     {
         if ($record->state === OperationState::DRAFT) {
@@ -51,19 +64,6 @@ class InventoryManager
         }
 
         $this->assignMoves($moves);
-
-        $record->refresh();
-
-        $record->computeState();
-
-        $record->save();
-
-        return $record;
-    }
-
-    public function confirmTransfer(Operation $record): Operation
-    {
-        $this->confirmMoves($record->moves->filter(fn (Move $move) => $move->state === MoveState::DRAFT));
 
         $record->refresh();
 
@@ -122,7 +122,6 @@ class InventoryManager
 
         return $record;
     }
-
 
     public function confirmMoves($moves, $merge = true, $mergeInto = null, $bypassEntirePack = true)
     {
@@ -821,12 +820,14 @@ class InventoryManager
 
         foreach ($record->moves as $move) {
             $newMove = $move->replicate()->fill([
+                'state'                   => MoveState::DRAFT,
                 'operation_id'            => $newOperation->id,
                 'reference'               => $newOperation->name,
-                'state'                   => MoveState::DRAFT,
                 'is_refund'               => true,
+                'is_picked'               => false,
                 'product_qty'             => $move->product_qty,
                 'product_uom_qty'         => $move->product_uom_qty,
+                'quantity'                => 0,
                 'source_location_id'      => $move->destination_location_id,
                 'destination_location_id' => $move->source_location_id,
                 'origin_returned_move_id' => $move->id,
@@ -838,7 +839,7 @@ class InventoryManager
 
         $newOperation->refresh();
 
-        $newOperation = $this->confirmTransfer($newOperation);
+        $newOperation = $this->assignTransfer($newOperation);
 
         if (Package::isPluginInstalled('purchases')) {
             $newOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));

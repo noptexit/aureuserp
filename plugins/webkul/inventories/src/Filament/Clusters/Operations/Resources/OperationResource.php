@@ -43,9 +43,7 @@ use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\OperationState;
-use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
-use Webkul\Inventory\Facades\Inventory;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\LotResource;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\PackageResource;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource;
@@ -501,6 +499,10 @@ class OperationResource extends Resource
 
                         if ($record->state !== OperationState::CANCELED) {
                             unset($options[OperationState::CANCELED->value]);
+                        }
+
+                        if ($record->state !== OperationState::WAITING) {
+                            unset($options[OperationState::WAITING->value]);
                         }
 
                         return $options;
