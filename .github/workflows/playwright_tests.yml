@@ -9,19 +9,54 @@ env:
   FORCE_COLOR: 1
 
 jobs:
+  discover_playwright_test_groups:
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.collect.outputs.matrix }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect Playwright Test Groups
+        id: collect
+        run: |
+          matrix=$(python3 -c '
+          import json
+          import re
+          from pathlib import Path
+
+          tests_root = Path("tests/e2e-pw/tests")
+          include = []
+
+          for folder in sorted(path for path in tests_root.iterdir() if path.is_dir()):
+              label = re.sub(r"^\d+[_-]*", "", folder.name) or folder.name
+              include.append(
+                  {
+                      "folder": folder.name,
+                      "group": label,
+                      "path": f"./tests/{folder.name}",
+                  }
+              )
+
+          if not include:
+              raise SystemExit("No Playwright test groups were found.")
+
+          print(json.dumps({"include": include}))
+          ')
+
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
   aureus_playwright_test:
-    runs-on: ${{ matrix.os }}
+    needs: discover_playwright_test_groups
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        php-versions: ["8.3"]
-        node-version: ["22.13.1"]
-        shard-index: [1, 2, 3, 4]
-        shard-total: [4]
+      matrix: ${{ fromJson(needs.discover_playwright_test_groups.outputs.matrix) }}
 
-    name: Playwright Tests | Shard ${{ matrix.shard-index }} Of ${{ matrix.shard-total }}
+    name: Playwright Tests | ${{ matrix.group }} (${{ matrix.folder }})
 
     services:
       mysql:
@@ -51,7 +86,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php-versions }}
+          php-version: "8.3"
           extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_mysql, tokenizer, zip
           ini-values: error_reporting=E_ALL
           tools: composer:v2
@@ -59,7 +94,7 @@ jobs:
       - name: Set Up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "22.13.1"
           cache: npm
           cache-dependency-path: tests/e2e-pw/package-lock.json
 
@@ -128,18 +163,18 @@ jobs:
           echo "Waiting for server to start..."
           timeout 30 bash -c 'until curl -s http://127.0.0.1:8000 > /dev/null; do sleep 1; done'
 
-      - name: Run All Playwright Tests
+      - name: Run Playwright Tests For Group
         env:
           BASE_URL: "http://127.0.0.1:8000"
         run: |
-          npx playwright test --config=playwright.config.ts --shard=${{ matrix.shard-index }}/${{ matrix.shard-total }}
+          npx playwright test --config=playwright.config.ts ${{ matrix.path }}
         working-directory: tests/e2e-pw
 
       - name: Upload Blob Report
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: blob-report-${{ matrix.shard-index }}
+          name: blob-report-${{ matrix.folder }}
           path: tests/e2e-pw/blob-report
           retention-days: 1
 
@@ -147,7 +182,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-failures-${{ matrix.shard-index }}-${{ github.run_id }}-${{ github.run_number }}
+          name: playwright-failures-${{ matrix.folder }}-${{ github.run_id }}-${{ github.run_number }}
           path: |
             tests/e2e-pw/test-results
             storage/logs/laravel.log
@@ -155,7 +190,9 @@ jobs:
 
   merge_playwright_reports:
     if: ${{ !cancelled() }}
-    needs: aureus_playwright_test
+    needs:
+      - discover_playwright_test_groups
+      - aureus_playwright_test
     runs-on: ubuntu-latest
 
     steps:
