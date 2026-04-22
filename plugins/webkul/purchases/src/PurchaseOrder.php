@@ -467,7 +467,7 @@ class PurchaseOrder
         );
 
         if ($operations->isEmpty()) {
-            $values = $record->prepareInventoryOperation();
+            $values = $this->prepareInventoryOperation($record);
 
             $operation = Receipt::create($values);
 
