@@ -86,7 +86,7 @@ class ValidateAction extends Action
                 ->body($e->getMessage())
                 ->send();
 
-            $this->halt();
+            $this->halt(shouldRollBackDatabaseTransaction: true);
         }
     }
 }

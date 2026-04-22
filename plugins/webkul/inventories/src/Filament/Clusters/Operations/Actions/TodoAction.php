@@ -53,7 +53,7 @@ class TodoAction extends Action
                         ->body($e->getMessage())
                         ->send();
 
-                    $this->halt();
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
             ->hidden(fn () => $this->getRecord()->state !== OperationState::DRAFT);

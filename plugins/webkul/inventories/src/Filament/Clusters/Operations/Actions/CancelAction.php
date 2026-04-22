@@ -39,7 +39,7 @@ class CancelAction extends Action
                         ->body($e->getMessage())
                         ->send();
 
-                    $this->halt();
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
             ->visible(fn () => ! in_array($this->getRecord()->state, [
