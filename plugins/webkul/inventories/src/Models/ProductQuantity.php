@@ -352,6 +352,17 @@ class ProductQuantity extends Model
         ];
     }
 
+    public static function deleteZeroQuantities(): void
+    {
+        static::where(function ($query) {
+                $query->whereRaw("ROUND(quantity, ?) = 0", [6])
+                    ->orWhereNull('quantity');
+            })
+            ->whereRaw("ROUND(reserved_quantity, ?) = 0", [6])
+            ->whereNull('user_id')
+            ->delete();
+    }
+
     public function updateScheduledAt()
     {
         $this->scheduled_at = Carbon::create(

@@ -120,6 +120,8 @@ class InventoryManager
 
         $record->save();
 
+        ProductQuantity::deleteZeroQuantities();
+
         return $record;
     }
 
@@ -578,6 +580,9 @@ class InventoryManager
             }
         }
 
+        if ($movesTodo->flatMap->lines->some(fn($moveLine) => $moveLine->package_id && $moveLine->package_id === $moveLine->result_package_id)) {
+            ProductQuantity::deleteZeroQuantities();
+        }
 
         $operation = $movesTodo->pluck('operation')->unique()->filter()->first();
 
