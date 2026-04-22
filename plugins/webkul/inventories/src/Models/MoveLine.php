@@ -190,7 +190,7 @@ class MoveLine extends Model
 
             $moveLine->move->computeState();
 
-            $moveLine->move->saveQuietly();
+            $moveLine->move->save();
         });
 
         static::updating(function ($moveLine) {
@@ -228,7 +228,7 @@ class MoveLine extends Model
 
             $moveLine->move->computeState();
 
-            $moveLine->move->saveQuietly();
+            $moveLine->move->save();
         });
 
         static::deleting(function ($moveLine) {
@@ -244,7 +244,7 @@ class MoveLine extends Model
 
             $moveLine->move->computeState();
 
-            $moveLine->move->saveQuietly();
+            $moveLine->move->save();
         });
     }
 

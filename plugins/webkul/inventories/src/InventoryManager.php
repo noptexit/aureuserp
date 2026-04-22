@@ -20,6 +20,7 @@ use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Lot;
 use Webkul\Inventory\Models\Move;
 use Webkul\Inventory\Models\Operation;
+use Webkul\Inventory\Models\Package as PackageModel;
 use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Rule;
@@ -125,6 +126,10 @@ class InventoryManager
 
     public function confirmMoves($moves, $merge = true, $mergeInto = null, $bypassEntirePack = true)
     {
+        if ($moves->isEmpty()) {
+            return collect();
+        }
+
         $movesToCreateProcurement = collect();
 
         $movesToConfirm = collect();
@@ -134,6 +139,10 @@ class InventoryManager
         $movesToAssign = [];
 
         foreach ($moves as $move) {
+            if ($move->state != MoveState::DRAFT) {
+                continue;
+            }
+
             if ($move->moveOrigins->isNotEmpty()) {
                 $movesWaiting->push($move);
             } elseif ($move->procure_method === ProcureMethod::MAKE_TO_ORDER) {
@@ -187,7 +196,7 @@ class InventoryManager
             ->each(fn (Move $move) => $move->update(['reservation_date' => now()]));
 
         foreach ($movesToAssign as $movesGroup) {
-            $this->assignOperation(collect($movesGroup));
+            $this->assignOperation(collect([$movesGroup]));
         }
 
         if ($merge) {
@@ -278,6 +287,10 @@ class InventoryManager
 
     public function assignMoves($moves, mixed $forceQty = false)
     {
+        if ($moves->isEmpty()) {
+            return;
+        }
+
         $assignedMovesIds = collect();
 
         $partiallyAssignedMovesIds = collect();
@@ -300,7 +313,7 @@ class InventoryManager
 
         $movesMto = $movesToAssign->filter(fn($move) => $move->moveOrigins->isNotEmpty() && ! $move->shouldBypassReservation());
 
-        $quantsCache = ProductQuantity::getQuantsByProductsLocations($movesMto->pluck('product_id'), $movesMto->pluck('source_location_id'));
+        $quantityCache = ProductQuantity::getQuantsByProductsLocations($movesMto->pluck('product_id'), $movesMto->pluck('source_location_id'));
 
         foreach ($movesToAssign as $move) {
             $rounding = $roundings[$move->id];
@@ -323,15 +336,23 @@ class InventoryManager
 
             if ($move->shouldBypassReservation()) {
                 if ($move->moveOrigins->isNotEmpty()) {
-                    $availableMoveLines = $move->getAvailableMoveLines($move, $assignedMovesIds, $partiallyAssignedMovesIds);
+                    $availableMoveLines = $move->getAvailableMoveLines($assignedMovesIds, $partiallyAssignedMovesIds);
 
-                    foreach ($availableMoveLines as $key => [$sourceLocationId, $lotId, $packageId, $quantity]) {
+                    foreach ($availableMoveLines as $key => $quantity) {
+                        $keyValues = explode('_', $key);
+
+                        $locationId = $keyValues[0];
+
+                        $lotId = $keyValues[1] ?: null;
+
+                        $packageId = $keyValues[2] ?: null;
+
                         $qtyAdded = min($missingReservedQuantity, $quantity);
 
                         $moveLineVals = $move->prepareLineValues($qtyAdded);
 
                         $moveLineVals += [
-                            'source_location_id' => $sourceLocationId,
+                            'source_location_id' => $locationId,
                             'lot_id'             => $lotId,
                             'lot_name'           => $lotId ? Lot::find($lotId)?->name : null,
                             'package_id'         => $packageId,
@@ -416,7 +437,7 @@ class InventoryManager
                         $partiallyAssignedMovesIds->push($move->id);
                     }
                 } else {
-                    $availableMoveLines = $move->getAvailableMoveLines($move, $assignedMovesIds, $partiallyAssignedMovesIds);
+                    $availableMoveLines = $move->getAvailableMoveLines($assignedMovesIds, $partiallyAssignedMovesIds);
 
                     if (empty($availableMoveLines)) {
                         continue;
@@ -430,16 +451,28 @@ class InventoryManager
                         }
                     }
 
-                    foreach ($availableMoveLines as $key => [$locationId, $lotId, $packageId, $quantity]) {
+                    foreach ($availableMoveLines as $key => $quantity) {
+                        $keyValues = explode('_', $key);
+
+                        $location = Location::find($keyValues[0]);
+
+                        $location = $keyValues[0] ? Location::find($keyValues[0]) : null;
+
+                        $lot = $keyValues[1] ? Lot::find($keyValues[1]) : null;
+
+                        $package = $keyValues[2] ? PackageModel::find($keyValues[2]) : null;
+
                         $need = $move->product_qty - $move->lines->sum('uom_qty');
 
-                        $takenQuantity = $move->updateReservedQuantity(
-                            min($quantity, $need),
-                            $locationId,
-                            $lotId,
-                            $packageId,
-                            quantsCache: $quantsCache
-                        );
+                        $takenQuantity = $move
+                            ->setContext([
+                                'quantity_cache' => $quantityCache,
+                            ])->updateReservedQuantity(
+                                min($quantity, $need),
+                                $location,
+                                $lot,
+                                $package
+                            );
 
                         if (float_is_zero($takenQuantity, precisionRounding: $rounding)) {
                             continue;
@@ -465,13 +498,9 @@ class InventoryManager
 
         $moveLineValsList->each(fn($vals) => MoveLine::create($vals));
 
-        Move::whereIn('id', $partiallyAssignedMovesIds)->update(['state' => MoveState::PARTIALLY_ASSIGNED]);
+        Move::whereIn('id', $partiallyAssignedMovesIds)->get()->each(fn ($move) => $move->update(['state' => MoveState::PARTIALLY_ASSIGNED]));
 
-        MoveLine::whereIn('move_id', $partiallyAssignedMovesIds)->update(['state' => MoveState::PARTIALLY_ASSIGNED]);
-
-        Move::whereIn('id', $assignedMovesIds)->update(['state' => MoveState::ASSIGNED]);
-
-        MoveLine::whereIn('move_id', $assignedMovesIds)->update(['state' => MoveState::ASSIGNED]);
+        Move::whereIn('id', $assignedMovesIds)->get()->each(fn ($move) => $move->update(['state' => MoveState::ASSIGNED]));
     }
 
     public function doneMoves($moves, $cancelBackOrder = false)
@@ -565,9 +594,12 @@ class InventoryManager
 
         $moveDestinationsPerCompany = [];
 
+        $movesTodo->load('moveDestinations');
+
         foreach ($movesTodo->flatMap->moveDestinations as $moveDestination) {
             $moveDestinationsPerCompany[$moveDestination->company_id][] = $moveDestination;
         }
+
 
         foreach ($moveDestinationsPerCompany as $moveDestinations) {
             $this->assignMoves(collect($moveDestinations));
@@ -694,13 +726,17 @@ class InventoryManager
 
         $moveLineIdsToIgnore = collect();
 
-        $quantsCache = ProductQuantity::getQuantsByProductsLocations(
+        $quantityCache = ProductQuantity::getQuantsByProductsLocations(
             $moveLinesTodo->pluck('product_id'),
             $moveLinesTodo->pluck('source_location_id')->merge($moveLinesTodo->pluck('destination_location_id'))->unique(),
             extraDomain: [['lot_id', 'in', $moveLinesTodo->pluck('lot_id')->filter()->all()], ['lot_id', '=', null]],
         );
 
         foreach ($moveLinesTodo as $moveLine) {
+            $moveLine->setContext([
+                'quantity_cache' => $quantityCache,
+            ]);
+
             $moveLine->synchronizeQuantity(
                 -$moveLine->uom_qty,
                 $moveLine->sourceLocation,
@@ -966,7 +1002,7 @@ class InventoryManager
             foreach ($move->moveDestinations->diff($newMove ? collect([$newMove]) : collect()) as $m) {
                 if ($newMove && $move->final_location_id && $m->source_location_id === $move->final_location_id) {
                     $movesToPropagate->push($m);
-                } elseif (! $m->location->isChildOf($move->destination_location_id)) {
+                } elseif (! $m->sourceLocation->isChildOf($move->destinationLocation)) {
                     $movesToMts->push($m);
                 }
             }
@@ -1004,7 +1040,7 @@ class InventoryManager
                 'destination_location_id' => $rule->destination_location_id,
             ]);
 
-            if ($move->move_line_ids && $move->move_line_ids->isNotEmpty()) {
+            if ($move->lines->isNotEmpty()) {
                 $putAwayLocation = $move->destinationLocation->getPutAwayStrategy($move->product);
 
                 foreach ($move->lines as $moveLine) {
@@ -1131,6 +1167,8 @@ class InventoryManager
             'reference'               => null,
             'product_uom_qty'         => $copiedQuantity,
             'product_qty'             => $moveToCopy->uom->computeQuantity($copiedQuantity, $moveToCopy->product->uom, true, 'HALF-UP'),
+            'quantity'                => 0,
+            'is_picked'               => false,
             'origin'                  => $moveToCopy->origin ?? $moveToCopy->operation->name ?? '/',
             'operation_id'            => null,
             'source_location_id'      => $moveToCopy->destination_location_id,

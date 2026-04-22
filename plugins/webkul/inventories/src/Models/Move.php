@@ -317,7 +317,15 @@ class Move extends Model
             }
 
             if ($move->wasChanged('state')) {
-                $move->lines->each(fn($moveLine) => $moveLine->update(['state' => $move->state]));
+                $move->lines->each(fn ($moveLine) => $moveLine->update(['state' => $move->state]));
+
+                if ($operation = $move->operation) {
+                    $operation->refresh();
+
+                    $operation->computeState();
+
+                    $operation->save();
+                }
             }
 
             if ($move->wasChanged('is_picked')) {
@@ -662,13 +670,17 @@ class Move extends Model
         } elseif (
             ($this->procure_method === ProcureMethod::MAKE_TO_ORDER && $this->moveOrigins->isEmpty())
             || (
-                $this->moveOrigins->isNotEmpty() &&
-                $this->moveOrigins->some(
+                $this->moveOrigins->isNotEmpty()
+                && $this->moveOrigins->some(
                     fn($orig) => float_compare($orig->product_uom_qty, 0, precisionRounding: $orig->uom->rounding) > 0
                     && ! in_array($orig->state, [MoveState::DONE, MoveState::CANCELED])
                 )
             )
         ) {
+            \Log::info([
+                'id' => $this->id,
+                'origins' => $this->moveOrigins->pluck('id')->toArray()
+            ]);
             $this->state = MoveState::WAITING;
         } else {
             $this->state = MoveState::CONFIRMED;
