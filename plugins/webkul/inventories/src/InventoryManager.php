@@ -76,6 +76,8 @@ class InventoryManager
 
     public function doneTransfer(Operation $record, $cancelBackOrder = false): Operation
     {
+        $this->checkForErrors($record);
+
         $todoMoves = $record->moves->filter(fn ($move) => in_array($move->state, [
             MoveState::DRAFT,
             MoveState::WAITING,
@@ -576,7 +578,7 @@ class InventoryManager
                 ->count();
 
             if ($locationCount > 1) {
-                throw new \Exception(__('You cannot move the same package content more than once in the same transfer or split the same package into two location.'));
+                throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.partial-package.body'));
             }
         }
 
@@ -889,6 +891,67 @@ class InventoryManager
         ]);
 
         return $newOperation;
+    }
+
+    public function checkForErrors($operation): void
+    {
+        $noQuantitiesDoneIds = collect();
+        
+        $productsWithoutLots = collect();
+
+        $hasLotsIssue = false;
+
+        $hasNoMoves = $operation->moves->isEmpty() && $operation->moveLines->isEmpty();
+
+        $hasNoQuantities = $operation->moves
+            ->filter(fn($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
+            ->every(fn($move) => float_is_zero($move->quantity, precisionDigits: 2));
+
+        if ($operation->operationType->use_create_lots || $operation->operationType->use_existing_lots) {
+            $linesToCheck = $this->getLotMoveLinesForErrorsCheck($operation, $noQuantitiesDoneIds);
+
+            foreach ($linesToCheck as $line) {
+                if (! $line->lot_name && ! $line->lot_id) {
+                    $hasLotsIssue = true;
+
+                    $productsWithoutLots->push($line->product);
+                }
+            }
+        }
+
+        if ($hasNoMoves) {
+            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.lines-missing.body'));
+        }
+
+        if ($hasNoQuantities) {
+            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.no-quantities-reserved.body'));
+        }
+
+        if ($hasLotsIssue) {
+            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.lot-missing.body', [
+                'products' => $productsWithoutLots->pluck('name')->implode(', '),
+            ]));
+        }
+    }
+
+    public function getLotMoveLinesForErrorsCheck(Operation $operation, $noQuantitiesDoneIds)
+    {
+        $getLineWithDoneQty = fn ($moveLines) => $moveLines->filter(
+            fn($moveLine) => $moveLine->product
+                && $moveLine->product->tracking !== ProductTracking::QTY
+                && $moveLine->is_picked
+                && float_compare($moveLine->qty, 0, precisionRounding: $moveLine->uom->rounding) > 0
+        );
+
+        if ($noQuantitiesDoneIds->contains($operation->id)) {
+            $linesToCheck = $operation->moveLines->filter(
+                fn($moveLine) => $moveLine->product && $moveLine->product->tracking !== ProductTracking::QTY
+            );
+        } else {
+            $linesToCheck = $getLineWithDoneQty($operation->moveLines);
+        }
+
+        return $linesToCheck;
     }
     
     /**

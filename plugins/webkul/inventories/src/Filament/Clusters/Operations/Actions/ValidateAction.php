@@ -54,20 +54,12 @@ class ValidateAction extends Action
                     ->label(__('inventories::filament/clusters/operations/actions/validate.extra-modal-footer-actions.no-backorder.label'))
                     ->color('danger')
                     ->action(function (Operation $record, Component $livewire): void {
-                        if ($this->hasMoveErrors($record)) {
-                            return;
-                        }
-
                         Inventory::doneTransfer($record, $this->canCreateBackOrder($record));
 
                         $livewire->updateForm();
                     }),
             ] : [])
             ->action(function (Operation $record, Component $livewire): void {
-                if ($this->hasMoveErrors($record)) {
-                    return;
-                }
-
                 if ($this->canCreateBackOrder($record)) {
                     Inventory::createBackOrder($record);
                 }
@@ -91,97 +83,6 @@ class ValidateAction extends Action
         }
 
         return $record->moves->sum('product_uom_qty') > $record->moves->sum('quantity');
-    }
-
-    protected function hasMoveErrors(Operation $record): bool
-    {
-        $record = Inventory::confirmTransfer($record);
-
-        foreach ($record->moves as $move) {
-            if ($this->hasMoveLineErrors($move)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Check if the move lines are valid.
-     *
-     * @return bool Returns false if a validation warning is triggered.
-     */
-    private function hasMoveLineErrors($move): bool
-    {
-        if ($move->lines->isEmpty()) {
-            $this->sendNotification(
-                'inventories::filament/clusters/operations/actions/validate.notification.warning.lines-missing.title',
-                'inventories::filament/clusters/operations/actions/validate.notification.warning.lines-missing.body',
-                'warning'
-            );
-
-            return true;
-        }
-
-        foreach ($move->lines as $line) {
-            if ($line->package_id && $line->result_package_id && $line->package_id == $line->result_package_id) {
-                $sourceQuantity = ProductQuantity::where('product_id', $line->product_id)
-                    ->where('location_id', $line->source_location_id)
-                    ->where('lot_id', $line->lot_id)
-                    ->where('package_id', $line->package_id)
-                    ->first();
-
-                if ($sourceQuantity && $sourceQuantity->quantity != $line->qty) {
-                    $this->sendNotification(
-                        'inventories::filament/clusters/operations/actions/validate.notification.warning.partial-package.title',
-                        'inventories::filament/clusters/operations/actions/validate.notification.warning.partial-package.body',
-                        'warning'
-                    );
-
-                    return true;
-                }
-            }
-        }
-
-        $isLotTracking = $move->product->tracking == ProductTracking::LOT || $move->product->tracking == ProductTracking::SERIAL;
-
-        if ($isLotTracking && $move->lines->contains(fn ($line) => ! $line->lot_id)) {
-            $this->sendNotification(
-                'inventories::filament/clusters/operations/actions/validate.notification.warning.lot-missing.title',
-                'inventories::filament/clusters/operations/actions/validate.notification.warning.lot-missing.body',
-                'warning'
-            );
-
-            return true;
-        }
-
-        $isSerialTracking = $move->product->tracking == ProductTracking::SERIAL;
-
-        if ($isSerialTracking) {
-            if ($move->lines->contains(fn ($line) => $line->qty != 1)) {
-                $this->sendNotification(
-                    'inventories::filament/clusters/operations/actions/validate.notification.warning.serial-qty.title',
-                    'inventories::filament/clusters/operations/actions/validate.notification.warning.serial-qty.body',
-                    'warning'
-                );
-
-                return true;
-            }
-
-            $lots = $move->lines->pluck('lot_id');
-
-            if ($lots->count() !== $lots->unique()->count()) {
-                $this->sendNotification(
-                    'inventories::filament/clusters/operations/actions/validate.notification.warning.serial-qty.title',
-                    'inventories::filament/clusters/operations/actions/validate.notification.warning.serial-qty.body',
-                    'warning'
-                );
-
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
