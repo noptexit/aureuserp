@@ -42,6 +42,7 @@ class PurchaseServiceProvider extends PackageServiceProvider
                 '2026_03_11_103115_alter_purchases_order_lines_table',
                 '2026_03_13_181105_alter_purchases_orders_table',
                 '2026_04_15_044345_add_destination_address_id_in_purchases_orders_table',
+                '2026_04_22_115707_create_purchases_order_line_moves_table_from_purchases',
             ])
             ->runsMigrations()
             ->hasSettings([

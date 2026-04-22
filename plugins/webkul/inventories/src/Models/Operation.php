@@ -288,4 +288,35 @@ class Operation extends Model
             $this->state = OperationState::ASSIGNED;
         }
     }
+
+    public static function getImpactedOperations($moves)
+    {
+        $impactedOperations = collect();
+
+        $exploredMoves = collect();
+
+        $explore = function ($movesToExplore) use (&$explore, &$impactedOperations, &$exploredMoves) {
+            foreach ($movesToExplore as $move) {
+                if (! $exploredMoves->contains('id', $move->id)) {
+                    if ($move->operation_id) {
+                        $impactedOperations->push($move->operation);
+                    }
+
+                    $exploredMoves->push($move);
+
+                    $movesToExplore = $movesToExplore->merge($move->moveDestinations);
+                }
+            }
+
+            $movesToExplore = $movesToExplore->filter(fn($move) => ! $exploredMoves->contains('id', $move->id));
+
+            if ($movesToExplore->isNotEmpty()) {
+                $explore($movesToExplore);
+            }
+        };
+
+        $explore($moves);
+
+        return $impactedOperations->unique('id');
+    }
 }

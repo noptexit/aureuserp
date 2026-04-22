@@ -12,10 +12,7 @@ use Webkul\Account\Models\Move as AccountMove;
 use Webkul\Inventory\Enums as InventoryEnums;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\Location;
-use Webkul\Inventory\Models\Move as InventoryMove;
-use Webkul\Inventory\Models\Operation as InventoryOperation;
 use Webkul\Inventory\Models\Product as InventoryProduct;
-use Webkul\Inventory\Models\Rule;
 use Webkul\Inventory\Models\Warehouse;
 use Webkul\Partner\Models\Partner;
 use Webkul\PluginManager\Package;
@@ -671,22 +668,6 @@ class SaleManager
         return $qty;
     }
 
-    public function adjustUomQuantities($uom, $qty, $productUom)
-    {
-        $procurementUom = $uom;
-
-        //TODO: Save this config
-        if (true) {
-            $computedQty = $uom->computeQuantity($qty, $productUom, roundingMethod: 'HALF-UP');
-
-            $procurementUom = $productUom;
-        } else {
-            $computedQty = $uom->computeQuantity($qty, $procurementUom, roundingMethod: 'HALF-UP');
-        }
-
-        return [$computedQty, $procurementUom];
-    }
-
     public function prepareProcurementValues(OrderLine $line, $procurementGroup = null): array
     {
         $location = Location::where('type', InventoryEnums\LocationType::CUSTOMER)->first();
@@ -784,7 +765,7 @@ class SaleManager
                 ? "{$line->order->name} - {$line->order->client_order_ref}" 
                 : $line->order->name;
 
-            [$productQty, $procurementUom] = $this->adjustUomQuantities($line->uom, $productQty, $line->product->uom);
+            [$productQty, $procurementUom] = $line->uom->adjustUomQuantities($productQty, $line->product->uom);
 
             $procurements->push($this->createProcurements($line, $productQty, $procurementUom, $origin, $values));
         }
@@ -802,15 +783,6 @@ class SaleManager
             return;
         }
 
-        foreach ($record->operation->moves as $move) {
-            $move->update([
-                'state'    => InventoryEnums\MoveState::CANCELED,
-                'quantity' => 0,
-            ]);
-
-            $move->lines()->delete();
-        }
-
-        $record->operation->refresh()->computeState();
+        InventoryFacade::cancelTransfer($record->operation);
     }
 }

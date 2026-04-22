@@ -11,9 +11,12 @@ use Webkul\Account\Facades\Account as AccountFacade;
 use Webkul\Account\Facades\Tax as TaxFacade;
 use Webkul\Account\Models\Partner;
 use Webkul\Inventory\Enums as InventoryEnums;
+use Webkul\Inventory\Enums\LocationType;
+use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Facades\Inventory;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
+use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\OperationType;
 use Webkul\Inventory\Models\Receipt;
 use Webkul\PluginManager\Package;
@@ -78,11 +81,11 @@ class PurchaseOrder
         $needsApproval = $requiresApproval && $amountExceeds;
 
         if (! $needsApproval) {
-            return $this->finalizeOrder($record, $settings);
+            return $this->approveOrder($record, $settings);
         }
 
         if (static::canUserApprove($user)) {
-            return $this->finalizeOrder($record, $settings);
+            return $this->approveOrder($record, $settings);
         }
 
         $record->update([
@@ -92,7 +95,7 @@ class PurchaseOrder
         return $this->computePurchaseOrder($record);
     }
 
-    private function finalizeOrder(Order $record, $settings): Order
+    private function approveOrder(Order $record, $settings): Order
     {
         $record->update([
             'state' => $settings->enable_lock_confirmed_orders
@@ -102,6 +105,8 @@ class PurchaseOrder
         ]);
 
         $record = $this->computePurchaseOrder($record);
+
+        $this->createInventoryOperation($record);
 
         return $record;
     }
@@ -227,8 +232,6 @@ class PurchaseOrder
         $record = $this->computeInvoiceStatus($record);
 
         $record->save();
-
-        $this->syncInventoryReceipt($record);
 
         return $record;
     }
@@ -445,8 +448,12 @@ class PurchaseOrder
         return $pdfPath;
     }
 
-    protected function syncInventoryReceipt(Order $record): void
+    protected function createInventoryOperation(Order $record): void
     {
+        if (! Package::isPluginInstalled('inventories')) {
+            return;
+        }
+        
         if (! in_array($record->state, [PurchaseEnums\OrderState::PURCHASE, PurchaseEnums\OrderState::DONE])) {
             return;
         }
@@ -455,340 +462,158 @@ class PurchaseOrder
             return;
         }
 
-        if (! Package::isPluginInstalled('inventories')) {
-            return;
-        }
+        $operations = $record->operations->filter(
+            fn($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
+        );
 
-        $operationType = $this->getInventoryOperationType($record);
+        if ($operations->isEmpty()) {
+            $values = $record->prepareInventoryOperation();
 
-        if (! $operationType) {
-            return;
-        }
+            $operation = Receipt::create($values);
 
-        $record->operation_type_id = $operationType->id;
-
-        $record->save();
-
-        $supplierLocation = Location::where('type', InventoryEnums\LocationType::SUPPLIER)->first();
-
-        $operations = $record->operations()->get();
-
-        $draftOperations = $operations->filter(function ($operation) {
-            return in_array($operation->state, [
-                InventoryEnums\OperationState::DRAFT,
-                InventoryEnums\OperationState::CONFIRMED,
-                InventoryEnums\OperationState::ASSIGNED,
-            ]);
-        });
-
-        $validatedOperations = $operations->filter(function ($operation) {
-            return $operation->state === InventoryEnums\OperationState::DONE;
-        });
-
-        foreach ($record->lines as $line) {
-            if ($line->product->type !== ProductType::GOODS) {
-                continue;
-            }
-
-            $line->update([
-                'final_location_id' => $this->getFinalWarehouseLocation($record)->id,
-            ]);
-
-            $validatedQty = $this->getValidatedQuantityForLine($line, $validatedOperations);
-
-            $pendingQty = $this->getPendingQuantityForLine($line, $draftOperations);
-
-            $totalScheduledQty = $validatedQty + $pendingQty;
-
-            $requiredQty = $line->product_uom_qty;
-
-            $diffQty = $requiredQty - $totalScheduledQty;
-
-            if ($diffQty > 0) {
-                if ($pendingQty > 0) {
-                    $this->updateDraftMovesAddQuantity($line, $draftOperations, $pendingQty + $diffQty);
-                } else {
-                    $this->createNewReceiptForLine($record, $line, $diffQty, $supplierLocation);
-                }
-            } elseif ($diffQty < 0) {
-                $qtyToReduce = min(abs($diffQty), $pendingQty);
-
-                if ($qtyToReduce > 0) {
-                    $newPendingQty = $pendingQty - $qtyToReduce;
-
-                    $this->updateOrCancelDraftMoves($line, $draftOperations, $newPendingQty);
-                }
-            } elseif ($pendingQty > 0 && $pendingQty != ($requiredQty - $validatedQty)) {
-                $expectedPendingQty = max(0, $requiredQty - $validatedQty);
-
-                $this->updateOrCancelDraftMoves($line, $draftOperations, $expectedPendingQty);
-            }
-        }
-
-        $this->cleanupEmptyOperations($record);
-
-        foreach ($record->operations()->get() as $operation) {
-            if (! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])) {
-                $operation->refresh();
-
-                Inventory::confirmTransfer($operation);
-            }
-        }
-    }
-
-    protected function getValidatedQuantityForLine(OrderLine $line, $validatedOperations): float
-    {
-        $quantity = 0.0;
-
-        foreach ($validatedOperations as $operation) {
-            foreach ($operation->moves as $move) {
-                if ($move->purchase_order_line_id === $line->id && $move->state === InventoryEnums\MoveState::DONE) {
-                    $quantity += $move->quantity;
-                }
-            }
-        }
-
-        return $quantity;
-    }
-
-    protected function getPendingQuantityForLine(OrderLine $line, $draftOperations): float
-    {
-        $quantity = 0.0;
-
-        foreach ($draftOperations as $operation) {
-            foreach ($operation->moves as $move) {
-                if (
-                    $move->purchase_order_line_id === $line->id
-                    && $move->state !== InventoryEnums\MoveState::CANCELED
-                ) {
-                    $quantity += $move->product_uom_qty;
-                }
-            }
-        }
-
-        return $quantity;
-    }
-
-    protected function updateDraftMovesAddQuantity(OrderLine $line, $draftOperations, float $targetQty): void
-    {
-        $firstMove = null;
-
-        $totalExistingQty = 0;
-
-        foreach ($draftOperations as $operation) {
-            foreach ($operation->moves as $move) {
-                if (
-                    $move->purchase_order_line_id === $line->id
-                    && $move->state !== InventoryEnums\MoveState::CANCELED
-                ) {
-                    if (! $firstMove) {
-                        $firstMove = $move;
-                    }
-
-                    $totalExistingQty += $move->product_uom_qty;
-                }
-            }
-        }
-
-        if ($firstMove) {
-            $firstMove->update([
-                'uom_id'          => $line->product->uom_id,
-                'product_qty'     => $targetQty,
-                'product_uom_qty' => $targetQty,
-                'quantity'        => $targetQty,
-            ]);
-
-            foreach ($draftOperations as $operation) {
-                foreach ($operation->moves as $move) {
-                    if (
-                        $move->id !== $firstMove->id
-                        && $move->purchase_order_line_id === $line->id
-                        && $move->state !== InventoryEnums\MoveState::CANCELED
-                    ) {
-                        $move->update([
-                            'state'    => InventoryEnums\MoveState::CANCELED,
-                            'quantity' => 0,
-                        ]);
-
-                        $move->lines()->delete();
-                    }
-                }
-            }
+            $operations = collect([$operation]);
         } else {
-            $targetOperation = $draftOperations->first();
-
-            if ($targetOperation) {
-                Move::create([
-                    'operation_id'            => $targetOperation->id,
-                    'name'                    => $targetOperation->name,
-                    'reference'               => $targetOperation->name,
-                    'description_picking'     => $line->product->picking_description ?? $line->name,
-                    'state'                   => InventoryEnums\MoveState::DRAFT,
-                    'scheduled_at'            => $line->planned_at,
-                    'deadline'                => $line->planned_at,
-                    'reservation_date'        => now(),
-                    'product_packaging_id'    => $line->product_packaging_id,
-                    'product_id'              => $line->product_id,
-                    'product_qty'             => $targetQty,
-                    'product_uom_qty'         => $targetQty,
-                    'quantity'                => $targetQty,
-                    'uom_id'                  => $line->product->uom_id,
-                    'partner_id'              => $targetOperation->partner_id,
-                    'warehouse_id'            => $targetOperation->destinationLocation->warehouse_id,
-                    'source_location_id'      => $targetOperation->source_location_id,
-                    'destination_location_id' => $targetOperation->destination_location_id,
-                    'operation_type_id'       => $targetOperation->operation_type_id,
-                    'final_location_id'       => $line->final_location_id,
-                    'company_id'              => $targetOperation->destinationLocation->company_id,
-                    'purchase_order_line_id'  => $line->id,
-                ]);
-            }
+            $operation = $operations->first();
         }
+
+        $moves = $this->createInventoryMoves($record->lines, $operation);
+
+        $moves = $moves->filter(fn($m) => ! in_array($m->state, [InventoryEnums\MoveState::DONE, InventoryEnums\MoveState::CANCELED]));
+
+        $moves = InventoryFacade::confirmMoves($moves);
+
+        $sort = 0;
+
+        foreach ($moves->sortBy('date') as $move) {
+            $sort += 5;
+
+            $move->update(['sort' => $sort]);
+        }
+
+        InventoryFacade::actionAssign($moves);
+
+        $forwardOperations = Receipt::getImpactedOperations($moves);
+
+        $operations->merge($forwardOperations)->each->actionConfirm();
+
+        $url = PurchaseOrderResource::getUrl('view', ['record' => $record]);
+
+        $operation->addMessage([
+            'body' => "This transfer has been created from <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$record->name}</a>.",
+            'type' => 'comment',
+        ]);
     }
 
-    protected function updateOrCancelDraftMoves(OrderLine $line, $draftOperations, float $targetQty): void
+    protected function createInventoryMoves($orderLines, Receipt $operation)
     {
-        if ($targetQty <= 0) {
-            foreach ($draftOperations as $operation) {
-                foreach ($operation->moves as $move) {
-                    if (
-                        $move->purchase_order_line_id === $line->id
-                        && $move->state !== InventoryEnums\MoveState::CANCELED
-                    ) {
-                        $move->update([
-                            'state'    => InventoryEnums\MoveState::CANCELED,
-                            'quantity' => 0,
-                        ]);
+        $values = [];
 
-                        $move->lines()->delete();
-                    }
-                }
+        foreach ($orderLines->filter(fn($line) => ! $line->display_type) as $line) {
+            foreach ($line->prepareInventoryMoves($operation) as $val) {
+                $values[] = $val;
             }
 
-            return;
+            $line->moveDestinations->each(fn($move) => $move->purchaseOrderLines()->detach());
         }
 
-        $firstMove = null;
-
-        foreach ($draftOperations as $operation) {
-            foreach ($operation->moves as $move) {
-                if (
-                    $move->purchase_order_line_id === $line->id
-                    && $move->state !== InventoryEnums\MoveState::CANCELED
-                ) {
-                    if (! $firstMove) {
-                        $firstMove = $move;
-
-                        $firstMove->update([
-                            'uom_id'          => $line->product->uom_id,
-                            'product_qty'     => $targetQty,
-                            'product_uom_qty' => $targetQty,
-                            'quantity'        => $targetQty,
-                        ]);
-                    } else {
-                        $move->update([
-                            'state'    => InventoryEnums\MoveState::CANCELED,
-                            'quantity' => 0,
-                        ]);
-
-                        $move->lines()->delete();
-                    }
-                }
-            }
-        }
+        return collect(array_map(fn ($val) => Move::create($val), $values));
     }
 
-    protected function createNewReceiptForLine(Order $record, OrderLine $line, float $qty, Location $supplierLocation): void
+    public function prepareInventoryMoves(OrderLine $line, $operation)
     {
-        $existingDraftOperation = $record->operations()
-            ->whereIn('state', [
-                InventoryEnums\OperationState::DRAFT,
-                InventoryEnums\OperationState::CONFIRMED,
-                InventoryEnums\OperationState::ASSIGNED,
-            ])
-            ->first();
+        $values = [];
 
-        if ($existingDraftOperation) {
-            Move::create([
-                'operation_id'            => $existingDraftOperation->id,
-                'description_picking'     => $line->product->picking_description ?? $line->name,
-                'state'                   => InventoryEnums\MoveState::DRAFT,
-                'scheduled_at'            => $line->planned_at,
-                'deadline'                => $line->planned_at,
-                'reservation_date'        => now(),
-                'product_packaging_id'    => $line->product_packaging_id,
-                'product_id'              => $line->product_id,
-                'product_qty'             => $qty,
-                'product_uom_qty'         => $qty,
-                'quantity'                => $qty,
-                'uom_id'                  => $line->product->uom_id,
-                'final_location_id'       => $line->final_location_id,
-                'purchase_order_line_id'  => $line->id,
-            ]);
+        if ($line->product->type !== ProductType::GOODS) {
+            return $values;
+        }
+
+        $priceUnit = $this->getInventoryMovePriceUnit($line);
+
+        $qty = $this->getQtyProcurement($line);
+
+        $moveDestinations = $line->moveDestinations->isNotEmpty()
+            ? $line->moveDestinations
+            : $line->inventoryMoves->flatMap->moveDestinations;
+
+        $moveDestinations = $moveDestinations->filter(
+            fn($move) => $move->state !== MoveState::CANCELED && ! $move->isPurchaseReturn()
+        );
+
+        if ($moveDestinations->isEmpty()) {
+            $qtyToAttach = 0;
+
+            $qtyToPush = $line->product_qty - $qty;
         } else {
-            $operation = Receipt::create([
-                'state'                   => InventoryEnums\OperationState::DRAFT,
-                'move_type'               => InventoryEnums\MoveType::DIRECT,
-                'origin'                  => $record->name,
-                'partner_id'              => $record->partner_id,
-                'date'                    => $record->ordered_at,
-                'operation_type_id'       => $record->operation_type_id,
-                'source_location_id'      => $supplierLocation->id,
-                'destination_location_id' => $record->operationType->destination_location_id,
-                'company_id'              => $record->company_id,
-            ]);
+            $moveDestinationsInitialDemand = $this->getMoveDestinationsInitialDemand($line, $moveDestinations);
 
-            $operation->save();
+            $qtyToAttach = $moveDestinationsInitialDemand - $qty;
 
-            Move::create([
-                'operation_id'            => $operation->id,
-                'description_picking'     => $line->product->picking_description ?? $line->name,
-                'state'                   => InventoryEnums\MoveState::DRAFT,
-                'scheduled_at'            => $line->planned_at,
-                'deadline'                => $line->planned_at,
-                'reservation_date'        => now(),
-                'product_packaging_id'    => $line->product_packaging_id,
-                'product_id'              => $line->product_id,
-                'product_qty'             => $qty,
-                'product_uom_qty'         => $qty,
-                'quantity'                => $qty,
-                'uom_id'                  => $line->product->uom_id,
-                'final_location_id'       => $line->final_location_id,
-                'purchase_order_line_id'  => $line->id,
-            ]);
-
-            $record->operations()->attach($operation->id);
-
-            $operation->refresh();
-
-            Inventory::confirmTransfer($operation);
-
-            $url = PurchaseOrderResource::getUrl('view', ['record' => $record]);
-
-            $operation->addMessage([
-                'body' => "This transfer has been created from <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$record->name}</a>.",
-                'type' => 'comment',
-            ]);
+            $qtyToPush = $line->product_qty - $moveDestinationsInitialDemand;
         }
+
+        if (float_compare($qtyToAttach, 0.0, precisionRounding: $line->uom->rounding) > 0) {
+            [$productUomQty, $productUom] = $line->uom->adjustUomQuantities($qtyToAttach, $line->product->uom);
+
+            $values[] = $this->prepareInventoryMoveValues($line, $operation, $priceUnit, $productUomQty, $productUom);
+        }
+
+        if (! float_is_zero($qtyToPush, precisionRounding: $line->uom->rounding)) {
+            [$productUomQty, $productUom] = $line->uom->adjustUomQuantities($qtyToPush, $line->product->uom);
+
+            $extraMoveVals = $this->prepareInventoryMoveValues($line, $operation, $priceUnit, $productUomQty, $productUom);
+
+            $extraMoveVals['move_destination_ids'] = null;
+            
+            $values[] = $extraMoveVals;
+        }
+
+        return $values;
     }
 
-    protected function cleanupEmptyOperations(Order $record): void
+    public function getQtyProcurement(OrderLine $line): float
     {
-        $operations = $record->operations()->get();
+        $qty = 0.0;
 
-        foreach ($operations as $operation) {
-            if (in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])) {
-                continue;
-            }
+        [$outgoingMoves, $incomingMoves] = $this->getOutgoingIncomingMoves($line);
 
-            $activeMoves = $operation->moves()->where('state', '!=', InventoryEnums\MoveState::CANCELED)->count();
+        foreach ($outgoingMoves as $move) {
+            $qtyToCompute = $move->state === MoveState::DONE ? $move->quantity : $move->product_uom_qty;
 
-            if ($activeMoves === 0) {
-                $operation->update([
-                    'state' => InventoryEnums\OperationState::CANCELED,
-                ]);
+            $qty -= $move->uom->computeQuantity($qtyToCompute, $line->uom, roundingMethod: 'HALF-UP');
+        }
+
+        foreach ($incomingMoves as $move) {
+            $qtyToCompute = $move->state === MoveState::DONE ? $move->quantity : $move->product_uom_qty;
+
+            $qty += $move->uom->computeQuantity($qtyToCompute, $line->uom, roundingMethod: 'HALF-UP');
+        }
+
+        return $qty;
+    }
+
+    public function getOutgoingIncomingMoves(OrderLine $line): array
+    {
+        $outgoingMoves = collect();
+
+        $incomingMoves = collect();
+
+        $relevantMoves = $line->inventoryMoves->filter(
+            fn($move) => $move->state !== MoveState::CANCELED
+                && ! $move->is_scraped
+                && $line->product_id === $move->product_id
+        );
+
+        foreach ($relevantMoves as $move) {
+            if ($move->isPurchaseReturn() && ($move->is_refund || ! $move->origin_returned_move_id)) {
+                $outgoingMoves->push($move);
+            } elseif ($move->destinationLocation->type !== LocationType::SUPPLIER) {
+                if (! $move->origin_returned_move_id || ($move->origin_returned_move_id && $move->is_refund)) {
+                    $incomingMoves->push($move);
+                }
             }
         }
+
+        return [$outgoingMoves, $incomingMoves];
     }
 
     protected function cancelInventoryOperations(Order $record): void
@@ -801,35 +626,7 @@ class PurchaseOrder
             return;
         }
 
-        $record->operations->each(function ($operation) {
-            foreach ($operation->moves as $move) {
-                $move->update([
-                    'state'    => InventoryEnums\MoveState::CANCELED,
-                    'quantity' => 0,
-                ]);
-
-                $move->lines()->delete();
-            }
-            
-            $operation->refresh()->computeState();
-        });
-    }
-
-    protected function getInventoryOperationType(Order $record): ?OperationType
-    {
-        $operationType = OperationType::where('type', InventoryEnums\OperationType::INCOMING)
-            ->whereHas('warehouse', function ($query) use ($record) {
-                $query->where('company_id', $record->company_id);
-            })
-            ->first();
-
-        if (! $operationType) {
-            $operationType = OperationType::where('type', InventoryEnums\OperationType::INCOMING)
-                ->whereDoesntHave('warehouse')
-                ->first();
-        }
-
-        return $operationType;
+        $record->operations->each(fn ($operation) => InventoryFacade::cancelTransfer($operation));
     }
 
     protected function getFinalWarehouseLocation(Order $record): ?Location

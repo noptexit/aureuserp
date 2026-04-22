@@ -11,10 +11,12 @@ use Illuminate\Support\Facades\Auth;
 use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Account\Models\Tax;
+use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move as InventoryMove;
 use Webkul\Inventory\Models\OrderPoint;
 use Webkul\Partner\Models\Partner;
+use Webkul\Product\Enums\ProductType;
 use Webkul\Product\Models\Packaging;
 use Webkul\Purchase\Database\Factories\OrderLineFactory;
 use Webkul\Purchase\Enums\QtyReceivedMethod;
@@ -134,6 +136,11 @@ class OrderLine extends Model implements Sortable
     public function inventoryMoves(): HasMany
     {
         return $this->hasMany(InventoryMove::class, 'purchase_order_line_id');
+    }
+
+    public function moveDestinations(): BelongsToMany
+    {
+        return $this->belongsToMany(InventoryMove::class, 'purchases_order_item_moves', 'purchase_order_line_id', 'inventory_move_id');
     }
 
     public function finalLocation(): BelongsTo

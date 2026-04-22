@@ -263,6 +263,11 @@ class Move extends Model
         return $this->belongsTo(PurchaseOrderLine::class, 'purchase_order_line_id');
     }
 
+    public function purchaseOrderLines(): BelongsToMany
+    {
+        return $this->belongsToMany(PurchaseOrderLine::class, 'purchases_order_item_moves', 'inventory_move_id', 'purchase_order_line_id');
+    }
+
     public function saleOrderLine(): BelongsTo
     {
         return $this->belongsTo(SaleOrderLine::class, 'sale_order_line_id');
