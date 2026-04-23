@@ -1,4 +1,4 @@
-name: E2E
+name: Playwright Tests
 
 on:
   push:
@@ -19,17 +19,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - shard_index: 1
-            shard_total: 4
-          - shard_index: 2
-            shard_total: 4
-          - shard_index: 3
-            shard_total: 4
-          - shard_index: 4
-            shard_total: 4
+        php-versions: [8.3]
+        node-version: ["22.13.1"]
+        shard_index: [1, 2, 3, 4]
+        shard_total: [4]
 
-    name: shard-${{ matrix.shard_index }}
+    name: Shard ${{ matrix.shard_index }} of ${{ matrix.shard_total }}
 
     services:
       mysql:
@@ -59,7 +54,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: ${{ matrix.php-versions }}
           extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_mysql, tokenizer, zip
           ini-values: error_reporting=E_ALL
           tools: composer:v2
@@ -67,7 +62,7 @@ jobs:
       - name: Set Up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.13.1"
+          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: tests/e2e-pw/package-lock.json
 
@@ -136,7 +131,7 @@ jobs:
           echo "Waiting for server to start..."
           timeout 30 bash -c 'until curl -s http://127.0.0.1:8000 > /dev/null; do sleep 1; done'
 
-      - name: Run Group Tests
+      - name: Run All Playwright Tests
         env:
           BASE_URL: "http://127.0.0.1:8000"
         run: |
@@ -175,7 +170,7 @@ jobs:
       - name: Set Up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.13.1"
+          node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: tests/e2e-pw/package-lock.json
 
@@ -201,26 +196,3 @@ jobs:
           path: tests/e2e-pw/playwright-report
           retention-days: 1
 
-  playwright_status:
-    if: ${{ always() && !cancelled() }}
-    needs:
-      - aureus_playwright_test
-      - merge_playwright_reports
-    runs-on: ubuntu-latest
-    name: Playwright Tests
-
-    steps:
-      - name: Evaluate Workflow Status
-        run: |
-          echo "Grouped test result: ${{ needs.aureus_playwright_test.result }}"
-          echo "Report merge result: ${{ needs.merge_playwright_reports.result }}"
-
-          if [ "${{ needs.aureus_playwright_test.result }}" != "success" ]; then
-            echo "One or more Playwright test groups failed."
-            exit 1
-          fi
-
-          if [ "${{ needs.merge_playwright_reports.result }}" != "success" ]; then
-            echo "Playwright report merge did not complete successfully."
-            exit 1
-          fi
