@@ -16,7 +16,7 @@
     >
         <aside x-cloak class="sticky top-4 w-40 shrink-0">
             <nav
-                class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-950/5 transition-opacity dark:bg-gray-900/60 dark:ring-white/10 dark:backdrop-blur"
+                class="overflow-hidden rounded-2xl bg-white shadow-sm transition-opacity dark:bg-gray-900/60 dark:backdrop-blur"
                 wire:loading.delay.shortest.class="opacity-60"
                 wire:target="selectPrefix"
             >
@@ -59,7 +59,7 @@
                                 <div
                                     class="group flex items-center rounded-lg transition"
                                     :class="selected === '{{ $digit }}'
-                                        ? 'bg-primary-500/10 ring-1 ring-inset ring-primary-500/20'
+                                        ? 'bg-primary-500/10'
                                         : 'hover:bg-gray-50 dark:hover:bg-white/5'"
                                 >
                                     <button
@@ -142,7 +142,7 @@
                                                     @click="pick('{{ $child }}')"
                                                     class="group/child flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-start text-sm transition"
                                                     :class="selected === '{{ $child }}'
-                                                        ? 'bg-primary-500/10 font-semibold text-primary-700 ring-1 ring-inset ring-primary-500/20 dark:text-primary-300'
+                                                        ? 'bg-primary-500/10 font-semibold text-primary-700 dark:text-primary-300'
                                                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-white'"
                                                 >
                                                     <span
