@@ -60,15 +60,15 @@ class EditQuotation extends EditRecord
 
     protected function afterSave(): void
     {
-        // try {
+        try {
             SaleOrder::computeSaleOrder($this->getRecord());
-        // } catch (\Exception $e) {
-        //     Notification::make()
-        //         ->danger()
-        //         ->body($e->getMessage())
-        //         ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->body($e->getMessage())
+                ->send();
 
-        //     $this->halt(shouldRollbackDatabaseTransaction: true);
-        // }
+            $this->halt(shouldRollbackDatabaseTransaction: true);
+        }
     }
 }

@@ -2049,6 +2049,7 @@ class InventoryManager
      */
     public function runBuyRule($procurements)
     {
+        return;
         if (! Package::isPluginInstalled('purchases')) {
             return;
         }
