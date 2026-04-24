@@ -770,10 +770,10 @@ class SaleManager
             return;
         }
 
-        if (! $record->operation) {
+        if ($record->operations->isEmpty()) {
             return;
         }
 
-        InventoryFacade::cancelTransfer($record->operation);
+        $record->operations->each(fn ($operation) => InventoryFacade::cancelOperation($operation));
     }
 }

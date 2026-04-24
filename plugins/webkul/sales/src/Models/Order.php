@@ -20,6 +20,7 @@ use Webkul\Inventory\Models\Operation;
 use Webkul\Inventory\Models\Warehouse;
 use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Partner\Models\Partner;
+use Webkul\PluginManager\Package;
 use Webkul\Sale\Database\Factories\OrderFactory;
 use Webkul\Sale\Enums\InvoiceStatus;
 use Webkul\Sale\Enums\OrderState;
@@ -254,6 +255,8 @@ class Order extends Model
 
         static::creating(function ($order) {
             $order->handleOrderCreation();
+
+            $order->computeWarehouseId();
         });
 
         static::saving(function ($order) {
@@ -263,6 +266,15 @@ class Order extends Model
         static::created(function ($order) {
             $order->update(['name' => $order->name]);
         });
+    }
+
+    public function computeWarehouseId()
+    {
+        if (! Package::isPluginInstalled('inventories')) {
+            return;
+        }
+
+        $this->warehouse_id = Warehouse::where('company_id', $this->company_id)->first()?->id;
     }
 
     protected static function newFactory(): OrderFactory
