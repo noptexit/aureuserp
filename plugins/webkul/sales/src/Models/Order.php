@@ -99,11 +99,14 @@ class Order extends Model
     }
 
     protected $casts = [
+        'state'          => OrderState::class,
+        'invoice_status' => InvoiceStatus::class,
         'amount_tax'     => 'decimal:4',
         'amount_total'   => 'decimal:4',
         'amount_untaxed' => 'decimal:4',
-        'state'          => OrderState::class,
-        'invoice_status' => InvoiceStatus::class,
+        'validity_date'  => 'date',
+        'date_order'     => 'date',
+        'signed_on'      => 'date',
     ];
 
     public function company()

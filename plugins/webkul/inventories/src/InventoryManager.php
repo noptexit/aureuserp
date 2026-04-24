@@ -1853,7 +1853,7 @@ class InventoryManager
             $this->cancelMoves($movesToCancel->filter(fn ($move) => ! $move->is_picked));
         }
 
-        return $moves->merge($mergedMoves)->diff($movesToDelete);
+        return $moves->merge($mergedMoves)->reject(fn ($move) => $movesToDelete->contains('id', $move->id));
     }
 
     public function mergeMoveValues($moves, $mergeExtra = false)
@@ -1905,7 +1905,8 @@ class InventoryManager
 
         foreach ($movesToCancel as $move) {
             $siblingsStates = $move->moveDestinations
-                ->flatMap->moveOrigins
+                ->flatMap
+                ->moveOrigins
                 ->diff(collect([$move]))
                 ->pluck('state');
 
