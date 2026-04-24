@@ -23,6 +23,8 @@ class Product extends Model implements Sortable
 {
     use HasChatter, HasFactory, HasLogActivity, SoftDeletes, SortableTrait;
 
+    public const ACTIVITY_PLAN_PLUGIN = 'products';
+
     protected $table = 'products_products';
 
     protected $fillable = [

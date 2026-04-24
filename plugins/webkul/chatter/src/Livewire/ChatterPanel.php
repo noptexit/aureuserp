@@ -549,7 +549,7 @@ class ChatterPanel extends Component implements HasActions, HasForms, HasInfolis
                                         ->label(__('chatter::livewire/chatter-panel.edit-activity.form.fields.activity-plan'))
                                         ->options($this->activityPlans)
                                         ->searchable()
-                                        ->hidden($this->activityPlans->isEmpty())
+                                        ->hidden(fn (): bool => $this->activityPlans->isEmpty())
                                         ->preload()
                                         ->live(),
                                     DatePicker::make('date_deadline')

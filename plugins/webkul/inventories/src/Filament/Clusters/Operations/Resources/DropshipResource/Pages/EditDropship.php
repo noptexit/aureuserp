@@ -37,7 +37,8 @@ class EditDropship extends EditRecord
     {
         return [
             ChatterAction::make()
-                ->resource(static::$resource),
+                ->resource(static::$resource)
+                ->activityPlans($this->getRecord()->activityPlans()),
             OperationActions\TodoAction::make(),
             OperationActions\ValidateAction::make(),
             OperationActions\CancelAction::make(),

@@ -3,12 +3,12 @@
 namespace Webkul\Project\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Auth;
 use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Chatter\Traits\HasChatter;
@@ -26,12 +26,9 @@ class Task extends Model implements Sortable
 {
     use HasChatter, HasCustomFields, HasFactory, HasLogActivity, HasPermissionScope, SoftDeletes, SortableTrait;
 
-    protected $table = 'projects_tasks';
+    public const ACTIVITY_PLAN_PLUGIN = 'projects';
 
-    public function getModelTitle(): string
-    {
-        return __('projects::models/task.title');
-    }
+    protected $table = 'projects_tasks';
 
     protected $fillable = [
         'title',
@@ -76,6 +73,24 @@ class Task extends Model implements Sortable
         'state'               => TaskState::class,
     ];
 
+    public string $recordTitleAttribute = 'title';
+
+    public $sortable = [
+        'order_column_name'  => 'sort',
+        'sort_when_creating' => true,
+    ];
+
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+
+        $this->setPivotTable('projects_task_users');
+
+        $this->setPivotForeignKey('task_id');
+
+        $this->setPivotRelatedKey('user_id');
+    }
+
     protected function getLogAttributeLabels(): array
     {
         return [
@@ -98,22 +113,9 @@ class Task extends Model implements Sortable
         ];
     }
 
-    public string $recordTitleAttribute = 'title';
-
-    public $sortable = [
-        'order_column_name'  => 'sort',
-        'sort_when_creating' => true,
-    ];
-
-    public function __construct(array $attributes = [])
+    public function getModelTitle(): string
     {
-        parent::__construct($attributes);
-
-        $this->setPivotTable('projects_task_users');
-
-        $this->setPivotForeignKey('task_id');
-
-        $this->setPivotRelatedKey('user_id');
+        return __('projects::models/task.title');
     }
 
     public function parent(): BelongsTo

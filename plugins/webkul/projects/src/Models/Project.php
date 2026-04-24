@@ -26,6 +26,8 @@ class Project extends Model implements Sortable
 {
     use HasChatter, HasCustomFields, HasFactory, HasLogActivity, HasPermissionScope, SoftDeletes, SortableTrait;
 
+    public const ACTIVITY_PLAN_PLUGIN = 'projects';
+
     protected $table = 'projects_projects';
 
     public $sortable = [

@@ -40,7 +40,8 @@ class ViewOrder extends ViewRecord
         return [
             ChatterAction::make()
                 ->record(Order::find($this->getRecord()->id))
-                ->resource(static::$resource),
+                ->resource(static::$resource)
+                ->activityPlans($this->getRecord()->activityPlans()),
             DeleteAction::make()
                 ->hidden(fn () => $this->getRecord()->state == OrderState::DONE)
                 ->action(function (DeleteAction $action, Order $record) {

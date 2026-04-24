@@ -34,6 +34,7 @@ use Filament\Tables\Filters\QueryBuilder\Constraints\RelationshipConstraint\Oper
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
+use Webkul\Chatter\Filament\Actions\ActivityTableAction;
 use Webkul\Recruitment\Filament\Clusters\Applications;
 use Webkul\Recruitment\Filament\Clusters\Applications\Resources\CandidateResource\Pages\CreateCandidate;
 use Webkul\Recruitment\Filament\Clusters\Applications\Resources\CandidateResource\Pages\EditCandidate;
@@ -278,6 +279,7 @@ class CandidateResource extends Resource
                     ->collapsible(),
             ])
             ->recordActions([
+                ActivityTableAction::make(),
                 ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make()

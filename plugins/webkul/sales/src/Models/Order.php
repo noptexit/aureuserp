@@ -34,12 +34,9 @@ class Order extends Model
 {
     use HasChatter, HasCustomFields, HasFactory, HasLogActivity, HasPermissionScope, SoftDeletes;
 
-    protected $table = 'sales_orders';
+    public const ACTIVITY_PLAN_PLUGIN = 'sales';
 
-    public function getModelTitle(): string
-    {
-        return __('sales::models/order.title');
-    }
+    protected $table = 'sales_orders';
 
     protected $fillable = [
         'utm_source_id',
@@ -81,6 +78,14 @@ class Order extends Model
         'warehouse_id',
     ];
 
+    protected $casts = [
+        'amount_tax'     => 'decimal:4',
+        'amount_total'   => 'decimal:4',
+        'amount_untaxed' => 'decimal:4',
+        'state'          => OrderState::class,
+        'invoice_status' => InvoiceStatus::class,
+    ];
+
     public function getLogAttributeLabels(): array
     {
         return [
@@ -96,13 +101,10 @@ class Order extends Model
         ];
     }
 
-    protected $casts = [
-        'amount_tax'     => 'decimal:4',
-        'amount_total'   => 'decimal:4',
-        'amount_untaxed' => 'decimal:4',
-        'state'          => OrderState::class,
-        'invoice_status' => InvoiceStatus::class,
-    ];
+    public function getModelTitle(): string
+    {
+        return __('sales::models/order.title');
+    }
 
     public function company()
     {

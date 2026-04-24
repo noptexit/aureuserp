@@ -31,6 +31,8 @@ class Order extends Model
 {
     use HasChatter, HasCustomFields, HasFactory, HasLogActivity, HasPermissionScope;
 
+    public const ACTIVITY_PLAN_PLUGIN = 'purchases';
+
     protected $table = 'purchases_orders';
 
     protected $fillable = [

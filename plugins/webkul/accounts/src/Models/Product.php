@@ -15,11 +15,8 @@ class Product extends BaseProduct
 {
     use HasChatter, HasCustomFields, HasLogActivity;
 
-    /**
-     * Create a new Eloquent model instance.
-     *
-     * @return void
-     */
+    public const ACTIVITY_PLAN_PLUGIN = 'accounts';
+
     public function __construct(array $attributes = [])
     {
         $this->mergeFillable([

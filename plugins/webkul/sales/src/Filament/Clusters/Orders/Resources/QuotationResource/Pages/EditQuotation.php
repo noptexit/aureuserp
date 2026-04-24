@@ -37,6 +37,7 @@ class EditQuotation extends EditRecord
     {
         return [
             ChatterAction::make()
+                ->activityPlans($this->getRecord()->activityPlans())
                 ->resource($this->getResource()),
             BaseActions\BackToQuotationAction::make(),
             BaseActions\CancelQuotationAction::make(),
