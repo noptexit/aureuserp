@@ -57,15 +57,10 @@ class EditJournalEntry extends EditRecord
             ChatterActions\ChatterAction::make()
                 ->resource($this->getResource())
                 ->activityPlans($this->getRecord()->activityPlans()),
-
             BaseActions\ConfirmAction::make(),
-
             BaseActions\CancelAction::make(),
-
             BaseActions\ReverseAction::make(),
-
             BaseActions\ResetToDraftAction::make(),
-
             DeleteAction::make(),
         ];
     }
