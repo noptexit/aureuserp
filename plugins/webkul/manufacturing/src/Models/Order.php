@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\OperationType;
 use Webkul\Inventory\Models\OrderPoint;
-use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Manufacturing\Database\Factories\OrderFactory;
 use Webkul\Manufacturing\Enums\BillOfMaterialConsumption;
 use Webkul\Manufacturing\Enums\ManufacturingOrderPriority;
@@ -156,6 +155,11 @@ class Order extends Model
         return $this->hasMany(Move::class, 'order_id');
     }
 
+    public function moveDestinations(): HasMany
+    {
+        return $this->hasMany(Move::class, 'created_order_id');
+    }
+
     public function unbuildOrders(): HasMany
     {
         return $this->hasMany(UnbuildOrder::class, 'manufacturing_order_id');
@@ -194,6 +198,8 @@ class Order extends Model
             }
 
             $order->computeProductionLocationId();
+
+            $order->computeFinishedMoves();
         });
 
         static::saving(function ($order) {
@@ -213,5 +219,145 @@ class Order extends Model
     public function computeProductionLocationId()
     {
         $this->production_location_id = Location::where('type', 'production')->where('company_id', $this->company_id)->first()?->id;
+    }
+
+    public function computeFinishedMoves(): void
+    {
+        if ($this->state !== ManufacturingOrderState::DRAFT) {
+            $updatedValues = [];
+
+            if ($this->finished_at) {
+                $updatedValues['date'] = $this->finished_at;
+            }
+
+            if ($this->deadline_at) {
+                $updatedValues['deadline_at'] = $this->deadline_at;
+            }
+
+            if (! empty($updatedValues)) {
+                $this->finishedMoves->each->update($updatedValues);
+            }
+
+            return;
+        }
+
+        $this->finishedMoves()->delete();
+
+        if ($this->product_id) {
+            $this->createUpdateMoveFinished();
+        } else {
+            $this->finishedMoves()
+                ->whereNotNull('bom_line_id')
+                ->delete();
+        }
+    }
+
+    public function getMoveFinishedValues(
+        int $productId,
+        float $productUomQty,
+        int $productUomId,
+        ?int $operationId = null,
+        ?int $byproductId = null,
+        float $costShare = 0
+    ): array {
+        $groupOrders = $this->procurementGroup?->orders ?? collect();
+
+        $moveDestinationIds = $this->moveDestinations->pluck('id')->all();
+
+        if ($groupOrders->count() > 1) {
+            $additionalDestinationIds = $groupOrders->first()
+                ->finishedMoves
+                ->filter(fn($move) => $move->product_id === $this->product_id)
+                ->flatMap->moveDestinations
+                ->pluck('id')
+                ->all();
+
+            $moveDestinationIds = array_unique(array_merge($moveDestinationIds, $additionalDestinationIds));
+        }
+
+        return [
+            'product_id'              => $productId,
+            'product_uom_qty'         => $productUomQty,
+            'uom_id'                  => $productUomId,
+            'operation_id'            => $operationId,
+            'byproduct_id'            => $byproductId,
+            'name'                    => 'New',
+            'scheduled_at'            => $this->finished_at,
+            'deadline'                => $this->deadline_at,
+            'operation_type_id'       => $this->operation_type_id,
+            'source_location_id'      => $this->production_location_id,
+            'destination_location_id' => $this->destination_location_id,
+            'company_id'              => $this->company_id,
+            'order_id'                => $this->id,
+            'warehouse_id'            => $this->destinationLocation->warehouse_id,
+            'origin'                  => $this->product->partner_ref,
+            'procurement_group_id'    => $this->procurementGroup?->id,
+            'propagate_cancel'        => $this->propagate_cancel,
+            'move_destination_ids'    => ! $byproductId ? $moveDestinationIds : [],
+            'cost_share'              => $costShare,
+        ];
+    }
+
+    public function getMovesFinishedValues(): array
+    {
+        $moves = [];
+
+        $byproductProductIds = $this->billOfMaterial->byproducts->pluck('product_id')->all();
+
+        if (in_array($this->product_id, $byproductProductIds)) {
+            throw new \Exception(__('You cannot have :product as the finished product and in the Byproducts', [
+                'product' => $this->product->name,
+            ]));
+        }
+
+        $finishedMoveValues = $this->getMoveFinishedValues($this->product_id, $this->quantity, $this->uom_id);
+
+        $finishedMoveValues['final_location_id'] = $this->final_location_id;
+
+        $moves[] = $finishedMoveValues;
+
+        foreach ($this->billOfMaterial->byproducts as $byproduct) {
+            if ($byproduct->skipByproductLine($this->product)) {
+                continue;
+            }
+
+            $productUomFactor = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom);
+
+            $qty = $byproduct->quantity * ($productUomFactor / $this->billOfMaterial->quantity);
+
+            $moves[] = $this->getMoveFinishedValues(
+                $byproduct->product_id,
+                $qty,
+                $byproduct->uom_id,
+                $byproduct->operation_id,
+                $byproduct->id,
+                $byproduct->cost_share
+            );
+        }
+
+        return $moves;
+    }
+
+    public function createUpdateMoveFinished(): void
+    {
+        $movesFinishedValues = $this->getMovesFinishedValues();
+
+        $movesByproductDict = $this->finishedMoves
+            ->filter(fn($move) => $move->byproduct_id)
+            ->keyBy('byproduct_id');
+
+        $moveFinished = $this->finishedMoves
+            ->filter(fn($move) => $move->product_id === $this->product_id)
+            ->first();
+
+        foreach ($movesFinishedValues as $moveFinishedValues) {
+            if (isset($moveFinishedValues['byproduct_id']) && $movesByproductDict->has($moveFinishedValues['byproduct_id'])) {
+                $movesByproductDict->get($moveFinishedValues['byproduct_id'])->update($moveFinishedValues);
+            } elseif (isset($moveFinishedValues['product_id']) && $moveFinishedValues['product_id'] === $this->product_id && $moveFinished) {
+                $moveFinished->update($moveFinishedValues);
+            } else {
+                $this->finishedMoves()->create($moveFinishedValues);
+            }
+        }
     }
 }

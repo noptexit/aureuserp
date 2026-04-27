@@ -286,7 +286,7 @@ class Move extends Model
         static::creating(function ($move) {
             $move->creator_id ??= Auth::id();
 
-            $move->company_id ??= $move->operation?->company_id;
+            $move->company_id ??= $move->operation?->company_id ?? $move->operationType?->company_id;
 
             $move->state ??= MoveState::DRAFT;
         });

@@ -112,6 +112,15 @@ class WorkOrder extends Model
         return $this->belongsToMany(self::class, 'manufacturing_work_order_dependencies', 'depends_on_work_order_id', 'work_order_id');
     }
 
+    public function getQuantityRemainingAttribute()
+    {
+        if (! $this->manufacturingOrder->uom_id) {
+            return 0;
+        }
+
+        return max(float_round($this->quantity_produced - $this->quantity, precisionRounding: $this->manufacturingOrder->uom->rounding), 0);
+    }
+
     protected static function newFactory(): WorkOrderFactory
     {
         return WorkOrderFactory::new();

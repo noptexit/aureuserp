@@ -581,6 +581,7 @@ class ManufacturingOrderResource extends Resource
     protected static function getComponentsRepeater(): Repeater
     {
         return Repeater::make('rawMaterialMoves')
+            ->relationship('rawMaterialMoves')
             ->hiddenLabel()
             ->defaultItems(0)
             ->addable(false)
@@ -602,6 +603,8 @@ class ManufacturingOrderResource extends Resource
             ])
             ->schema([
                 Hidden::make('name'),
+                Hidden::make('operation_type_id'),
+                Hidden::make('bom_line_id'),
                 Hidden::make('source_location_id'),
                 Hidden::make('display_from'),
                 Hidden::make('display_forecast'),
@@ -761,9 +764,11 @@ class ManufacturingOrderResource extends Resource
             ->orderBy('sort')
             ->get()
             ->map(fn (BillOfMaterialLine $line): array => [
+                'bom_line_id'        => $line->id,
                 'product_id'         => $line->product_id,
                 'uom_id'             => $line->uom_id,
                 'product_uom_qty'    => round((float) $line->quantity * $quantityMultiplier, 4),
+                'operation_type_id'  => $operationType->id,
                 'source_location_id' => $operationType->source_location_id,
                 'display_from'       => $operationType?->sourceLocation?->full_name ?? '—',
                 'display_forecast'   => '—',
