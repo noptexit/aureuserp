@@ -25,26 +25,28 @@ class ConfirmAction extends Action
         parent::setUp();
 
         $this
-            ->label('Confirm')
+            ->label(__('manufacturing::filament/clusters/operations/actions/confirm.label'))
             ->action(function (Order $record, Component $livewire): void {
-                // try {
+                try {
                     $record = ManufacturingFacade::confirmManufacturingOrder($record);
 
-                    // $livewire->updateForm();
+                    $record->refresh();
+
+                    $livewire->updateForm();
 
                     Notification::make()
                         ->success()
-                        ->title(__('inventories::filament/clusters/operations/actions/todo.notification.success.title'))
-                        ->body(__('inventories::filament/clusters/operations/actions/todo.notification.success.body'))
+                        ->title(__('manufacturing::filament/clusters/operations/actions/confirm.notification.success.title'))
+                        ->body(__('manufacturing::filament/clusters/operations/actions/confirm.notification.success.body'))
                         ->send();
-                // } catch (Throwable $e) {
-                //     Notification::make()
-                //         ->danger()
-                //         ->body($e->getMessage())
-                //         ->send();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->danger()
+                        ->body($e->getMessage())
+                        ->send();
 
-                //     $this->halt(shouldRollBackDatabaseTransaction: true);
-                // }
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
+                }
             })
             ->hidden(fn () => $this->getRecord()->state !== ManufacturingOrderState::DRAFT);
     }
