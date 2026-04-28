@@ -7,8 +7,10 @@ use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Foundation\AliasLoader;
 use Webkul\Inventory\Models\Warehouse;
+use Webkul\Inventory\Models\Move;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
 use Webkul\Manufacturing\Observers\WarehouseObserver;
+use Webkul\Manufacturing\Observers\MoveObserver;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -109,5 +111,7 @@ class ManufacturingServiceProvider extends PackageServiceProvider
     protected function registerModelObservers(): void
     {
         Warehouse::observe(WarehouseObserver::class);
+
+        Move::observe(MoveObserver::class);
     }
 }

@@ -101,14 +101,24 @@ class ManufacturingOrderResource extends Resource
                     ->options(function ($record): array {
                         $options = ManufacturingOrderState::options();
 
-                        unset(
-                            $options[ManufacturingOrderState::PROGRESS->value],
-                            $options[ManufacturingOrderState::TO_CLOSE->value],
-                            $options[ManufacturingOrderState::CANCEL->value],
-                        );
+                        if (! $record) {
+                            unset(
+                                $options[ManufacturingOrderState::PROGRESS->value],
+                                $options[ManufacturingOrderState::TO_CLOSE->value],
+                                $options[ManufacturingOrderState::CANCEL->value],
+                            );
+                        } else {
+                            if ($record->state !== ManufacturingOrderState::TO_CLOSE) {
+                                unset($options[ManufacturingOrderState::TO_CLOSE->value]);
+                            }
 
-                        if ($record?->state === ManufacturingOrderState::CANCEL) {
-                            $options[ManufacturingOrderState::CANCEL->value] = ManufacturingOrderState::CANCEL->getLabel();
+                            if ($record->state !== ManufacturingOrderState::PROGRESS) {
+                                unset($options[ManufacturingOrderState::PROGRESS->value]);
+                            }
+
+                            if ($record->state !== ManufacturingOrderState::CANCEL) {
+                                unset($options[ManufacturingOrderState::CANCEL->value]);
+                            }
                         }
 
                         return $options;

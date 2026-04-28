@@ -28,24 +28,24 @@ class CancelAction extends Action
             ->label(__('manufacturing::filament/clusters/operations/actions/cancel.label'))
             ->color('gray')
             ->action(function (Order $record, Component $livewire): void {
-                // try {
+                try {
                     $record = ManufacturingFacade::cancelManufacturingOrder($record);
 
-                    // $livewire->updateForm();
+                    $livewire->updateForm();
 
                     Notification::make()
                         ->success()
                         ->title(__('manufacturing::filament/clusters/operations/actions/cancel.notification.success.title'))
                         ->body(__('manufacturing::filament/clusters/operations/actions/cancel.notification.success.body'))
                         ->send();
-                // } catch (Throwable $e) {
-                //     Notification::make()
-                //         ->danger()
-                //         ->body($e->getMessage())
-                //         ->send();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->danger()
+                        ->body($e->getMessage())
+                        ->send();
 
-                //     $this->halt(shouldRollBackDatabaseTransaction: true);
-                // }
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
+                }
             })
             ->hidden(fn () => in_array($this->getRecord()->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL]));
     }

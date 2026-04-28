@@ -2,14 +2,12 @@
 
 namespace Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages;
 
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\ConfirmAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\CancelAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\PlanAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\StartAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\UnplanAction;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
@@ -28,9 +26,10 @@ class ViewManufacturingOrder extends ViewRecord
     {
         return [
             ConfirmAction::make('confirm'),
-            CancelAction::make('cancel'),
             PlanAction::make('plan'),
             UnplanAction::make('unplan'),
+            StartAction::make('start'),
+            CancelAction::make('cancel'),
         ];
     }
 }

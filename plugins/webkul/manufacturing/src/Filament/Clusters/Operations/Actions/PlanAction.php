@@ -30,7 +30,7 @@ class PlanAction extends Action
                 // try {
                     $record = ManufacturingFacade::planManufacturingOrder($record);
 
-                    // $livewire->updateForm();
+                    $livewire->updateForm();
 
                     Notification::make()
                         ->success()

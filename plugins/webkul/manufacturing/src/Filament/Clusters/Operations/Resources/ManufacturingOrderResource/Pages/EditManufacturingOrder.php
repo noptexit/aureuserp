@@ -8,6 +8,7 @@ use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\ConfirmAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\CancelAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\PlanAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\UnplanAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\StartAction;
 use Webkul\Support\Filament\Concerns\HasRepeaterColumnManager;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
@@ -35,9 +36,15 @@ class EditManufacturingOrder extends EditRecord
     {
         return [
             ConfirmAction::make('confirm'),
-            CancelAction::make('cancel'),
             PlanAction::make('plan'),
             UnplanAction::make('unplan'),
+            StartAction::make('start'),
+            CancelAction::make('cancel'),
         ];
+    }
+
+    public function updateForm(): void
+    {
+        $this->fillForm();
     }
 }

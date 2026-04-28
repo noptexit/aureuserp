@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Webkul\Account\Facades\Tax as TaxFacade;
 use Webkul\Inventory\Models\MoveLine;
 use Webkul\Inventory\Enums\GroupPropagation;
+use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\OperationState;
@@ -210,7 +211,6 @@ class InventoryManager
         $movesToConfirm->merge($movesWaiting)
             ->filter(fn ($move) => $move->operationType?->reservation_method === ReservationMethod::AT_CONFIRM)
             ->each(fn (Move $move) => $move->update(['reservation_date' => now()]));
-
 
         foreach ($movesToAssign as $movesGroup) {
             $this->assignOperation(collect($movesGroup));
@@ -623,7 +623,6 @@ class InventoryManager
         foreach ($movesTodo->flatMap->moveDestinations as $moveDestination) {
             $moveDestinationsPerCompany[$moveDestination->company_id][] = $moveDestination;
         }
-
 
         foreach ($moveDestinationsPerCompany as $moveDestinations) {
             $this->assignMoves(collect($moveDestinations));
@@ -1481,6 +1480,10 @@ class InventoryManager
                 $move = Move::create($moveValue);
 
                 $moves->push($move);
+
+                if ($moveValue['move_destinations']->isNotEmpty()) {
+                    $move->moveDestinations()->attach($moveValue['move_destinations']->pluck('id')->all());
+                }
             }
 
             $this->confirmMoves($moves);
@@ -1509,6 +1512,24 @@ class InventoryManager
 
         $qtyLeft = $procurement['product_qty'];
 
+        if (! $partner && ! $procurement['values']['move_destinations']?->isNotEmpty()) {
+            $moveDestinations = $procurement['values']['move_destinations'];
+
+            $transitLocation = Location::where('type', LocationType::TRANSIT)->whereNotNull('company_id')->first();
+
+            if ($procurement['location']->id === $transitLocation->is) {
+                $partners = $moveDestinations->pluck('destinationLocation.warehouse.partner')->filter()->unique('id');
+
+                if ($partners->count() === 1) {
+                    $partner = $partners->first();
+                }
+
+                $moveDestinations->each->update([
+                    'partner_id' => $rule->sourceLocation->warehouse?->partner_id ?? $rule->company->partner_id,
+                ]);
+            }
+        }
+
         if (float_compare($procurement['product_qty'], 0.0, precisionRounding: $procurement['product_uom']->rounding) < 0) {
             $isRefund = true;
         }
@@ -1523,6 +1544,7 @@ class InventoryManager
             'partner_id'           => $partner?->id,
             'source_location_id'   => $rule->source_location_id,
             'final_location_id'    => $rule->destination_location_id,
+            'move_destinations'    => $procurement['values']['move_destinations'] ?? collect(),
             'rule_id'              => $rule->id,
             'procure_method'       => $rule->procure_method,
             'origin'               => $procurement['origin'] ?? null,

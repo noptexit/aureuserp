@@ -68,7 +68,18 @@ class ManufacturingManager
             $order->update(['state' => ManufacturingOrderState::CONFIRMED]);
         }
 
-        return true;
+        return $order;
+    }
+
+    public function startManufacturingOrder($order)
+    {
+        if ($order->state !== ManufacturingOrderState::CONFIRMED) {
+            return $order;
+        }
+
+        $order->update(['state' => ManufacturingOrderState::PROGRESS]);
+
+        return $order;
     }
 
     public function confirmWorkOrders($order, $workOrders)

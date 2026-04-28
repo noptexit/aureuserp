@@ -11,13 +11,13 @@ use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
 use Webkul\Manufacturing\Models\Order;
 
-class UnplanAction extends Action
+class StartAction extends Action
 {
     protected bool|Closure $hasDatabaseTransactions = true;
 
     public static function getDefaultName(): ?string
     {
-        return 'manufacturing.order.unplan';
+        return 'manufacturing.order.start';
     }
 
     protected function setUp(): void
@@ -25,18 +25,18 @@ class UnplanAction extends Action
         parent::setUp();
 
         $this
-            ->label(__('manufacturing::filament/clusters/operations/actions/unplan.label'))
+            ->label(__('manufacturing::filament/clusters/operations/actions/start.label'))
             ->color('gray')
             ->action(function (Order $record, Component $livewire): void {
                 try {
-                    $record = ManufacturingFacade::unplanManufacturingOrder($record);
+                    $record = ManufacturingFacade::startManufacturingOrder($record);
 
                     $livewire->updateForm();
 
                     Notification::make()
                         ->success()
-                        ->title(__('manufacturing::filament/clusters/operations/actions/unplan.notification.success.title'))
-                        ->body(__('manufacturing::filament/clusters/operations/actions/unplan.notification.success.body'))
+                        ->title(__('manufacturing::filament/clusters/operations/actions/start.notification.success.title'))
+                        ->body(__('manufacturing::filament/clusters/operations/actions/start.notification.success.body'))
                         ->send();
                 } catch (Throwable $e) {
                     Notification::make()
@@ -47,6 +47,6 @@ class UnplanAction extends Action
                     $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
-            ->visible(fn (Order $record) => $record->state !== ManufacturingOrderState::DRAFT && $record->is_planned);
+            ->visible(fn (Order $record) => $record->state !== ManufacturingOrderState::DRAFT && $record->state !== ManufacturingOrderState::PROGRESS);
     }
 }
