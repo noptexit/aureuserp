@@ -224,34 +224,4 @@ class OverviewManufacturingOrder extends ViewRecord
     {
         return round((float) ($this->getRecord()->product?->cost ?? 0) * (float) $this->getRecord()->quantity, 2);
     }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('confirm')
-                ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.pages.shared.header-actions.confirm.label'))
-                ->color('primary')
-                ->visible(fn (): bool => $this->getRecord()->state === ManufacturingOrderState::DRAFT)
-                ->action(function (): void {
-                    $this->getRecord()->update(['state' => ManufacturingOrderState::CONFIRMED]);
-
-                    Notification::make()
-                        ->success()
-                        ->title(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.pages.shared.header-actions.confirm.notification.title'))
-                        ->send();
-                }),
-            Action::make('cancel')
-                ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.pages.shared.header-actions.cancel.label'))
-                ->color('gray')
-                ->visible(fn (): bool => $this->getRecord()->state !== ManufacturingOrderState::DONE)
-                ->action(function (): void {
-                    $this->getRecord()->update(['state' => ManufacturingOrderState::CANCEL]);
-
-                    Notification::make()
-                        ->success()
-                        ->title(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.pages.shared.header-actions.cancel.notification.title'))
-                        ->send();
-                }),
-        ];
-    }
 }

@@ -43,6 +43,7 @@ use Webkul\Manufacturing\Filament\Clusters\Operations;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\CreateManufacturingOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\EditManufacturingOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\ListManufacturingOrders;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\ManageTransfers;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\OverviewManufacturingOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\ViewManufacturingOrder;
 use Webkul\Manufacturing\Models\BillOfMaterial;
@@ -450,17 +451,19 @@ class ManufacturingOrderResource extends Resource
             ViewManufacturingOrder::class,
             EditManufacturingOrder::class,
             OverviewManufacturingOrder::class,
+            ManageTransfers::class,
         ]);
     }
 
     public static function getPages(): array
     {
         return [
-            'index'    => ListManufacturingOrders::route('/'),
-            'create'   => CreateManufacturingOrder::route('/create'),
-            'view'     => ViewManufacturingOrder::route('/{record}'),
-            'edit'     => EditManufacturingOrder::route('/{record}/edit'),
-            'overview' => OverviewManufacturingOrder::route('/{record}/overview'),
+            'index'     => ListManufacturingOrders::route('/'),
+            'create'    => CreateManufacturingOrder::route('/create'),
+            'view'      => ViewManufacturingOrder::route('/{record}'),
+            'edit'      => EditManufacturingOrder::route('/{record}/edit'),
+            'overview'  => OverviewManufacturingOrder::route('/{record}/overview'),
+            'transfers' => ManageTransfers::route('/{record}/transfers'),
         ];
     }
 

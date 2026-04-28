@@ -244,19 +244,11 @@ class Order extends Model
 
             $order->started_at ??= now();
 
-            $order->computeName();
-
             $order->computeStartedAt();
 
             $order->computeFinishedAt();
 
             $order->computeDeadlineAt();
-
-            if (! $order->procurement_group_id) {
-                $order->procurement_group_id = $order->procurementGroup()->create([
-                    'name' => $order->name,
-                ])->id;
-            }
 
             $order->computeProductionLocationId();
         });
@@ -272,7 +264,17 @@ class Order extends Model
         });
 
         static::created(function ($order) {
-            $order->update(['name' => $order->name]);
+            $name = 'MO/'.$order->id;
+
+            if (! $order->procurement_group_id) {
+                $order->procurement_group_id = $order->procurementGroup()->create([
+                    'name' => $name,
+                ])->id;
+            }
+
+            $order->update([
+                'name' => $name,
+            ]);
 
             $order->computeFinishedMoves();
         });

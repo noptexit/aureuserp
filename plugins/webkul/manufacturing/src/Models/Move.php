@@ -133,6 +133,12 @@ class Move extends BaseMove
             if (! empty($move->raw_material_order_id)) {
                 $move->destination_location_id = $mo->production_location_id;
 
+                $move->scheduled_at = $mo->started_at;
+
+                $move->deadline = $mo->started_at;
+
+                $move->origin = $mo->name;
+
                 if (empty($move->source_location_id)) {
                     $move->source_location_id = $mo->source_location_id;
                 }
@@ -145,8 +151,10 @@ class Move extends BaseMove
             }
 
             $move->source_location_id = $mo->production_location_id;
+
             $move->scheduled_at = $mo->finished_at;
-            $move->deadline  = $mo->date_deadline;
+
+            $move->deadline = $mo->deadline_at;
 
             if (empty($move->destination_location_id)) {
                 $move->destination_location_id = $mo->destination_location_id;

@@ -1531,7 +1531,7 @@ class InventoryManager
             'routes'               => $procurement['values']['routes'] ?? collect(),
             'warehouse_id'         => $rule->warehouse_id,
             'scheduled_at'         => $dateScheduled,
-            'date_deadline'        => $rule->group_propagation_option === GroupPropagation::FIXED ? null : $dateDeadline,
+            'deadline'             => $rule->group_propagation_option === GroupPropagation::FIXED ? null : $dateDeadline,
             'propagate_cancel'     => $rule->propagate_cancel,
             'description_picking'  => $pickingDescription,
             'priority'             => $procurement['values']['priority'] ?? '0',

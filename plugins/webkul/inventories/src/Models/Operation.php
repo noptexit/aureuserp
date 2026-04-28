@@ -233,6 +233,14 @@ class Operation extends Model
 
             $operation->autoConfirm();
         });
+
+        static::saved(function ($operation) {
+            $operation->computeDeadline();
+
+            $operation->computeScheduledAt();
+
+            $operation->saveQuietly();
+        });
     }
 
     public function autoConfirm()
@@ -267,6 +275,36 @@ class Operation extends Model
 
         foreach ($this->moveLines as $moveLine) {
             $moveLine->update(['name' => $this->name]);
+        }
+    }
+
+    public function computeDeadline(): void
+    {
+        $deadlines = $this->moves->filter(fn ($m) => $m->deadline)->pluck('deadline');
+
+        if ($deadlines->isEmpty()) {
+            $this->deadline = null;
+
+            return;
+        }
+
+        $this->deadline = $this->move_type === 'direct'
+            ? $deadlines->min()
+            : $deadlines->max();
+    }
+
+    public function computeScheduledAt(): void
+    {
+        $movesDates = $this->moves
+            ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
+            ->pluck('scheduled_at');
+
+        $defaultDate = $this->scheduled_at ?: now();
+
+        if ($this->move_type === 'direct') {
+            $this->scheduled_at = $movesDates->min() ?? $defaultDate;
+        } else {
+            $this->scheduled_at = $movesDates->max() ?? $defaultDate;
         }
     }
 
