@@ -29,15 +29,19 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Enums\Width;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Field\Filament\Forms\Components\ProgressStepper as FormProgressStepper;
 use Webkul\Field\Filament\Infolists\Components\ProgressStepper as InfolistProgressStepper;
+use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Models\Location;
+use Webkul\Manufacturing\Models\Move;
 use Webkul\Inventory\Models\OperationType;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
+use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\OperationResource as ConfigurationOperationResource;
 use Webkul\Manufacturing\Filament\Clusters\Operations;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\CreateManufacturingOrder;
@@ -605,13 +609,16 @@ class ManufacturingOrderResource extends Resource
             ->deletable(true)
             ->reorderable(false)
             ->compact()
-            ->table([
+            ->table(fn ($record) => [
                 RepeaterTableColumn::make('product_id')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.component')),
                 RepeaterTableColumn::make('rendered_display_from')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from')),
                 RepeaterTableColumn::make('product_uom_qty')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.to-consume')),
+                RepeaterTableColumn::make('quantity')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.quantity'))
+                    ->visible(fn () => $record?->rawMaterialMoves->contains(fn ($move) => $move->id && $move->state !== MoveState::DRAFT)),
                 RepeaterTableColumn::make('uom_id')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.uom')),
                 RepeaterTableColumn::make('rendered_display_forecast')
@@ -652,7 +659,8 @@ class ManufacturingOrderResource extends Resource
 
                         $set('uom_id', $uomId);
                     })
-                    ->required(),
+                    ->required()
+                    ->disabled(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT),
                 Placeholder::make('rendered_display_from')
                     ->hiddenLabel()
                     ->content(function (Get $get): string {
@@ -670,7 +678,18 @@ class ManufacturingOrderResource extends Resource
                     ->minValue(0)
                     ->default(0)
                     ->live(onBlur: true)
-                    ->required(),
+                    ->required()
+                    ->disabled(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT),
+                TextInput::make('quantity')
+                    ->hiddenLabel()
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(99999999999)
+                    ->default(0)
+                    ->required()
+                    ->visible(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT)
+                    ->disabled(fn (?Move $record): bool => in_array($record?->state, [MoveState::DONE, MoveState::CANCELED])),
+                    // ->suffixAction(fn (Move $record) => static::getMoveLinesAction($record)),
                 Select::make('uom_id')
                     ->hiddenLabel()
                     ->default(fn (Get $get): mixed => $get('../../uom_id'))
@@ -688,7 +707,8 @@ class ManufacturingOrderResource extends Resource
                     ->preload()
                     ->native(false)
                     ->wrapOptionLabels(false)
-                    ->required(),
+                    ->required()
+                    ->disabled(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT),
                 Placeholder::make('rendered_display_forecast')
                     ->hiddenLabel()
                     ->content(fn (Get $get): string => (string) ($get('display_forecast') ?: '—')),
@@ -706,7 +726,7 @@ class ManufacturingOrderResource extends Resource
             ->deletable(true)
             ->reorderable(false)
             ->compact()
-            ->table([
+            ->table(fn ($record) => [
                 RepeaterTableColumn::make('operation_id')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.operation')),
                 RepeaterTableColumn::make('work_center_id')
@@ -715,16 +735,19 @@ class ManufacturingOrderResource extends Resource
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.product')),
                 RepeaterTableColumn::make('rendered_display_quantity_remaining')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.quantity-remaining')),
-                RepeaterTableColumn::make('expected_duration')
-                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.expected-duration')),
-                RepeaterTableColumn::make('rendered_display_real_duration')
-                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.real-duration')),
                 RepeaterTableColumn::make('started_at')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.start'))
                     ->toggleable(isToggledHiddenByDefault: true),
                 RepeaterTableColumn::make('finished_at')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.end'))
                     ->toggleable(isToggledHiddenByDefault: true),
+                RepeaterTableColumn::make('expected_duration')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.expected-duration')),
+                RepeaterTableColumn::make('rendered_display_real_duration')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.real-duration')),
+                RepeaterTableColumn::make('state')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.status'))
+                    ->visible(fn () => $record && $record?->state !== ManufacturingOrderState::DRAFT),
             ])
             ->schema([
                 Hidden::make('name'),
@@ -756,7 +779,8 @@ class ManufacturingOrderResource extends Resource
                         $set('name', $operation?->name);
                         $set('work_center_id', $operation?->work_center_id);
                     })
-                    ->required(),
+                    ->required()
+                    ->disabled(fn ($record): bool => ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 Select::make('work_center_id')
                     ->hiddenLabel()
                     ->options(fn (): array => WorkCenter::query()->withTrashed()->pluck('name', 'id')->all())
@@ -764,7 +788,8 @@ class ManufacturingOrderResource extends Resource
                     ->preload()
                     ->native(false)
                     ->wrapOptionLabels(false)
-                    ->required(),
+                    ->required()
+                    ->disabled(fn ($record): bool => ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 Placeholder::make('rendered_display_product')
                     ->hiddenLabel()
                     ->content(function (Get $get): string {
@@ -801,6 +826,16 @@ class ManufacturingOrderResource extends Resource
 
                         return number_format((float) ($get('quantity_remaining') ?: 0), 4);
                     }),
+                DateTimePicker::make('started_at')
+                    ->hiddenLabel()
+                    ->native(false)
+                    ->seconds(false)
+                    ->disabled(fn ($record): bool => ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
+                DateTimePicker::make('finished_at')
+                    ->hiddenLabel()
+                    ->native(false)
+                    ->seconds(false)
+                    ->disabled(fn ($record): bool => ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 TextInput::make('expected_duration')
                     ->hiddenLabel()
                     ->default('00:00')
@@ -808,18 +843,29 @@ class ManufacturingOrderResource extends Resource
                         $component->state(format_float_time((float) ($state ?: 0), 'minutes'));
                     })
                     ->dehydrateStateUsing(fn (?string $state): float => parse_float_time($state, 'minutes'))
-                    ->required(),
+                    ->required()
+                    ->disabled(fn ($record): bool => in_array($record?->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])),
                 Placeholder::make('rendered_display_real_duration')
                     ->hiddenLabel()
                     ->content(fn (Get $get): string => format_float_time((float) ($get('duration') ?: 0), 'minutes')),
-                DateTimePicker::make('started_at')
+                Placeholder::make('state')
                     ->hiddenLabel()
-                    ->native(false)
-                    ->seconds(false),
-                DateTimePicker::make('finished_at')
-                    ->hiddenLabel()
-                    ->native(false)
-                    ->seconds(false),
+                    ->badge()
+                    ->suffixAction(function ($record) {
+                        return Action::make('action')
+                            ->icon('heroicon-m-play')
+                            ->color('success')
+                            ->action(function (Set $set, $state) use($record) {
+                                if ($record->state == WorkOrderState::PROGRESS) {
+                                    $record->state = WorkOrderState::PROGRESS;
+                                } else {
+                                    $record->state = WorkOrderState::PROGRESS;
+                                }
+                                // $record->update([
+                                //     'priority' => ! $record->priority,
+                                // ]);
+                            });
+                    }),
             ]);
     }
 

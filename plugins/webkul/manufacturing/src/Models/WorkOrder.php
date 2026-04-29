@@ -212,4 +212,75 @@ class WorkOrder extends Model
             $this->state = WorkOrderState::WAITING;
         }
     }
+
+    // public function start(bool $raiseOnInvalidState = false): void
+    // {
+    //     if ($this->working_state === 'blocked') {
+    //         throw new \Exception(__('Please unblock the work center to start the work order.'));
+    //     }
+
+    //     if ($this->times->filter(fn($time) => $time->user_id === auth()->id() && ! $time->date_end)->isNotEmpty()) {
+    //         return;
+    //     }
+
+    //     if (in_array($this->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
+    //         if ($raiseOnInvalidState) {
+    //             return;
+    //         }
+
+    //         throw new \Exception(__('You cannot start a work order that is already done or cancelled'));
+    //     }
+
+    //     if ($this->product_tracking === 'serial' && $this->qty_producing == 0) {
+    //         $this->qty_producing = 1.0;
+    //     } elseif ($this->qty_producing == 0) {
+    //         $this->qty_producing = $this->qty_remaining;
+    //     }
+
+    //     if ($this->shouldStartTimer()) {
+    //         WorkcenterProductivity::create($this->prepareTimelineVals($this->duration, now()));
+    //     }
+
+    //     if ($this->production->state !== ProductionState::PROGRESS) {
+    //         $this->production->update(['date_start' => now()]);
+    //     }
+
+    //     if ($this->state === WorkOrderState::PROGRESS) {
+    //         return;
+    //     }
+
+    //     $dateStart = now();
+
+    //     $vals = [
+    //         'state'      => WorkOrderState::PROGRESS,
+    //         'date_start' => $dateStart,
+    //     ];
+
+    //     if (! $this->leave_id) {
+    //         $leave = ResourceCalendarLeave::create([
+    //             'name'        => $this->display_name,
+    //             'calendar_id' => $this->workcenter->resourceCalendar->id,
+    //             'date_from'   => $dateStart,
+    //             'date_to'     => $dateStart->clone()->addMinutes($this->duration_expected),
+    //             'resource_id' => $this->workcenter->resource->id,
+    //             'time_type'   => 'other',
+    //         ]);
+
+    //         $vals['date_finished'] = $leave->date_to;
+    //         $vals['leave_id']      = $leave->id;
+
+    //         $this->update($vals);
+    //     } else {
+    //         if (! $this->date_start || $this->date_start > $dateStart) {
+    //             $vals['date_start']    = $dateStart;
+    //             $vals['date_finished'] = $this->calculateDateFinished($dateStart);
+    //         }
+
+    //         if ($this->date_finished && $this->date_finished < $dateStart) {
+    //             $vals['date_finished'] = $dateStart;
+    //         }
+
+    //         $this->update($vals);
+    //     }
+    // }
 }
