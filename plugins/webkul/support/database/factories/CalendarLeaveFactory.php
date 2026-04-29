@@ -5,11 +5,11 @@ namespace Webkul\Support\Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Calendar;
-use Webkul\Support\Models\CalendarLeaves;
+use Webkul\Support\Models\CalendarLeave;
 
-class CalendarLeavesFactory extends Factory
+class CalendarLeaveFactory extends Factory
 {
-    protected $model = CalendarLeaves::class;
+    protected $model = CalendarLeave::class;
 
     public function definition(): array
     {

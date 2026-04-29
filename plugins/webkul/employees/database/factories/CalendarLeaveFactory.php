@@ -4,15 +4,15 @@ namespace Webkul\Employee\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Webkul\Employee\Models\Calendar;
-use Webkul\Employee\Models\CalendarLeaves;
+use Webkul\Employee\Models\CalendarLeave;
 use Webkul\Security\Models\User;
 
 /**
  * @extends Factory<CalendarLeaves>
  */
-class CalendarLeavesFactory extends Factory
+class CalendarLeaveFactory extends Factory
 {
-    protected $model = CalendarLeaves::class;
+    protected $model = CalendarLeave::class;
 
     public function definition(): array
     {

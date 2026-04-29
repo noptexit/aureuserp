@@ -35,6 +35,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('procurement_groups');
+        Schema::dropIfExists('inventories_procurement_groups');
     }
 };

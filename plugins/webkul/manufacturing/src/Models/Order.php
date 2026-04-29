@@ -21,6 +21,7 @@ use Webkul\Manufacturing\Enums\BillOfMaterialReadyToProduce;
 use Webkul\Manufacturing\Enums\ManufacturingOrderPriority;
 use Webkul\Manufacturing\Enums\ManufacturingOrderReservationState;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
+use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 use Webkul\Support\Models\UOM;
@@ -39,7 +40,7 @@ class Order extends Model
         'reservation_state',
         'consumption',
         'quantity',
-        'quantity_in_progress',
+        'quantity_producing',
         'is_planned',
         'deadline_at',
         'started_at',
@@ -61,16 +62,16 @@ class Order extends Model
     ];
 
     protected $casts = [
-        'priority'             => ManufacturingOrderPriority::class,
-        'state'                => ManufacturingOrderState::class,
-        'reservation_state'    => ManufacturingOrderReservationState::class,
-        'consumption'          => BillOfMaterialConsumption::class,
-        'is_planned'           => 'boolean',
-        'quantity'             => 'decimal:4',
-        'quantity_in_progress' => 'decimal:4',
-        'deadline_at'          => 'datetime',
-        'started_at'           => 'datetime',
-        'finished_at'          => 'datetime',
+        'priority'           => ManufacturingOrderPriority::class,
+        'state'              => ManufacturingOrderState::class,
+        'reservation_state'  => ManufacturingOrderReservationState::class,
+        'consumption'        => BillOfMaterialConsumption::class,
+        'is_planned'         => 'boolean',
+        'quantity'           => 'decimal:4',
+        'quantity_producing' => 'decimal:4',
+        'deadline_at'        => 'datetime',
+        'started_at'         => 'datetime',
+        'finished_at'        => 'datetime',
     ];
 
     public function getModelTitle(): string
@@ -244,9 +245,9 @@ class Order extends Model
 
             $order->company_id ??= $authUser?->default_company_id;
 
-            $order->priority ??= ManufacturingOrderPriority::NORMAL;
+            $order->computeState();
 
-            $order->state ??= ManufacturingOrderState::DRAFT;
+            $order->priority ??= ManufacturingOrderPriority::NORMAL;
 
             $order->consumption ??= BillOfMaterialConsumption::FLEXIBLE;
 
@@ -301,6 +302,80 @@ class Order extends Model
     public function computeName()
     {
         $this->name = 'MO/'.$this->id;
+    }
+
+    public function computeState(): void
+    {
+        if (! $this->state || ! $this->uom_id || ! $this->id) {
+            $this->state = ManufacturingOrderState::DRAFT;
+
+            return;
+        }
+
+        if (
+            $this->state === ManufacturingOrderState::CANCEL
+            || (
+                $this->finishedMoves->isNotEmpty()
+                && $this->finishedMoves->every(fn($move) => $move->state === MoveState::CANCELED
+            )
+        )
+        ) {
+            $this->state = ManufacturingOrderState::CANCEL;
+            
+            return;
+        }
+
+        if (
+            $this->state === ManufacturingOrderState::DONE ||
+            (
+                $this->rawMaterialMoves->isNotEmpty() &&
+                $this->rawMaterialMoves->every(fn($m) => in_array($m->state, [MoveState::CANCELED, MoveState::DONE])) &&
+                $this->finishedMoves->every(fn($m) => in_array($m->state, [MoveState::CANCELED, MoveState::DONE]))
+            )
+        ) {
+            $this->state = ManufacturingOrderState::DONE;
+
+            return;
+        }
+
+        if (
+            $this->workOrders->isNotEmpty()
+            && $this->workOrders->every(fn($wo) => in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
+        ) {
+            $this->state = ManufacturingOrderState::TO_CLOSE;
+
+            return;
+        }
+
+        if (
+            $this->workOrders->isEmpty()
+            && $this->floatCompare($this->qty_producing, $this->product_qty, precisionRounding: $this->uom->rounding) >= 0
+        ) {
+            $this->state = ManufacturingOrderState::TO_CLOSE;
+
+            return;
+        }
+
+        if ($this->workOrders->some(fn ($wo) => in_array($wo->state, [WorkOrderState::PROGRESS, WorkOrderState::DONE]))) {
+            $this->state = ManufacturingOrderState::PROGRESS;
+
+            return;
+        }
+
+        if (
+            $this->uom_id &&
+            ! float_is_zero($this->qty_producing, precisionRounding: $this->uom->rounding)
+        ) {
+            $this->state = ManufacturingOrderState::PROGRESS;
+
+            return;
+        }
+
+        if ($this->rawMaterialMoves->some(fn($move) => $move->is_picked)) {
+            $this->state = ManufacturingOrderState::PROGRESS;
+
+            return;
+        }
     }
 
     public function computeReservationState(): void

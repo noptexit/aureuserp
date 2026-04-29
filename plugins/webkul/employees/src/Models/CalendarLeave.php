@@ -1,6 +1,6 @@
 <?php
 
-namespace Webkul\TimeOff\Models;
+namespace Webkul\Employee\Models;
 
 use Webkul\Support\Models\CalendarLeave as BaseCalendarLeave;
 

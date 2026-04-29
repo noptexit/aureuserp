@@ -12,6 +12,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call([
+            WorkCenterLossTypeSeeder::class,
+            WorkCenterProductivityLossSeeder::class,
+        ]);
+
         $warehouses = Warehouse::all();
 
         foreach ($warehouses as $warehouse) {

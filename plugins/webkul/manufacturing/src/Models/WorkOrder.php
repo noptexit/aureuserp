@@ -2,16 +2,21 @@
 
 namespace Webkul\Manufacturing\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
-use Webkul\Employee\Models\CalendarLeaves;
+use Webkul\Inventory\Enums\ProductTracking;
+use Webkul\Support\Models\CalendarLeave;
 use Webkul\Manufacturing\Database\Factories\WorkOrderFactory;
 use Webkul\Manufacturing\Enums\WorkOrderProductionAvailability;
 use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Security\Models\User;
+use Webkul\Manufacturing\Enums\ManufacturingOrderState;
+use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Support\Models\UOM;
 
 class WorkOrder extends Model
@@ -89,7 +94,7 @@ class WorkOrder extends Model
 
     public function calendarLeave(): BelongsTo
     {
-        return $this->belongsTo(CalendarLeaves::class, 'calendar_leave_id');
+        return $this->belongsTo(CalendarLeave::class, 'calendar_leave_id');
     }
 
     public function operation(): BelongsTo
@@ -112,9 +117,29 @@ class WorkOrder extends Model
         return $this->belongsToMany(self::class, 'manufacturing_work_order_dependencies', 'depends_on_work_order_id', 'work_order_id');
     }
 
+    public function productivityLogs(): HasMany
+    {
+        return $this->hasMany(WorkCenterProductivityLog::class, 'work_order_id');
+    }
+
+    public function getWorkingStateAttribute()
+    {
+        return $this->workCenter->working_state;
+    }
+
+    public function getProductTrackingAttribute()
+    {
+        return $this->product->tracking;
+    }
+
     public function getQuantityProductionAttribute()
     {
         return $this->manufacturingOrder->quantity;
+    }
+
+    public function getQuantityProducingAttribute()
+    {
+        return $this->manufacturingOrder->quantity_producing;
     }
 
     public function getQuantityRemainingAttribute()
@@ -124,6 +149,27 @@ class WorkOrder extends Model
         }
 
         return max(float_round($this->quantity_production - $this->quantity, precisionRounding: $this->manufacturingOrder->uom->rounding), 0);
+    }
+
+    public function getWorkingUsersAttribute()
+    {
+        [$workingUsers] = $this->computeWorkingUsers();
+
+        return $workingUsers;
+    }
+
+    public function getLastWorkingUserAttribute()
+    {
+        [, $lastWorkingUser] = $this->computeWorkingUsers();
+
+        return $lastWorkingUser;
+    }
+
+    public function getIsUserWorkingAttribute()
+    {
+        [, , $isUserWorking] = $this->computeWorkingUsers();
+
+        return $isUserWorking;
     }
 
     protected static function newFactory(): WorkOrderFactory
@@ -164,6 +210,12 @@ class WorkOrder extends Model
 
                     $dependentWorkOrder->save();
                 });
+
+                if ($workOrder->wasChanged('state')) {
+                    $workOrder->manufacturingOrder->computeState();
+
+                    $workOrder->manufacturingOrder->save();
+                }
             }
         });
     }
@@ -213,74 +265,151 @@ class WorkOrder extends Model
         }
     }
 
-    // public function start(bool $raiseOnInvalidState = false): void
-    // {
-    //     if ($this->working_state === 'blocked') {
-    //         throw new \Exception(__('Please unblock the work center to start the work order.'));
-    //     }
+    public function computeWorkingUsers(): array
+    {
+        $workingUsers = $this->productivityLogs
+            ->filter(fn($log) => ! $log->finished_at)
+            ->sortBy('started_at')
+            ->pluck('creator')
+            ->unique('id');
 
-    //     if ($this->times->filter(fn($time) => $time->user_id === auth()->id() && ! $time->date_end)->isNotEmpty()) {
-    //         return;
-    //     }
+        $lastWorkingUser = null;
 
-    //     if (in_array($this->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
-    //         if ($raiseOnInvalidState) {
-    //             return;
-    //         }
+        if ($workingUsers->isNotEmpty()) {
+            $lastWorkingUser = $workingUsers->last();
+        } elseif ($this->productivityLogs->isNotEmpty()) {
+            $timesWithEnd = $this->productivityLogs->filter(fn($log) => $log->finished_at);
 
-    //         throw new \Exception(__('You cannot start a work order that is already done or cancelled'));
-    //     }
+            $lastWorkingUser = $timesWithEnd->isNotEmpty()
+                ? $timesWithEnd->sortBy('finished_at')->last()->creator
+                : $this->productivityLogs->last()->creator;
+        } else {
+            $lastWorkingUser = null;
+        }
 
-    //     if ($this->product_tracking === 'serial' && $this->qty_producing == 0) {
-    //         $this->qty_producing = 1.0;
-    //     } elseif ($this->qty_producing == 0) {
-    //         $this->qty_producing = $this->qty_remaining;
-    //     }
+        $isUserWorking = $this->productivityLogs->some(
+            fn($x) => $x->creator_id === Auth::id()
+                && ! $x->finished_at
+                && in_array($x->loss_type, ['productive', 'performance'])
+        );
 
-    //     if ($this->shouldStartTimer()) {
-    //         WorkcenterProductivity::create($this->prepareTimelineVals($this->duration, now()));
-    //     }
+        return [
+            $workingUsers,
+            $lastWorkingUser,
+            $isUserWorking,
+        ];
+    }
 
-    //     if ($this->production->state !== ProductionState::PROGRESS) {
-    //         $this->production->update(['date_start' => now()]);
-    //     }
+    public function start(bool $raiseOnInvalidState = false): void
+    {
+        if ($this->working_state === WorkCenterWorkingState::BLOCKED) {
+            throw new \Exception(__('Please unblock the work center to start the work order.'));
+        }
 
-    //     if ($this->state === WorkOrderState::PROGRESS) {
-    //         return;
-    //     }
+        if ($this->times->filter(fn($time) => $time->user_id === Auth::id() && ! $time->finished_at)->isNotEmpty()) {
+            return;
+        }
 
-    //     $dateStart = now();
+        if (in_array($this->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
+            if ($raiseOnInvalidState) {
+                return;
+            }
 
-    //     $vals = [
-    //         'state'      => WorkOrderState::PROGRESS,
-    //         'date_start' => $dateStart,
-    //     ];
+            throw new \Exception(__('You cannot start a work order that is already done or cancelled'));
+        }
 
-    //     if (! $this->leave_id) {
-    //         $leave = ResourceCalendarLeave::create([
-    //             'name'        => $this->display_name,
-    //             'calendar_id' => $this->workcenter->resourceCalendar->id,
-    //             'date_from'   => $dateStart,
-    //             'date_to'     => $dateStart->clone()->addMinutes($this->duration_expected),
-    //             'resource_id' => $this->workcenter->resource->id,
-    //             'time_type'   => 'other',
-    //         ]);
+        if ($this->product_tracking === ProductTracking::SERIAL && $this->qty_producing == 0) {
+            $this->manufacturingOrder->update(['qty_producing' => 1]);
+        } elseif ($this->qty_producing == 0) {
+            $this->manufacturingOrder->update(['qty_producing' => $this->qty_remaining]);
+        }
 
-    //         $vals['date_finished'] = $leave->date_to;
-    //         $vals['leave_id']      = $leave->id;
+        if ($this->shouldStartTimer()) {
+            WorkCenterProductivityLog::create($this->prepareTimelineVals($this->duration, now()));
+        }
 
-    //         $this->update($vals);
-    //     } else {
-    //         if (! $this->date_start || $this->date_start > $dateStart) {
-    //             $vals['date_start']    = $dateStart;
-    //             $vals['date_finished'] = $this->calculateDateFinished($dateStart);
-    //         }
+        if ($this->manufacturingOrder->state !== ManufacturingOrderState::PROGRESS) {
+            $this->manufacturingOrder->update(['started_at' => now()]);
+        }
 
-    //         if ($this->date_finished && $this->date_finished < $dateStart) {
-    //             $vals['date_finished'] = $dateStart;
-    //         }
+        if ($this->state === WorkOrderState::PROGRESS) {
+            return;
+        }
 
-    //         $this->update($vals);
-    //     }
-    // }
+        $dateStart = now();
+
+        $values = [
+            'state'      => WorkOrderState::PROGRESS,
+            'started_at' => $dateStart,
+        ];
+
+        if (! $this->calendar_leave_id) {
+            $leave = CalendarLeave::create([
+                'name'        => $this->display_name,
+                'calendar_id' => $this->workCenter->calendar->id,
+                'date_from'   => $dateStart,
+                'date_to'     => $dateStart->clone()->addMinutes($this->duration_expected),
+                'resource_id' => $this->workCenter->resource->id,
+                'time_type'   => 'other',
+            ]);
+
+            $values['finished_at'] = $leave->date_to;
+
+            $values['calendar_leave_id'] = $leave->id;
+        } else {
+            if (! $this->started_at || $this->started_at > $dateStart) {
+                $values['started_at'] = $dateStart;
+
+                $values['finished_at'] = $this->calculateDateFinished($dateStart);
+            }
+
+            if ($this->finished_at && $this->finished_at < $dateStart) {
+                $values['finished_at'] = $dateStart;
+            }
+        }
+
+        $this->update($values);
+    }
+
+    public function pending(): void
+    {
+        static::endPrevious(collect([$this]));
+    }
+
+    public static function endPrevious($workOrders, bool $endAll = false): void
+    {
+        $query = WorkCenterProductivityLog::whereIn('work_order_id', $workOrders->pluck('id'))
+            ->whereNull('finished_at');
+
+        if (! $endAll) {
+            $query->where('user_id', Auth::id())->limit(1);
+        }
+
+        $query->get()->each(fn ($log) => $log->closeTimer());
+    }
+
+    public function prepareTimelineVals(float $duration, Carbon $dateStart, ?Carbon $dateEnd = null): array
+    {
+        if (! $this->expected_duration || $duration <= $this->expected_duration) {
+            $lossId = WorkCenterProductivityLoss::where('loss_type', 'productive')->first();
+
+            if (! $lossId) {
+                throw new \Exception(__("You need to define at least one productivity loss in the category 'Productivity'. Create Configuration settings."));
+            }
+        } else {
+            $lossId = WorkCenterProductivityLoss::where('loss_type', 'performance')->first();
+
+            if (! $lossId) {
+                throw new \Exception(__("You need to define at least one productivity loss in the category 'Performance'. Create Configuration settings."));
+            }
+        }
+
+        return [
+            'work_order_id'  => $this->id,
+            'work_center_id' => $this->work_center_id,
+            'loss_id'        => $lossId->id,
+            'started_at'     => $dateStart->startOfSecond(),
+            'finished_at'    => $dateEnd?->startOfSecond(),
+        ];
+    }
 }

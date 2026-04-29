@@ -92,6 +92,11 @@ class WorkCenter extends Model implements Sortable
         return $this->hasMany(WorkOrder::class, 'work_center_id');
     }
 
+    public function productivityLogs(): HasMany
+    {
+        return $this->hasMany(WorkCenterProductivityLog::class, 'work_center_id');
+    }
+
     public function alternativeWorkCenters(): BelongsToMany
     {
         return $this->belongsToMany(self::class, 'manufacturing_work_center_alternatives', 'work_center_id', 'alternative_work_center_id');
@@ -154,5 +159,29 @@ class WorkCenter extends Model implements Sortable
             $workCenter->cleanup_time ??= 0;
             $workCenter->oee_target ??= 90;
         });
+    }
+
+    public function computeWorkingState(): void
+    {
+        $productivityLog = $this->productivityLogs()
+            ->whereNull('date_end')
+            ->first();
+
+        if (! $productivityLog) {
+            $this->working_state = WorkCenterWorkingState::NORMAL;
+        } elseif (in_array($productivityLog->loss_type, ['productive', 'performance'])) {
+            $this->working_state = WorkCenterWorkingState::DONE;
+        } else {
+            $this->working_state = WorkCenterWorkingState::BLOCKED;
+        }
+    }
+
+    public function unblock()
+    {
+        if ($this->working_state !== WorkCenterWorkingState::BLOCKED) {
+            throw new \Exception('It has already been unblocked.');
+        }
+
+        $this->productivityLogs()->whereNull('finished_at')->update(['finished_at' => now()]);
     }
 }

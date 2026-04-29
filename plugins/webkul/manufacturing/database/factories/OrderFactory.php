@@ -34,7 +34,7 @@ class OrderFactory extends Factory
             'reservation_state'       => null,
             'consumption'             => BillOfMaterialConsumption::WARNING,
             'quantity'                => fake()->randomFloat(4, 1, 50),
-            'quantity_in_progress'    => 0,
+            'quantity_producing'      => 0,
             'deadline_at'             => fake()->optional()->dateTimeBetween('now', '+1 month'),
             'started_at'              => fake()->dateTimeBetween('-1 week', 'now'),
             'finished_at'             => null,

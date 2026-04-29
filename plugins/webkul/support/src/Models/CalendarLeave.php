@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Security\Models\User;
 
-class CalendarLeaves extends Model
+class CalendarLeave extends Model
 {
     use HasFactory;
 

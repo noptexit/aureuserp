@@ -855,15 +855,9 @@ class ManufacturingOrderResource extends Resource
                         return Action::make('action')
                             ->icon('heroicon-m-play')
                             ->color('success')
+                            ->databaseTransaction()
                             ->action(function (Set $set, $state) use($record) {
-                                if ($record->state == WorkOrderState::PROGRESS) {
-                                    $record->state = WorkOrderState::PROGRESS;
-                                } else {
-                                    $record->state = WorkOrderState::PROGRESS;
-                                }
-                                // $record->update([
-                                //     'priority' => ! $record->priority,
-                                // ]);
+                                
                             });
                     }),
             ]);
