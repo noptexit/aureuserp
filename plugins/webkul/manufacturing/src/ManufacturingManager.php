@@ -7,12 +7,13 @@ use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Models\BillOfMaterial;
+use Webkul\Manufacturing\Models\Order;
 use Webkul\Manufacturing\Models\Move;
 use Webkul\Product\Enums\ProductType;
 
 class ManufacturingManager
 {
-    public function confirmManufacturingOrder($order)
+    public function confirmManufacturingOrder(Order $order)
     {
         $orderVals = [];
 
@@ -71,7 +72,7 @@ class ManufacturingManager
         return $order;
     }
 
-    public function startManufacturingOrder($order)
+    public function startManufacturingOrder(Order $order)
     {
         if ($order->state !== ManufacturingOrderState::CONFIRMED) {
             return $order;
@@ -82,7 +83,7 @@ class ManufacturingManager
         return $order;
     }
 
-    public function confirmWorkOrders($order, $workOrders)
+    public function confirmWorkOrders(Order $order, $workOrders)
     {
         $order->linkWorkOrdersAndMoves($workOrders);
     }
