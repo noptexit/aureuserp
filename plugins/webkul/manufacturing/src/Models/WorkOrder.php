@@ -223,7 +223,7 @@ class WorkOrder extends Model
         });
 
         static::created(function ($workOrder) {
-            $workOrder->update(['name' => $workOrder->name]);
+            $workOrder->updateQuietly(['name' => $workOrder->name]);
         });
 
         static::updated(function ($workOrder) {

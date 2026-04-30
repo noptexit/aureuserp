@@ -37,7 +37,7 @@ class TodoAction extends Action
                     return;
                 }
 
-                // try {
+                try {
                     $record = Inventory::confirmTransfer($record);
 
                     $livewire->updateForm();
@@ -47,14 +47,14 @@ class TodoAction extends Action
                         ->title(__('inventories::filament/clusters/operations/actions/todo.notification.success.title'))
                         ->body(__('inventories::filament/clusters/operations/actions/todo.notification.success.body'))
                         ->send();
-                // } catch (Throwable $e) {
-                //     Notification::make()
-                //         ->danger()
-                //         ->body($e->getMessage())
-                //         ->send();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->danger()
+                        ->body($e->getMessage())
+                        ->send();
 
-                //     $this->halt(shouldRollBackDatabaseTransaction: true);
-                // }
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
+                }
             })
             ->hidden(fn () => $this->getRecord()->state !== OperationState::DRAFT);
     }

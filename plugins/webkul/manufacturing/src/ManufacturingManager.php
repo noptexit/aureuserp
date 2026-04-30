@@ -17,8 +17,8 @@ class ManufacturingManager
     {
         $orderVals = [];
 
-        if ($order->bom_id) {
-            $orderVals['consumption'] = $order->bom->consumption;
+        if ($order->bill_of_material_id) {
+            $orderVals['consumption'] = $order->billOfMaterial->consumption;
         }
 
         if (
@@ -58,8 +58,7 @@ class ManufacturingManager
         $this->confirmWorkOrders($order, $order->workOrders->sortBy('id'));
 
         $operationsToConfirm = $order->inventory_operations
-            ->filter(fn($operation) => ! in_array($operation->state, [MoveState::CANCELED, MoveState::DONE]))
-            ->each(fn($operation) => InventoryFacade::confirmTransfer($operation, merge: false));
+            ->filter(fn($operation) => ! in_array($operation->state, [MoveState::CANCELED, MoveState::DONE]));
 
         foreach ($operationsToConfirm as $operation) {
             InventoryFacade::confirmTransfer($operation, merge: false);

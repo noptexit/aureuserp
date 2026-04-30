@@ -268,16 +268,6 @@ class Order extends Model
             $order->computeProductionLocationId();
         });
 
-        static::saving(function ($order) {
-            $order->computeName();
-
-            $order->computeIsPlanned();
-
-            $order->computeFinishedAt();
-
-            $order->computeDeadlineAt();
-        });
-
         static::created(function ($order) {
             $name = 'MO/'.$order->id;
 
@@ -290,12 +280,24 @@ class Order extends Model
             $order->update([
                 'name' => $name,
             ]);
+        });
 
-            $order->computeFinishedMoves();
+        static::saving(function ($order) {
+            $order->computeName();
+
+            $order->computeIsPlanned();
+
+            if ($order->wasChanged(['company_id', 'started_at', 'is_planned', 'product_id'])) {
+                $order->computeFinishedAt();
+            }
+
+            $order->computeDeadlineAt();
         });
 
         static::updated(function ($order) {
-            $order->computeFinishedMoves();
+            if ($order->wasChanged(['product_id', 'bill_of_material_id', 'quantity', 'uom_id', 'destination_location_id', 'finished_at'])) {
+                $order->computeFinishedMoves();
+            }
 
             if ($order->wasChanged('state')) {
                 $order->computeReservationState();
@@ -436,7 +438,7 @@ class Order extends Model
             return;
         }
 
-        $daysDelay = $this->bom->produce_delay ?? 0;
+        $daysDelay = $this->billOfMaterial->produce_delay ?? 0;
 
         $finishedAt = Carbon::parse($this->started_at)->addDays($daysDelay);
 
@@ -483,7 +485,7 @@ class Order extends Model
         $this->finishedMoves()->delete();
 
         if ($this->product_id) {
-            $this->createUpdateMoveFinished();
+            $this->updateOrCreateMoveFinished();
         } else {
             $this->finishedMoves()
                 ->whereNotNull('bom_line_id')
@@ -608,7 +610,7 @@ class Order extends Model
         return $moves;
     }
 
-    public function createUpdateMoveFinished(): void
+    public function updateOrCreateMoveFinished(): void
     {
         $movesFinishedValues = $this->getMovesFinishedValues();
 
@@ -639,7 +641,7 @@ class Order extends Model
 
         $workOrderPerOperation = $this->workOrders->keyBy('operation_id');
 
-        $workOrderBoms = $this->workOrders->pluck('operation.bom_id')->unique()->filter();
+        $workOrderBoms = $this->workOrders->pluck('operation.bill_of_material_id')->unique()->filter();
 
         $lastWorkOrderPerBom = [];
 
@@ -657,7 +659,7 @@ class Order extends Model
                 $workOrder->blockedByWorkOrders()->syncWithoutDetaching($blockedByIds);
 
                 if ($workOrder->dependentWorkOrders->isEmpty()) {
-                    $lastWorkOrderPerBom[$workOrder->operation->bom_id] = $workOrder;
+                    $lastWorkOrderPerBom[$workOrder->operation->bill_of_material_id] = $workOrder;
                 }
             }
         } else {
@@ -674,7 +676,7 @@ class Order extends Model
 
                 $previousWorkOrder = $workOrder;
 
-                $lastWorkOrderPerBom[$workOrder->operation->bom_id] = $workOrder;
+                $lastWorkOrderPerBom[$workOrder->operation->bill_of_material_id] = $workOrder;
             }
         }
 
@@ -688,9 +690,9 @@ class Order extends Model
                         : null,
                 ]);
             } else {
-                $bom = ($move->bomLine && $workOrderBoms->contains($move->bomLine->bom_id))
-                    ? $move->bomLine->bom_id
-                    : $this->bom_id;
+                $bom = ($move->bomLine && $workOrderBoms->contains($move->bomLine->bill_of_material_id))
+                    ? $move->bomLine->bill_of_material_id
+                    : $this->bill_of_material_id;
 
                 $move->update([
                     'work_order_id' => isset($lastWorkOrderPerBom[$bom]) ? $lastWorkOrderPerBom[$bom]->id : null,
