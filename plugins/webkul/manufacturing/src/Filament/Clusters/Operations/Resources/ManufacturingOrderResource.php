@@ -159,6 +159,7 @@ class ManufacturingOrderResource extends Resource
                                     ->native(false)
                                     ->wrapOptionLabels(false)
                                     ->live()
+                                    ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                                         $product = Product::query()->withTrashed()->find($state);
 
@@ -224,6 +225,7 @@ class ManufacturingOrderResource extends Resource
                                     ->native(false)
                                     ->wrapOptionLabels(false)
                                     ->live()
+                                    ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                                         $product = Product::query()->withTrashed()->find($get('product_id'));
 
@@ -239,12 +241,18 @@ class ManufacturingOrderResource extends Resource
                         Group::make()
                             ->columns(1)
                             ->schema([
-                                DateTimePicker::make('deadline_at')
+                                DateTimePicker::make('started_at')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.scheduled-date'))
                                     ->native(false)
                                     ->default(now())
                                     ->seconds(false)
                                     ->required(),
+                                DateTimePicker::make('finished_at')
+                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.scheduled-end'))
+                                    ->default(now())
+                                    ->seconds(false)
+                                    ->disabled()
+                                    ->visible(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT),
                                 Select::make('assigned_user_id')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.responsible'))
                                     ->relationship('assignedUser', 'name')
@@ -290,6 +298,7 @@ class ManufacturingOrderResource extends Resource
                                             ->native(false)
                                             ->wrapOptionLabels(false)
                                             ->live()
+                                            ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->afterStateUpdated(function (Set $set, ?string $state): void {
                                                 $operationType = OperationType::query()->withTrashed()->find($state);
 
@@ -302,6 +311,7 @@ class ManufacturingOrderResource extends Resource
                                             ->searchable()
                                             ->preload()
                                             ->native(false)
+                                            ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->wrapOptionLabels(false),
                                         Select::make('destination_location_id')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.miscellaneous.fields.finished-products-location'))
@@ -311,6 +321,7 @@ class ManufacturingOrderResource extends Resource
                                             ->native(false)
                                             ->wrapOptionLabels(false)
                                             ->live()
+                                            ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->afterStateUpdated(function (Set $set, ?string $state): void {
                                                 $set('destination_location_id', $state);
                                             }),
@@ -320,6 +331,7 @@ class ManufacturingOrderResource extends Resource
                                             ->searchable()
                                             ->preload()
                                             ->native(false)
+                                            ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->default(Auth::user()?->default_company_id),
                                     ]),
                             ]),

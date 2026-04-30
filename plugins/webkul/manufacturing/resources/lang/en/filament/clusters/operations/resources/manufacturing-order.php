@@ -16,6 +16,7 @@ return [
                     'uom'                    => 'UoM',
                     'bill-of-material'       => 'Bill of Material',
                     'scheduled-date'         => 'Scheduled Date',
+                    'scheduled-end'          => 'Scheduled End',
                     'responsible'            => 'Responsible',
                     'to-produce'             => 'To Produce',
                     'to-produce-placeholder' => 'Image preview',

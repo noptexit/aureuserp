@@ -44,7 +44,7 @@ class CreateManufacturingOrder extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('overview', ['record' => $this->getRecord()]);
+        return $this->getResource()::getUrl('edit', ['record' => $this->getRecord()]);
     }
 
     protected function getCreatedNotification(): ?Notification
