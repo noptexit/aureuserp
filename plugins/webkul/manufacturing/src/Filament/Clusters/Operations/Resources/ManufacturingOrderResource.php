@@ -194,6 +194,7 @@ class ManufacturingOrderResource extends Resource
                                             BillOfMaterial::query()->withTrashed()->find($billOfMaterialId),
                                             $product,
                                             (float) ($get('quantity') ?: 1),
+                                            $get('uom_id'),
                                         );
                                     })
                                     ->required(),
@@ -231,6 +232,7 @@ class ManufacturingOrderResource extends Resource
                                             BillOfMaterial::query()->withTrashed()->find($state),
                                             $product,
                                             (float) ($get('quantity') ?: 1),
+                                            $get('uom_id'),
                                         );
                                     }),
                             ]),
@@ -498,8 +500,13 @@ class ManufacturingOrderResource extends Resource
             ->value('id');
     }
 
-    protected static function applyBillOfMaterialDefaults(Set $set, ?BillOfMaterial $billOfMaterial, ?Product $product = null, float $quantity = 1): void
-    {
+    protected static function applyBillOfMaterialDefaults(
+        Set $set,
+        ?BillOfMaterial $billOfMaterial,
+        ?Product $product = null,
+        float $quantity = 1,
+        ?int $uomId = null
+    ): void {
         if (! $billOfMaterial) {
             $set('rawMaterialMoves', []);
             $set('workOrders', []);
@@ -519,16 +526,20 @@ class ManufacturingOrderResource extends Resource
 
         $set('destination_location_id', $operationType?->destination_location_id);
 
-        $set('uom_id', $billOfMaterial->uom_id ?: static::getDefaultUomId());
+        if (! $uomId) {
+            $set('uom_id', $billOfMaterial->uom_id ?: static::getDefaultUomId());
+        }
 
         $set('company_id', $billOfMaterial->company_id);
 
-        $set('rawMaterialMoves', static::getComponentRepeaterState($billOfMaterial, $quantity));
+        $effectiveQuantity = static::convertOrderQuantityToBillOfMaterialUom($billOfMaterial, $quantity, $uomId);
+
+        $set('rawMaterialMoves', static::getComponentRepeaterState($billOfMaterial, $effectiveQuantity));
 
         $set('workOrders', static::getWorkOrderRepeaterState(
             $billOfMaterial,
             $product ?? $billOfMaterial->product,
-            $quantity,
+            $effectiveQuantity,
         ));
     }
 
@@ -579,6 +590,7 @@ class ManufacturingOrderResource extends Resource
                         $billOfMaterial,
                         $product,
                         (float) ($state ?: 1),
+                        $get('uom_id'),
                     );
                 })
                 ->required()
@@ -589,6 +601,19 @@ class ManufacturingOrderResource extends Resource
                 ->required()
                 ->searchable()
                 ->preload()
+                ->live()
+                ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                    $billOfMaterial = BillOfMaterial::query()->withTrashed()->find($get('bill_of_material_id'));
+                    $product = Product::query()->withTrashed()->find($get('product_id'));
+
+                    static::applyBillOfMaterialDefaults(
+                        $set,
+                        $billOfMaterial,
+                        $product,
+                        (float) ($get('quantity') ?: 1),
+                        $state ? (int) $state : null,
+                    );
+                })
                 ->options(function (Get $get): array {
                     $product = Product::query()->withTrashed()->find($get('product_id'));
                     $categoryId = $product?->uom?->category_id;
@@ -1030,5 +1055,20 @@ class ManufacturingOrderResource extends Resource
             ->where('name', 'Units')
             ->value('id')
             ?? UOM::query()->value('id');
+    }
+
+    protected static function convertOrderQuantityToBillOfMaterialUom(BillOfMaterial $billOfMaterial, float $quantity, ?int $uomId): float
+    {
+        if (! $uomId || ! $billOfMaterial->uom_id || $uomId === $billOfMaterial->uom_id) {
+            return $quantity;
+        }
+
+        $selectedUom = UOM::query()->withTrashed()->find($uomId);
+
+        if (! $selectedUom || ! $billOfMaterial->uom) {
+            return $quantity;
+        }
+
+        return (float) $selectedUom->computeQuantity($quantity, $billOfMaterial->uom, roundingMethod: 'HALF-UP');
     }
 }
