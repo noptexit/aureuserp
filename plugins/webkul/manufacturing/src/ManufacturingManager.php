@@ -6,6 +6,7 @@ use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
+use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Manufacturing\Models\BillOfMaterial;
 use Webkul\Manufacturing\Models\Order;
 use Webkul\Manufacturing\Models\Move;
@@ -78,6 +79,17 @@ class ManufacturingManager
         }
 
         $order->update(['state' => ManufacturingOrderState::PROGRESS]);
+
+        return $order;
+    }
+
+    public function planManufacturingOrder(Order $order)
+    {
+        if ($order->state === ManufacturingOrderState::DRAFT) {
+            $order = $this->confirmManufacturingOrder($order);
+        }
+
+        $order = $this->planWorkOrders($order);
 
         return $order;
     }
@@ -165,6 +177,36 @@ class ManufacturingManager
         });
 
         return $movesToReturn;
+    }
+
+    public function planWorkOrders(Order $order, bool $replan = false)
+    {
+        if ($order->workOrders->isEmpty()) {
+            $order->update(['is_planned' => true]);
+
+            return $order;
+        }
+
+        $order->linkWorkOrdersAndMoves();
+
+        $finalWorkOrders = $order->workOrders->filter(fn ($workOrder) => $workOrder->dependentWorkOrders->isEmpty());
+
+        $finalWorkOrders->each(fn($workOrder) => $workOrder->plan($replan));
+
+        $workOrders = $order->workOrders->filter(
+            fn($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
+        );
+
+        if ($workOrders->isEmpty()) {
+            return $order;
+        }
+
+        $order->update([
+            'started_at'  => $workOrders->min(fn ($workOrder) => $workOrder->calendarLeave->date_from),
+            'finished_at' => $workOrders->max(fn ($workOrder) => $workOrder->calendarLeave->date_to),
+        ]);
+
+        return $order;
     }
 
     public function preparePhantomMoveValues($move, $bomLine, $productQty, $quantityDone): array

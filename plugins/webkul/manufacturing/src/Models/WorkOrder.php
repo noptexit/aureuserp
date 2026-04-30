@@ -195,6 +195,61 @@ class WorkOrder extends Model
         return $displayName;
     }
 
+    public function getDurationExpected(?WorkCenter $alternativeWorkCenter = null, float $ratio = 1): float
+    {
+        if (! $this->work_center_id) {
+            return $this->expected_duration;
+        }
+
+        if (! $this->operation_id) {
+            $durationExpectedWorking = ($this->expected_duration - $this->workCenter->setup_time - $this->workCenter->cleanup_time)
+                * $this->workCenter->time_efficiency / 100.0;
+
+            if ($durationExpectedWorking < 0) {
+                $durationExpectedWorking = 0;
+            }
+
+            if (! in_array($this->quantity_producing, [0, $this->quantity_production])) {
+                $qtyRatio = $this->quantity_producing / $this->quantity_production;
+            } else {
+                $qtyRatio = 1;
+            }
+
+            return $this->workCenter->getExpectedDuration($this->product)
+                + $durationExpectedWorking * $qtyRatio * $ratio * 100.0 / $this->workCenter->time_efficiency;
+        }
+
+        $qtyProduction = $this->manufacturingOrder->uom->computeQuantity(
+            $this->quantity_producing ?: $this->quantity_production,
+            $this->manufacturingOrder->product->uom
+        );
+
+        $capacity = $this->workCenter->getCapacity($this->product);
+
+        $cycleNumber = float_round($qtyProduction / $capacity, precisionDigits: 0, roundingMethod: 'UP');
+
+        if ($alternativeWorkCenter) {
+            $durationExpectedWorking = ($this->expected_duration - $this->workCenter->getExpectedDuration($this->product))
+                * $this->workCenter->time_efficiency / (100.0 * $cycleNumber);
+
+            if ($durationExpectedWorking < 0) {
+                $durationExpectedWorking = 0;
+            }
+
+            $alternativeCapacity = $alternativeWorkCenter->getCapacity($this->product);
+            
+            $alternativeCycleNb = float_round($qtyProduction / $alternativeCapacity, precisionDigits: 0, roundingMethod: 'UP');
+
+            return $alternativeWorkCenter->getExpectedDuration($this->product)
+                + $alternativeCycleNb * $durationExpectedWorking * 100.0 / $alternativeWorkCenter->time_efficiency;
+        }
+
+        $timeCycle = $this->operation->time_cycle;
+
+        return $this->workCenter->getExpectedDuration($this->product)
+            + $cycleNumber * $timeCycle * 100.0 / $this->workCenter->time_efficiency;
+    }
+
     protected static function newFactory(): WorkOrderFactory
     {
         return WorkOrderFactory::new();
@@ -287,7 +342,7 @@ class WorkOrder extends Model
 
         $blockedByWorkOrders = $this->blockedByWorkOrders;
 
-        if ($this->production_availability === WorkOrderProductionAvailability::ASSIGNED) {
+        if ($this->manufacturingOrder_availability === WorkOrderProductionAvailability::ASSIGNED) {
             $this->state = $blockedByWorkOrders->every(fn ($wo) => in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
                 ? WorkOrderState::READY
                 : WorkOrderState::PENDING;
@@ -466,6 +521,92 @@ class WorkOrder extends Model
     public function pending(): void
     {
         static::endPrevious(collect([$this]));
+    }
+
+    public function plan(bool $replan = false): void
+    {
+        $dateStart = max(Carbon::parse($this->manufacturingOrder->started_at), now());
+
+        foreach ($this->blockedByWorkOrders as $workOrder) {
+            if (in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
+                continue;
+            }
+
+            $workOrder->plan($replan);
+
+            if ($workOrder->finished_at && Carbon::parse($workOrder->finished_at)->gt($dateStart)) {
+                $dateStart = Carbon::parse($workOrder->finished_at);
+            }
+        }
+
+        if (! in_array($this->state, [WorkOrderState::PENDING, WorkOrderState::WAITING, WorkOrderState::READY])) {
+            return;
+        }
+
+        if ($this->calendar_leave_id) {
+            if ($replan) {
+                $this->calendarLeave->delete();
+            } else {
+                return;
+            }
+        }
+
+        $workCenters = collect([$this->workCenter])->merge($this->workCenter->alternativeWorkCenters);
+
+        $bestFinishedDate = Carbon::maxValue();
+        
+        $bestStartedDate = null;
+
+        $bestWorkCenter = null;
+
+        $values = [];
+
+        foreach ($workCenters as $workCenter) {
+            if (! $workCenter->resourceCalendar) {
+                throw new \Exception(__('There is no defined calendar on work center :name.', ['name' => $workCenter->name]));
+            }
+
+            $expectedDuration = $this->work_center_id === $workCenter->id
+                ? $this->expected_duration
+                : $this->getExpectedDuration(alternativeWorkCenter: $workCenter);
+
+            [$fromDate, $toDate] = $workCenter->getFirstAvailableSlot($dateStart, $expectedDuration);
+
+            if (! $fromDate) {
+                continue;
+            }
+
+            if ($toDate && Carbon::parse($toDate)->lt($bestFinishedDate)) {
+                $bestStartedDate = $fromDate;
+
+                $bestFinishedDate = Carbon::parse($toDate);
+
+                $bestWorkCenter = $workCenter;
+
+                $values = [
+                    'work_center_id'    => $workCenter->id,
+                    'expected_duration' => $expectedDuration,
+                ];
+            }
+        }
+
+        if ($bestFinishedDate->eq(Carbon::maxValue())) {
+            throw new \Exception('Impossible to plan the work order. Please check the work center availabilities.');
+        }
+
+        $leave = CalendarLeave::create([
+            'name'          => $this->name,
+            'calendar_id'   => $bestWorkCenter->calendar_id,
+            'date_from'     => $bestStartedDate,
+            'date_to'       => $bestFinishedDate,
+            'resource_id'   => $bestWorkCenter->getKey(),
+            'resource_type' => $bestWorkCenter->getMorphClass(),
+            'time_type'     => 'other',
+        ]);
+
+        $values['calendar_leave_id'] = $leave->id;
+
+        $this->update($values);
     }
 
     public function finish(): void

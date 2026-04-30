@@ -93,9 +93,36 @@ class Operation extends Model
         return $this->belongsToMany(self::class, 'manufacturing_operation_dependencies', 'depends_on_operation_id', 'operation_id');
     }
 
-    public function getCycleDuration(): float
+    public function getTimeCycleAttribute()
     {
-        return (float) ($this->manual_cycle_time ?? 0);
+        if ($this->time_mode === OperationTimeMode::MANUAL) {
+            return $this->manual_cycle_time;
+        }
+
+        $workOrders = WorkOrder::query()
+            ->where('operation_id', $this->id)
+            ->where('quantity_produced', '>', 0)
+            ->where('state', 'done')
+            ->orderByDesc('finished_at')
+            ->orderByDesc('id')
+            ->limit($this->time_mode_batch)
+            ->get();
+
+        $totalDuration = 0;
+
+        $cycleNumber = 0;
+
+        foreach ($workOrders as $workOrder) {
+            $totalDuration += $workOrder->duration;
+
+            $capacity = $workOrder->workCenter->getCapacity($workOrder->product);
+
+            $qtyProduced = $workOrder->uom->computeQuantity($workOrder->quantity_produced, $workOrder->product->uom);
+
+            $cycleNumber += float_round(($qtyProduced / $capacity) ?: 1.0, precisionDigits: 0, roundingMethod: 'UP');
+        }
+
+        return $cycleNumber ? ($totalDuration / $cycleNumber) : $this->manual_cycle_time;
     }
 
     public function getExpectedDuration(?Product $product = null, float $quantity = 1): float
@@ -103,16 +130,19 @@ class Operation extends Model
         $workCenter = $this->workCenter;
 
         if (! $workCenter) {
-            return $this->getCycleDuration();
+            return $this->time_cycle;
         }
 
         $normalizedQuantity = max($quantity, 0);
+
         $capacity = $workCenter->getCapacity($product);
+
         $cycleNumber = $normalizedQuantity > 0 ? (float) ceil($normalizedQuantity / $capacity) : 0.0;
+        
         $timeEfficiency = max((float) ($workCenter->time_efficiency ?? 100), 0.0001);
 
         return $workCenter->getExpectedDuration($product)
-            + ($cycleNumber * $this->getCycleDuration() * 100.0 / $timeEfficiency);
+            + ($cycleNumber * $this->time_cycle * 100.0 / $timeEfficiency);
     }
 
     public function getExpectedCost(?Product $product = null, float $quantity = 1): float
