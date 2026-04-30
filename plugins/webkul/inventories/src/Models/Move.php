@@ -649,7 +649,7 @@ class Move extends Model
         $quantity = 0;
 
         $this->lines()->get()->each(function ($moveLine) use (&$quantity) {
-            $quantity += $moveLine->uom->computeQuantity($moveLine->qty, $this->product->uom, round: false);
+            $quantity += $moveLine->uom->computeQuantity($moveLine->qty, $this->uom, round: false);
         });
 
         return $quantity;
