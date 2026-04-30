@@ -267,6 +267,10 @@ class MoveLine extends Model
 
     public function computeUOMQty()
     {
+        if (! $this->uom) {
+            return;
+        }
+
         $this->uom_qty = $this->uom->computeQuantity($this->qty, $this->product->uom, roundingMethod: 'HALF-UP');
     }
 
