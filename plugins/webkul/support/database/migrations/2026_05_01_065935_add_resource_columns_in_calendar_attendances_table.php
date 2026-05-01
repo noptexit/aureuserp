@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('calendar_attendances', function (Blueprint $table) {
-            $table->morphs('resource');
+            $table->nullableMorphs('resource');
         });
     }
 

@@ -407,7 +407,7 @@ class WorkOrder extends Model
 
         $start = $startedAt ?? Carbon::parse($this->started_at);
 
-        if (1 || ! $workCenter->calendar_id) {
+        if (! $workCenter->calendar_id) {
             $durationInSeconds = $this->expected_duration * 60;
 
             return $start->clone()->addSeconds($durationInSeconds);

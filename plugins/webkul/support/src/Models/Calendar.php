@@ -213,7 +213,7 @@ class Calendar extends Model
         $resourcesPerTz = [];
 
         foreach ($resourcesList as $resource) {
-            $resourceTz = $tz ?? ($resource ? $resource->tz : $this->tz);
+            $resourceTz = $tz ?? ($resource ? $resource->tz : $this->timezone);
 
             $resourcesPerTz[$resourceTz][] = $resource;
         }
@@ -224,12 +224,22 @@ class Calendar extends Model
 
         $weekdays = [];
 
+        $dayOfWeekMap = [
+            'monday'    => 0,
+            'tuesday'   => 1,
+            'wednesday' => 2,
+            'thursday'  => 3,
+            'friday'    => 4,
+            'saturday'  => 5,
+            'sunday'    => 6,
+        ];
+
         foreach ($attendances as $attendance) {
             if ($attendance->resource_id) {
                 $attendancePerResource[$attendance->resource_id][] = $attendance;
             }
 
-            $weekday = (int) $attendance->dayofweek;
+            $weekday = $dayOfWeekMap[$attendance->day_of_week] ?? 0;
 
             $weekdays[] = $weekday;
 
@@ -307,7 +317,7 @@ class Calendar extends Model
                 Carbon::parse(max($bounds[0], Carbon::parse($val[0])->setTimezone($resourceTz))),
                 Carbon::parse(min($bounds[1], Carbon::parse($val[1])->setTimezone($resourceTz))),
                 $val[2],
-            ])->all();
+            ])->filter(fn ($interval) => $interval[0]->lt($interval[1]))->values()->all();
         }
 
         $resultPerResourceId = [];
@@ -325,7 +335,7 @@ class Calendar extends Model
                         Carbon::parse(max($bounds[0], Carbon::parse($val[0])->setTimezone($resourceTz))),
                         Carbon::parse(min($bounds[1], Carbon::parse($val[1])->setTimezone($resourceTz))),
                         $val[2],
-                    ])->all();
+                    ])->filter(fn ($interval) => $interval[0]->lt($interval[1]))->values()->all();
 
                     $resultPerResourceId[$resourceId] = collect(array_merge($res, $resourceSpecificResult));
                 } else {
@@ -391,7 +401,7 @@ class Calendar extends Model
                     continue;
                 }
 
-                $resourceTz = $tz ?? ($resource ? $resource->tz : $this->tz);
+                $resourceTz = $tz ?? ($resource ? $resource->tz : $this->timezone);
                 $resourceId = $resource?->id;
 
                 $tzKey = $resourceTz.'_start';
