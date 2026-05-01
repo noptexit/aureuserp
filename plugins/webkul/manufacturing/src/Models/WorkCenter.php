@@ -3,7 +3,6 @@
 namespace Webkul\Manufacturing\Models;
 
 use Carbon\Carbon;
-use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,10 +13,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
-use Webkul\Employee\Models\Calendar;
 use Webkul\Manufacturing\Database\Factories\WorkCenterFactory;
 use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Security\Models\User;
+use Webkul\Support\Models\Calendar;
 use Webkul\Support\Models\Company;
 
 class WorkCenter extends Model implements Sortable
@@ -146,12 +145,11 @@ class WorkCenter extends Model implements Sortable
         ?Collection $leavesToIgnore = null,
         array $extraLeavesSlots = []
     ): array {
-        $resource = $this->resource;
         $remaining = $duration;
-        $delta = 14; 
+        $delta = 14;
 
         $startInterval = null;
-        $stopInterval  = null;
+        $stopInterval = null;
 
         $workOrderLeavesDomain = [['time_type', '=', 'other']];
 
@@ -159,7 +157,7 @@ class WorkCenter extends Model implements Sortable
             $workOrderLeavesDomain[] = ['id', 'not in', $leavesToIgnore->pluck('id')->all()];
         }
 
-        $extraLeavesIntervals = collect($extraLeavesSlots)->map(fn($slot) => [
+        $extraLeavesIntervals = collect($extraLeavesSlots)->map(fn ($slot) => [
             Carbon::parse($slot[0]),
             Carbon::parse($slot[1]),
         ]);
@@ -170,9 +168,9 @@ class WorkCenter extends Model implements Sortable
 
                 $dateStop = $dateStart->clone()->addDays($delta);
 
-                $availableIntervals = $this->calendar->getWorkIntervalsBatch($dateStart, $dateStop, $resource);
+                $availableIntervals = $this->calendar->getWorkIntervalsBatch($dateStart, $dateStop, $this)[$this->id] ?? [];
 
-                $workOrderIntervals = $this->calendar->getLeaveIntervalsBatch($dateStart, $dateStop, $resource, $workOrderLeavesDomain);
+                $workOrderIntervals = collect($this->calendar->getLeaveIntervalsBatch($dateStart, $dateStop, $this, $workOrderLeavesDomain)[$this->id] ?? []);
 
                 foreach ($availableIntervals as [$start, $stop]) {
                     $startInterval = $startInterval ?? $start;
@@ -196,14 +194,18 @@ class WorkCenter extends Model implements Sortable
                             break;
                         }
 
-                        $start = $conflict[1]; 
+                        $start = $conflict[1];
 
                         $intervalMinutes = $start->diffInSeconds($stop) / 60;
 
-                        if (! $intervalMinutes) {
+                        if ($intervalMinutes <= 0) {
+                            $intervalMinutes = 0;
+
                             $startInterval = null;
 
                             $remaining = $duration;
+
+                            break;
                         } else {
                             $startInterval = $start;
                         }
@@ -223,9 +225,9 @@ class WorkCenter extends Model implements Sortable
 
                 $dateStart = $dateStop->clone()->subDays($delta);
 
-                $availableIntervals = collect($this->calendar->getWorkIntervalsBatch($dateStart, $dateStop, $resource))->reverse();
+                $availableIntervals = collect($this->calendar->getWorkIntervalsBatch($dateStart, $dateStop, $this)[$this->id] ?? [])->reverse();
 
-                $workOrderIntervals = $this->calendar->getLeaveIntervalsBatch($dateStart, $dateStop, $resource, $workOrderLeavesDomain);
+                $workOrderIntervals = collect($this->calendar->getLeaveIntervalsBatch($dateStart, $dateStop, $this, $workOrderLeavesDomain)[$this->id] ?? []);
 
                 foreach ($availableIntervals as [$start, $stop]) {
                     $stopInterval = $stopInterval ?? $stop;
@@ -253,10 +255,14 @@ class WorkCenter extends Model implements Sortable
 
                         $intervalMinutes = $start->diffInSeconds($stop) / 60;
 
-                        if (! $intervalMinutes) {
+                        if ($intervalMinutes <= 0) {
+                            $intervalMinutes = 0;
+
                             $stopInterval = null;
 
                             $remaining = $duration;
+
+                            break;
                         } else {
                             $stopInterval = $stop;
                         }

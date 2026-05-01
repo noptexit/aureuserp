@@ -8,8 +8,8 @@ use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Manufacturing\Models\BillOfMaterial;
-use Webkul\Manufacturing\Models\Order;
 use Webkul\Manufacturing\Models\Move;
+use Webkul\Manufacturing\Models\Order;
 use Webkul\Product\Enums\ProductType;
 
 class ManufacturingManager
@@ -31,11 +31,11 @@ class ManufacturingManager
             $orderVals['uom_id'] = $order->product->uom_id;
 
             $order->finishedMoves
-                ->filter(fn($move) => $move->product_id === $order->product_id)
+                ->filter(fn ($move) => $move->product_id === $order->product_id)
                 ->each(function ($moveFinish) {
                     $moveFinish->update([
                         'product_uom_qty' => $moveFinish->uom->computeQuantity($moveFinish->product_uom_qty, $moveFinish->product->uom),
-                        'uom_id' => $moveFinish->product->uom_id,
+                        'uom_id'          => $moveFinish->product->uom_id,
                     ]);
                 });
         }
@@ -55,11 +55,11 @@ class ManufacturingManager
         $movesToConfirm = $order->rawMaterialMoves->merge($order->finishedMoves)->sortBy('id')->unique('id');
 
         $this->confirmMoves($movesToConfirm, merge: false);
-        
+
         $this->confirmWorkOrders($order, $order->workOrders->sortBy('id'));
 
         $operationsToConfirm = $order->inventory_operations
-            ->filter(fn($operation) => ! in_array($operation->state, [MoveState::CANCELED, MoveState::DONE]));
+            ->filter(fn ($operation) => ! in_array($operation->state, [MoveState::CANCELED, MoveState::DONE]));
 
         foreach ($operationsToConfirm as $operation) {
             InventoryFacade::confirmTransfer($operation, merge: false);
@@ -125,7 +125,7 @@ class ManufacturingManager
                 )
             ) {
                 $movesToReturn->push($move);
-                
+
                 continue;
             }
 
@@ -161,7 +161,7 @@ class ManufacturingManager
         }
 
         if (! empty($phantomMovesValsList)) {
-            $phantomMoves = collect(array_map(fn($vals) => Move::create($vals), $phantomMovesValsList));
+            $phantomMoves = collect(array_map(fn ($vals) => Move::create($vals), $phantomMovesValsList));
 
             $phantomMoves->each->adjustProcureMethod();
 
@@ -191,10 +191,10 @@ class ManufacturingManager
 
         $finalWorkOrders = $order->workOrders->filter(fn ($workOrder) => $workOrder->dependentWorkOrders->isEmpty());
 
-        $finalWorkOrders->each(fn($workOrder) => $workOrder->plan($replan));
+        $finalWorkOrders->each(fn ($workOrder) => $workOrder->plan($replan));
 
         $workOrders = $order->workOrders->filter(
-            fn($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
+            fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
         );
 
         if ($workOrders->isEmpty()) {
@@ -202,8 +202,8 @@ class ManufacturingManager
         }
 
         $order->update([
-            'started_at'  => $workOrders->min(fn ($workOrder) => $workOrder->calendarLeave->date_from),
-            'finished_at' => $workOrders->max(fn ($workOrder) => $workOrder->calendarLeave->date_to),
+            'started_at'  => $workOrders->min(fn ($workOrder) => $workOrder->refresh()->calendarLeave->date_from),
+            'finished_at' => $workOrders->max(fn ($workOrder) => $workOrder->refresh()->calendarLeave->date_to),
         ]);
 
         return $order;

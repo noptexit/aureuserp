@@ -43,7 +43,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
-use Webkul\Employee\Models\Calendar;
 use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Manufacturing\Filament\Clusters\Configurations;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\CreateWorkCenter;
@@ -55,6 +54,7 @@ use Webkul\Manufacturing\Models\WorkCenterTag;
 use Webkul\Product\Models\Product;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn;
+use Webkul\Support\Models\Calendar;
 
 class WorkCenterResource extends Resource
 {

@@ -54,7 +54,7 @@ class CalendarLeave extends Model
         static::creating(function ($calendarLeave) {
             $authUser = Auth::user();
 
-            $calendarLeave->creator_id ??= $authUser->id;
+            $calendarLeave->creator_id ??= $authUser?->id;
 
             $calendarLeave->company_id ??= $authUser?->default_company_id;
         });

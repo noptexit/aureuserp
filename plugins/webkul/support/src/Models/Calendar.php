@@ -150,7 +150,7 @@ class Calendar extends Model
         Carbon $endDt,
         mixed $resources = null,
         ?array $domain = null,
-        ?string $tz = null,
+        ?string $timezone = null,
         bool $computeLeaves = true
     ): array {
         if (! $resources) {
@@ -159,10 +159,10 @@ class Calendar extends Model
             $resourcesList = is_array($resources) ? array_merge($resources, [null]) : [$resources, null];
         }
 
-        $attendanceIntervals = $this->getAttendanceIntervalsBatch($startDt, $endDt, $resources, tz: $tz);
+        $attendanceIntervals = $this->getAttendanceIntervalsBatch($startDt, $endDt, $resources, timezone: $timezone);
 
         if ($computeLeaves) {
-            $leaveIntervals = $this->getLeaveIntervalsBatch($startDt, $endDt, $resources, $domain, tz: $tz);
+            $leaveIntervals = $this->getLeaveIntervalsBatch($startDt, $endDt, $resources, $domain, timezone: $timezone);
 
             $result = [];
 
@@ -191,7 +191,7 @@ class Calendar extends Model
         Carbon $endDt,
         mixed $resources = null,
         ?array $domain = null,
-        ?string $tz = null,
+        ?string $timezone = null,
         bool $lunch = false
     ): array {
         if (! $resources) {
@@ -213,7 +213,9 @@ class Calendar extends Model
         $resourcesPerTz = [];
 
         foreach ($resourcesList as $resource) {
-            $resourceTz = $tz ?? ($resource ? $resource->tz : $this->timezone);
+            $resourceTz = $timezone
+                ?? ($resource ? ($resource->timezone ?: null) : null)
+                ?? $this->timezone;
 
             $resourcesPerTz[$resourceTz][] = $resource;
         }
@@ -352,7 +354,7 @@ class Calendar extends Model
         Carbon $endDt,
         mixed $resources = null,
         ?array $domain = null,
-        ?string $tz = null,
+        ?string $timezone = null,
         bool $anyCalendar = false
     ): array {
         if (! $resources) {
@@ -401,7 +403,9 @@ class Calendar extends Model
                     continue;
                 }
 
-                $resourceTz = $tz ?? ($resource ? $resource->tz : $this->timezone);
+                $resourceTz = $timezone
+                    ?? ($resource ? ($resource->timezone ?: null) : null)
+                    ?? $this->timezone;
                 $resourceId = $resource?->id;
 
                 $tzKey = $resourceTz.'_start';

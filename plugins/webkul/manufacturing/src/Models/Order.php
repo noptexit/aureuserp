@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\MoveState;
-use Webkul\Manufacturing\Models\Move;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Operation;
 use Webkul\Inventory\Models\OperationType;
@@ -325,12 +324,12 @@ class Order extends Model
             $this->state === ManufacturingOrderState::CANCEL
             || (
                 $this->finishedMoves->isNotEmpty()
-                && $this->finishedMoves->every(fn($move) => $move->state === MoveState::CANCELED
+                && $this->finishedMoves->every(fn ($move) => $move->state === MoveState::CANCELED
+                )
             )
-        )
         ) {
             $this->state = ManufacturingOrderState::CANCEL;
-            
+
             return;
         }
 
@@ -338,8 +337,8 @@ class Order extends Model
             $this->state === ManufacturingOrderState::DONE ||
             (
                 $this->rawMaterialMoves->isNotEmpty() &&
-                $this->rawMaterialMoves->every(fn($m) => in_array($m->state, [MoveState::CANCELED, MoveState::DONE])) &&
-                $this->finishedMoves->every(fn($m) => in_array($m->state, [MoveState::CANCELED, MoveState::DONE]))
+                $this->rawMaterialMoves->every(fn ($m) => in_array($m->state, [MoveState::CANCELED, MoveState::DONE])) &&
+                $this->finishedMoves->every(fn ($m) => in_array($m->state, [MoveState::CANCELED, MoveState::DONE]))
             )
         ) {
             $this->state = ManufacturingOrderState::DONE;
@@ -349,7 +348,7 @@ class Order extends Model
 
         if (
             $this->workOrders->isNotEmpty()
-            && $this->workOrders->every(fn($wo) => in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
+            && $this->workOrders->every(fn ($wo) => in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
         ) {
             $this->state = ManufacturingOrderState::TO_CLOSE;
 
@@ -380,7 +379,7 @@ class Order extends Model
             return;
         }
 
-        if ($this->rawMaterialMoves->some(fn($move) => $move->is_picked)) {
+        if ($this->rawMaterialMoves->some(fn ($move) => $move->is_picked)) {
             $this->state = ManufacturingOrderState::PROGRESS;
 
             return;
@@ -396,7 +395,7 @@ class Order extends Model
         }
 
         $relevantMoveState = Move::getRelevantStateAmongMoves(
-            $this->rawMaterialMoves->filter(fn($move) => ! $move->is_picked)
+            $this->rawMaterialMoves->filter(fn ($move) => ! $move->is_picked)
         );
 
         if ($relevantMoveState === MoveState::PARTIALLY_ASSIGNED) {
@@ -459,8 +458,16 @@ class Order extends Model
 
     public function computeIsPlanned()
     {
-        $this->is_planned = $this->workOrders->isNotEmpty()
-            && $this->workOrders->some(fn ($wo) => $wo->started_at && $wo->finished_at);
+        if ($this->workOrders->isEmpty()) {
+            return;
+        }
+
+        $activeWorkOrders = $this->workOrders->filter(
+            fn ($wo) => ! in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
+        );
+
+        $this->is_planned = $activeWorkOrders->isNotEmpty()
+            && $activeWorkOrders->every(fn ($wo) => $wo->calendar_leave_id !== null);
     }
 
     public function computeFinishedMoves(): void
@@ -511,8 +518,7 @@ class Order extends Model
         }
 
         $movesInFirstOperation = $movesInFirstOperation->filter(
-            fn ($move) =>
-                $move->bom_line_id
+            fn ($move) => $move->bom_line_id
                 && ! $move->bomLine->skipBomLine(
                     $this->product
                 )
