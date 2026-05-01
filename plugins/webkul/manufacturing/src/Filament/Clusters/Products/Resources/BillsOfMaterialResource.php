@@ -206,6 +206,7 @@ class BillsOfMaterialResource extends Resource
                                         static::getOperationsRepeater(),
                                     ]),
                                 Tab::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.by-products.title'))
+                                    ->hidden(true)
                                     ->schema([
                                         static::getByProductsRepeater(),
                                     ]),
@@ -553,6 +554,7 @@ class BillsOfMaterialResource extends Resource
                                             ]),
                                     ]),
                                 Tab::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.infolist.tabs.by-products.title'))
+                                    ->hidden(true)
                                     ->schema([
                                         RepeatableEntry::make('byproducts')
                                             ->hiddenLabel()

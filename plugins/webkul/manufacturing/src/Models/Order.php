@@ -33,6 +33,7 @@ class Order extends Model
     protected $table = 'manufacturing_orders';
 
     protected $fillable = [
+        'name',
         'reference',
         'priority',
         'origin',

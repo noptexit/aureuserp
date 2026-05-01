@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('manufacturing_orders', function (Blueprint $table) {
             $table->id();
-            $table->string('reference')->index();
+            $table->string('name')->nullable()->index();
+            $table->string('reference')->nullable()->index();
             $table->string('priority')->nullable()->default('0');
             $table->string('origin')->nullable();
             $table->string('state')->default('draft')->index();
