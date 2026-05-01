@@ -195,7 +195,7 @@ class WorkOrder extends Model
         return $displayName;
     }
 
-    public function getDurationExpected(?WorkCenter $alternativeWorkCenter = null, float $ratio = 1): float
+    public function getExpectedDuration(?WorkCenter $alternativeWorkCenter = null, float $ratio = 1): float
     {
         if (! $this->work_center_id) {
             return $this->expected_duration;
@@ -553,7 +553,7 @@ class WorkOrder extends Model
 
         $workCenters = collect([$this->workCenter])->merge($this->workCenter->alternativeWorkCenters);
 
-        $bestFinishedDate = Carbon::maxValue();
+        $bestFinishedDate = null;
         
         $bestStartedDate = null;
 
@@ -562,7 +562,7 @@ class WorkOrder extends Model
         $values = [];
 
         foreach ($workCenters as $workCenter) {
-            if (! $workCenter->resourceCalendar) {
+            if (! $workCenter->calendar) {
                 throw new \Exception(__('There is no defined calendar on work center :name.', ['name' => $workCenter->name]));
             }
 
@@ -576,7 +576,7 @@ class WorkOrder extends Model
                 continue;
             }
 
-            if ($toDate && Carbon::parse($toDate)->lt($bestFinishedDate)) {
+            if ($toDate && ($bestFinishedDate === null || Carbon::parse($toDate)->lt($bestFinishedDate))) {
                 $bestStartedDate = $fromDate;
 
                 $bestFinishedDate = Carbon::parse($toDate);
@@ -590,7 +590,7 @@ class WorkOrder extends Model
             }
         }
 
-        if ($bestFinishedDate->eq(Carbon::maxValue())) {
+        if ($bestFinishedDate === null) {
             throw new \Exception('Impossible to plan the work order. Please check the work center availabilities.');
         }
 
