@@ -2,6 +2,7 @@
 
 namespace Webkul\Support\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -46,6 +47,11 @@ class CalendarAttendance extends Model implements Sortable
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    public static function getWeekType(\DateTime|Carbon $date): int
+    {
+        return (int) floor(($date->toDateTime()->format('z') + 1) / 7) % 2;
     }
 
     protected static function boot()

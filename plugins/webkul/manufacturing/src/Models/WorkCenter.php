@@ -2,6 +2,8 @@
 
 namespace Webkul\Manufacturing\Models;
 
+use Carbon\Carbon;
+use Carbon\CarbonInterval;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -135,6 +137,148 @@ class WorkCenter extends Model implements Sortable
         return $this->capacities
             ->filter(fn (WorkCenterCapacity $capacity): bool => (int) $capacity->product_id === (int) $product->getKey())
             ->values();
+    }
+
+    public function getFirstAvailableSlot(
+        Carbon $startDatetime,
+        float $duration,
+        bool $forward = true,
+        ?Collection $leavesToIgnore = null,
+        array $extraLeavesSlots = []
+    ): array {
+        $resource = $this->resource;
+        $remaining = $duration;
+        $delta = 14; 
+
+        $startInterval = null;
+        $stopInterval  = null;
+
+        $workOrderLeavesDomain = [['time_type', '=', 'other']];
+
+        if ($leavesToIgnore && $leavesToIgnore->isNotEmpty()) {
+            $workOrderLeavesDomain[] = ['id', 'not in', $leavesToIgnore->pluck('id')->all()];
+        }
+
+        $extraLeavesIntervals = collect($extraLeavesSlots)->map(fn($slot) => [
+            Carbon::parse($slot[0]),
+            Carbon::parse($slot[1]),
+        ]);
+
+        for ($n = 0; $n < 50; $n++) {
+            if ($forward) {
+                $dateStart = $startDatetime->clone()->addDays($delta * $n);
+
+                $dateStop = $dateStart->clone()->addDays($delta);
+
+                $availableIntervals = $this->calendar->getWorkIntervalsBatch($dateStart, $dateStop, $resource);
+
+                $workOrderIntervals = $this->calendar->getLeaveIntervalsBatch($dateStart, $dateStop, $resource, $workOrderLeavesDomain);
+
+                foreach ($availableIntervals as [$start, $stop]) {
+                    $startInterval = $startInterval ?? $start;
+
+                    $intervalMinutes = $start->diffInSeconds($stop) / 60;
+
+                    while (true) {
+                        $intervalEnd = $start->clone()->addMinutes(min($remaining, $intervalMinutes));
+
+                        $conflict = null;
+
+                        foreach ($workOrderIntervals->merge($extraLeavesIntervals) as [$conflictStart, $conflictStop]) {
+                            if ($startInterval->lt($conflictStop) && $intervalEnd->gt($conflictStart)) {
+                                $conflict = [$conflictStart, $conflictStop];
+
+                                break;
+                            }
+                        }
+
+                        if (! $conflict) {
+                            break;
+                        }
+
+                        $start = $conflict[1]; 
+
+                        $intervalMinutes = $start->diffInSeconds($stop) / 60;
+
+                        if (! $intervalMinutes) {
+                            $startInterval = null;
+
+                            $remaining = $duration;
+                        } else {
+                            $startInterval = $start;
+                        }
+                    }
+
+                    if (float_compare($intervalMinutes, $remaining, precisionDigits: 3) >= 0) {
+                        return [
+                            $startInterval,
+                            $start->clone()->addMinutes($remaining),
+                        ];
+                    }
+
+                    $remaining -= $intervalMinutes;
+                }
+            } else {
+                $dateStop = $startDatetime->clone()->subDays($delta * $n);
+
+                $dateStart = $dateStop->clone()->subDays($delta);
+
+                $availableIntervals = collect($this->calendar->getWorkIntervalsBatch($dateStart, $dateStop, $resource))->reverse();
+
+                $workOrderIntervals = $this->calendar->getLeaveIntervalsBatch($dateStart, $dateStop, $resource, $workOrderLeavesDomain);
+
+                foreach ($availableIntervals as [$start, $stop]) {
+                    $stopInterval = $stopInterval ?? $stop;
+
+                    $intervalMinutes = $start->diffInSeconds($stop) / 60;
+
+                    while (true) {
+                        $intervalStart = $stop->clone()->subMinutes(min($remaining, $intervalMinutes));
+
+                        $conflict = null;
+
+                        foreach ($workOrderIntervals->merge($extraLeavesIntervals) as [$conflictStart, $conflictStop]) {
+                            if ($intervalStart->lt($conflictStop) && $stopInterval->gt($conflictStart)) {
+                                $conflict = [$conflictStart, $conflictStop];
+
+                                break;
+                            }
+                        }
+
+                        if (! $conflict) {
+                            break;
+                        }
+
+                        $stop = $conflict[0];
+
+                        $intervalMinutes = $start->diffInSeconds($stop) / 60;
+
+                        if (! $intervalMinutes) {
+                            $stopInterval = null;
+
+                            $remaining = $duration;
+                        } else {
+                            $stopInterval = $stop;
+                        }
+                    }
+
+                    if (float_compare($intervalMinutes, $remaining, precisionDigits: 3) >= 0) {
+                        return [
+                            $stop->clone()->subMinutes($remaining),
+                            $stopInterval,
+                        ];
+                    }
+
+                    $remaining -= $intervalMinutes;
+                }
+
+                if ($dateStart->lte(now())) {
+                    break;
+                }
+            }
+        }
+
+        return [false, 'No available slot 700 days after the planned start'];
     }
 
     protected static function newFactory(): WorkCenterFactory
