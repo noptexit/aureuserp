@@ -621,11 +621,11 @@ class Order extends Model
     {
         $movesFinishedValues = $this->getMovesFinishedValues();
 
-        $movesByproductDict = $this->finishedMoves
+        $movesByproductDict = $this->finishedMoves()->get()
             ->filter(fn ($move) => $move->byproduct_id)
             ->keyBy('byproduct_id');
 
-        $moveFinished = $this->finishedMoves
+        $moveFinished = $this->finishedMoves()->get()
             ->filter(fn ($move) => $move->product_id === $this->product_id)
             ->first();
 

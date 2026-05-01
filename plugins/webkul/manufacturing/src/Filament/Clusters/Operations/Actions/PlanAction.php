@@ -27,24 +27,24 @@ class PlanAction extends Action
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/plan.label'))
             ->action(function (Order $record, Component $livewire): void {
-                // try {
-                $record = ManufacturingFacade::planManufacturingOrder($record);
+                try {
+                    $record = ManufacturingFacade::planManufacturingOrder($record);
 
-                $livewire->updateForm();
+                    $livewire->updateForm();
 
-                Notification::make()
-                    ->success()
-                    ->title(__('manufacturing::filament/clusters/operations/actions/plan.notification.success.title'))
-                    ->body(__('manufacturing::filament/clusters/operations/actions/plan.notification.success.body'))
-                    ->send();
-                // } catch (Throwable $e) {
-                //     Notification::make()
-                //         ->danger()
-                //         ->body($e->getMessage())
-                //         ->send();
+                    Notification::make()
+                        ->success()
+                        ->title(__('manufacturing::filament/clusters/operations/actions/plan.notification.success.title'))
+                        ->body(__('manufacturing::filament/clusters/operations/actions/plan.notification.success.body'))
+                        ->send();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->danger()
+                        ->body($e->getMessage())
+                        ->send();
 
-                //     $this->halt(shouldRollBackDatabaseTransaction: true);
-                // }
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
+                }
             })
             ->visible(fn (Order $record) => $record->state !== ManufacturingOrderState::DRAFT && ! $record->is_planned);
     }

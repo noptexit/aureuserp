@@ -618,15 +618,46 @@ class ManufacturingOrderResource extends Resource
                 ->live()
                 ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
                     $billOfMaterial = BillOfMaterial::query()->withTrashed()->find($get('bill_of_material_id'));
-                    $product = Product::query()->withTrashed()->find($get('product_id'));
 
-                    static::applyBillOfMaterialDefaults(
-                        $set,
+                    if (! $billOfMaterial) {
+                        return;
+                    }
+
+                    $uomId = $state ? (int) $state : null;
+
+                    $effectiveQuantity = static::convertOrderQuantityToBillOfMaterialUom(
                         $billOfMaterial,
-                        $product,
                         (float) ($get('quantity') ?: 1),
-                        $state ? (int) $state : null,
+                        $uomId,
                     );
+
+                    $quantityMultiplier = $billOfMaterial->getQuantityMultiplier($effectiveQuantity);
+
+                    $bomLinesById = $billOfMaterial->lines()->get()->keyBy('id');
+
+                    $updatedMoves = [];
+
+                    foreach (($get('rawMaterialMoves') ?? []) as $key => $move) {
+                        $bomLineId = $move['bom_line_id'] ?? null;
+
+                        if ($bomLineId && $bomLinesById->has($bomLineId)) {
+                            $move['product_uom_qty'] = round((float) $bomLinesById->get($bomLineId)->quantity * $quantityMultiplier, 4);
+                        }
+
+                        $updatedMoves[$key] = $move;
+                    }
+
+                    $set('rawMaterialMoves', $updatedMoves);
+
+                    $updatedWorkOrders = [];
+
+                    foreach (($get('workOrders') ?? []) as $key => $workOrder) {
+                        $workOrder['quantity_remaining'] = round($effectiveQuantity, 4);
+
+                        $updatedWorkOrders[$key] = $workOrder;
+                    }
+
+                    $set('workOrders', $updatedWorkOrders);
                 })
                 ->options(function (Get $get): array {
                     $product = Product::query()->withTrashed()->find($get('product_id'));
