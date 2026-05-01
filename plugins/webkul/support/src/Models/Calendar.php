@@ -47,11 +47,6 @@ class Calendar extends Model
         return $this->hasMany(CalendarAttendance::class);
     }
 
-    public function resource()
-    {
-        return $this->morphTo();
-    }
-
     protected static function boot()
     {
         parent::boot();
@@ -66,13 +61,81 @@ class Calendar extends Model
         return CalendarFactory::new();
     }
 
+    public function planHours(float $hours, Carbon $dayDt, bool $computeLeaves = false, ?array $domain = null, $resource = null): Carbon|false
+    {
+        [$dayDt, $revert] = make_aware($dayDt);
+
+        if ($computeLeaves) {
+            $getIntervals = fn ($start, $end) => $this->getWorkIntervalsBatch($start, $end, resources: $resource, domain: $domain);
+            $resourceId = $resource?->id;
+        } else {
+            $getIntervals = fn ($start, $end) => $this->getAttendanceIntervalsBatch($start, $end);
+            $resourceId = null;
+        }
+
+        $delta = 14;
+
+        if ($hours >= 0) {
+            for ($n = 0; $n < 100; $n++) {
+                $dt = $dayDt->copy()->addDays($delta * $n);
+
+                foreach ($getIntervals($dt, $dt->copy()->addDays($delta))[$resourceId] as [$start, $stop, $meta]) {
+                    $intervalHours = $start->diffInSeconds($stop) / 3600;
+
+                    if ($hours <= $intervalHours) {
+                        return $revert($start->copy()->addSeconds($hours * 3600));
+                    }
+
+                    $hours -= $intervalHours;
+                }
+            }
+
+            return false;
+        } else {
+            $hours = abs($hours);
+
+            for ($n = 0; $n < 100; $n++) {
+                $dt = $dayDt->copy()->subDays($delta * $n);
+
+                $intervals = collect($getIntervals($dt->copy()->subDays($delta), $dt)[$resourceId])->reverse()->values();
+
+                foreach ($intervals as [$start, $stop, $meta]) {
+                    $intervalHours = $start->diffInSeconds($stop) / 3600;
+
+                    if ($hours <= $intervalHours) {
+                        return $revert($stop->copy()->subSeconds($hours * 3600));
+                    }
+
+                    $hours -= $intervalHours;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    public function getAttendanceIntervalsDaysData(iterable $intervals): array
+    {
+        $hoursPerDay = [];
+
+        foreach ($intervals as [$start, $stop]) {
+            $day = $start->toDateString();
+
+            $hoursPerDay[$day] = ($hoursPerDay[$day] ?? 0.0) + $start->diffInSeconds($stop) / 3600;
+        }
+
+        return [
+            'days'  => count($hoursPerDay),
+            'hours' => array_sum($hoursPerDay),
+        ];
+    }
+
     public function getWorkDurationData(
         Carbon $fromDatetime,
         Carbon $toDatetime,
         bool $computeLeaves = true,
         ?array $domain = null
-    ): array
-    {
+    ): array {
         if ($computeLeaves) {
             $intervals = $this->getWorkIntervalsBatch($fromDatetime, $toDatetime, domain: $domain)[null];
         } else {
@@ -89,8 +152,7 @@ class Calendar extends Model
         ?array $domain = null,
         ?string $tz = null,
         bool $computeLeaves = true
-    ): array
-    {
+    ): array {
         if (! $resources) {
             $resourcesList = [null];
         } else {
@@ -103,7 +165,7 @@ class Calendar extends Model
             $leaveIntervals = $this->getLeaveIntervalsBatch($startDt, $endDt, $resources, $domain, tz: $tz);
 
             $result = [];
-            
+
             foreach ($resourcesList as $resource) {
                 $resourceId = $resource?->id;
 
@@ -140,14 +202,13 @@ class Calendar extends Model
 
         $resourceIds = collect($resourcesList)->filter()->pluck('id')->all();
 
-        $attendanceDomain = array_merge($domain ?? [], [
-            ['calendar_id', '=', $this->id],
-            ['resource_id', 'in', array_merge([null], $resourceIds)],
-            ['display_type', '=', null],
-            ['day_period', $lunch ? '=' : '!=', 'lunch'],
-        ]);
-
-        $attendances = CalendarAttendance::where($attendanceDomain)->get();
+        $attendances = CalendarAttendance::query()
+            ->where(fn ($q) => $this->applyDomain($q, $domain ?? []))
+            ->where('calendar_id', $this->id)
+            ->where(fn ($q) => $q->whereNull('resource_id')->orWhereIn('resource_id', $resourceIds))
+            ->whereNull('display_type')
+            ->where('day_period', $lunch ? '=' : '!=', 'lunch')
+            ->get();
 
         $resourcesPerTz = [];
 
@@ -159,7 +220,7 @@ class Calendar extends Model
 
         $attendancePerResource = [];
 
-        $attendancesPerDay = array_fill(0, 14, collect());
+        $attendancesPerDay = array_map(fn () => [], range(0, 13));
 
         $weekdays = [];
 
@@ -177,7 +238,7 @@ class Calendar extends Model
 
                 $attendancesPerDay[$weekday + 7 * $weekType][] = $attendance;
             } else {
-                $attendancesPerDay[$weekday][]     = $attendance;
+                $attendancesPerDay[$weekday][] = $attendance;
                 $attendancesPerDay[$weekday + 7][] = $attendance;
             }
         }
@@ -185,7 +246,7 @@ class Calendar extends Model
         $weekdays = array_unique($weekdays);
 
         $start = $startDt->clone()->utc();
-        
+
         $end = $endDt->clone()->utc();
 
         $boundsPerTz = [];
@@ -203,14 +264,16 @@ class Calendar extends Model
         $baseResult = [];
 
         $perResourceResult = [];
-        
+
         $current = $start->clone()->startOfDay();
 
         while ($current->lte($end)) {
-            if (in_array($current->dayOfWeek, $weekdays)) {
+            $odooDay = $current->dayOfWeek === 0 ? 6 : $current->dayOfWeek - 1;
+
+            if (in_array($odooDay, $weekdays)) {
                 $weekType = CalendarAttendance::getWeekType($current);
 
-                $dayAttends = $attendancesPerDay[$current->dayOfWeek + 7 * $weekType];
+                $dayAttends = $attendancesPerDay[$odooDay + 7 * $weekType];
 
                 foreach ($dayAttends as $attendance) {
                     if (
@@ -240,7 +303,7 @@ class Calendar extends Model
         foreach ($resourcesPerTz as $resourceTz => $tzResources) {
             $bounds = $boundsPerTz[$resourceTz];
 
-            $resultPerTz[$resourceTz] = collect($baseResult)->map(fn($val) => [
+            $resultPerTz[$resourceTz] = collect($baseResult)->map(fn ($val) => [
                 Carbon::parse(max($bounds[0], Carbon::parse($val[0])->setTimezone($resourceTz))),
                 Carbon::parse(min($bounds[1], Carbon::parse($val[1])->setTimezone($resourceTz))),
                 $val[2],
@@ -258,7 +321,7 @@ class Calendar extends Model
                 if ($resource && isset($perResourceResult[$resourceId])) {
                     $bounds = $boundsPerTz[$resourceTz];
 
-                    $resourceSpecificResult = collect($perResourceResult[$resourceId])->map(fn($val) => [
+                    $resourceSpecificResult = collect($perResourceResult[$resourceId])->map(fn ($val) => [
                         Carbon::parse(max($bounds[0], Carbon::parse($val[0])->setTimezone($resourceTz))),
                         Carbon::parse(min($bounds[1], Carbon::parse($val[1])->setTimezone($resourceTz))),
                         $val[2],
@@ -292,26 +355,19 @@ class Calendar extends Model
             $domain = [['time_type', '=', 'leave']];
         }
 
-        if (! $anyCalendar) {
-            $domain[] = function ($query) {
-                $query->whereNull('calendar_id')->orWhere('calendar_id', $this->id);
-            };
-        }
+        $resourceIds = collect($resourcesList)->filter()->pluck('id')->all();
 
-        $domain = array_merge($domain, [
-            function ($query) use ($resourcesList) {
-                $query->whereNull('resource_id')
-                    ->orWhereIn('resource_id', collect($resourcesList)->filter()->pluck('id')->all());
-            },
-            ['date_from', '<=', $endDt->toDateTimeString()],
-            ['date_to', '>=', $startDt->toDateTimeString()],
-        ]);
+        $allLeaves = CalendarLeave::query()
+            ->where(fn ($q) => $this->applyDomain($q, $domain))
+            ->when(! $anyCalendar, fn ($q) => $q->where(fn ($q) => $q->whereNull('calendar_id')->orWhere('calendar_id', $this->id)))
+            ->where(fn ($q) => $q->whereNull('resource_id')->orWhereIn('resource_id', $resourceIds))
+            ->where('date_from', '<=', $endDt->toDateTimeString())
+            ->where('date_to', '>=', $startDt->toDateTimeString())
+            ->get();
 
         $result = [];
 
         $tzDates = [];
-        
-        $allLeaves = CalendarLeave::where($domain)->get();
 
         foreach ($allLeaves as $leave) {
             $leaveResource = $leave->resource;
@@ -319,7 +375,7 @@ class Calendar extends Model
             $leaveCompany = $leave->company;
 
             $leaveDateFrom = $leave->date_from;
-            
+
             $leaveDateTo = $leave->date_to;
 
             foreach ($resourcesList as $resource) {
@@ -338,7 +394,7 @@ class Calendar extends Model
                 $resourceTz = $tz ?? ($resource ? $resource->tz : $this->tz);
                 $resourceId = $resource?->id;
 
-                $tzKey = $resourceTz . '_start';
+                $tzKey = $resourceTz.'_start';
 
                 if (! isset($tzDates[$tzKey])) {
                     $tzDates[$tzKey] = $startDt->clone()->setTimezone($resourceTz);
@@ -346,7 +402,7 @@ class Calendar extends Model
 
                 $start = $tzDates[$tzKey];
 
-                $tzKey = $resourceTz . '_end';
+                $tzKey = $resourceTz.'_end';
 
                 if (! isset($tzDates[$tzKey])) {
                     $tzDates[$tzKey] = $endDt->clone()->setTimezone($resourceTz);
@@ -370,10 +426,56 @@ class Calendar extends Model
 
         foreach ($resourcesList as $resource) {
             $resourceId = $resource?->id;
-            
+
             $finalResult[$resourceId] = collect($result[$resourceId] ?? []);
         }
 
         return $finalResult;
+    }
+
+    protected function applyDomain($query, array $domain): void
+    {
+        foreach ($domain as $condition) {
+            if (! is_array($condition)) {
+                continue;
+            }
+
+            [$column, $operator, $value] = $condition;
+
+            match ($operator) {
+                'in'     => $query->whereIn($column, $value),
+                'not in' => $query->whereNotIn($column, $value),
+                default  => $query->where($column, $operator, $value),
+            };
+        }
+    }
+
+    protected function subtractIntervals($attendance, $leaves): array
+    {
+        $result = [];
+
+        foreach ($attendance as [$start, $stop, $rec]) {
+            $remaining = [[$start, $stop, $rec]];
+
+            foreach ($leaves as [$leaveStart, $leaveStop]) {
+                $split = [];
+
+                foreach ($remaining as [$s, $e, $r]) {
+                    if ($s->lt($leaveStart)) {
+                        $split[] = [$s->copy(), ($e->lt($leaveStart) ? $e : $leaveStart)->copy(), $r];
+                    }
+
+                    if ($e->gt($leaveStop)) {
+                        $split[] = [($s->gt($leaveStop) ? $s : $leaveStop)->copy(), $e->copy(), $r];
+                    }
+                }
+
+                $remaining = $split;
+            }
+
+            array_push($result, ...$remaining);
+        }
+
+        return $result;
     }
 }

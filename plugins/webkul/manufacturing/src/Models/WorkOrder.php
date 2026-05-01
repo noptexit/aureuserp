@@ -237,7 +237,7 @@ class WorkOrder extends Model
             }
 
             $alternativeCapacity = $alternativeWorkCenter->getCapacity($this->product);
-            
+
             $alternativeCycleNb = float_round($qtyProduction / $alternativeCapacity, precisionDigits: 0, roundingMethod: 'UP');
 
             return $alternativeWorkCenter->getExpectedDuration($this->product)
@@ -427,8 +427,7 @@ class WorkOrder extends Model
 
         $finished = $dateFinished ?? Carbon::parse($this->finished_at);
 
-        //TODO: Implement this
-        if (true || ! $this->workCenter->calendar_id) {
+        if (! $this->workCenter->calendar_id) {
             return $finished->diffInSeconds($start) / 60;
         }
 
@@ -554,7 +553,7 @@ class WorkOrder extends Model
         $workCenters = collect([$this->workCenter])->merge($this->workCenter->alternativeWorkCenters);
 
         $bestFinishedDate = null;
-        
+
         $bestStartedDate = null;
 
         $bestWorkCenter = null;

@@ -64,6 +64,7 @@ class SupportServiceProvider extends PackageServiceProvider
                 '2026_03_18_000001_alter_unit_of_measures_factor_precision',
                 '2026_04_02_000001_create_calendars_table',
                 '2026_04_29_065935_add_resource_columns_in_calendar_leaves_table',
+                '2026_05_01_065935_add_resource_columns_in_calendar_attendances_table',
             ])
             ->runsMigrations()
             ->hasSeeder('Webkul\\Support\\Database\\Seeders\\DatabaseSeeder');
