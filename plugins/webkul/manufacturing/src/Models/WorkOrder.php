@@ -342,7 +342,7 @@ class WorkOrder extends Model
 
         $blockedByWorkOrders = $this->blockedByWorkOrders;
 
-        if ($this->manufacturingOrder_availability === WorkOrderProductionAvailability::ASSIGNED) {
+        if ($this->production_availability === WorkOrderProductionAvailability::ASSIGNED) {
             $this->state = $blockedByWorkOrders->every(fn ($wo) => in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
                 ? WorkOrderState::READY
                 : WorkOrderState::PENDING;

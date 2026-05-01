@@ -670,9 +670,9 @@ class Order extends Model
                 if ($previousWorkOrder) {
                     $workOrder->blockedByWorkOrders()->syncWithoutDetaching([$previousWorkOrder->id]);
 
-                    $workOrder->computeState();
+                    $previousWorkOrder->computeState();
 
-                    $workOrder->save();
+                    $previousWorkOrder->save();
                 }
 
                 $previousWorkOrder = $workOrder;

@@ -792,7 +792,8 @@ class ManufacturingOrderResource extends Resource
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.real-duration')),
                 RepeaterTableColumn::make('state')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.status'))
-                    ->visible(fn () => $record && $record?->state !== ManufacturingOrderState::DRAFT),
+                    ->visible(fn () => $record && $record?->state !== ManufacturingOrderState::DRAFT)
+                    ->resizable(),
             ])
             ->schema([
                 Hidden::make('name'),
