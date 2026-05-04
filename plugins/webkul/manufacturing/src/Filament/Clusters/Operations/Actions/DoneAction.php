@@ -130,7 +130,10 @@ class DoneAction extends Action
                 Action::make('set-quantities')
                     ->label(__('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.actions.set-quantities.label'))
                     ->color('gray')
-                    ->cancelParentActions(),
+                    ->cancelParentActions()
+                    ->action(function (Order $record, Component $livewire): void {
+                        
+                    }),
             ];
         }
 
