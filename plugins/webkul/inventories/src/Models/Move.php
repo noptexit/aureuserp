@@ -374,7 +374,7 @@ class Move extends Model
             }
 
             if ($move->wasChanged('is_picked')) {
-                $move->lines->each(fn ($moveLine) => $moveLine->update(['is_picked' => $move->is_picked]));
+                $move->lines()->get()->each(fn ($moveLine) => $moveLine->update(['is_picked' => $move->is_picked]));
             }
 
             if ($receiptMovesToReassign->isNotEmpty()) {

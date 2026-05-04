@@ -39,7 +39,7 @@ class DoneAction extends Action
                     if (! float_is_zero($record->qty_producing, precisionRounding: $record->uom->rounding)) {
                         $record->rawMaterialMoves
                             ->filter(fn ($move) => $move->manual_consumption && ! $move->is_picked)
-                            ->each->update(['is_picked' => true]);
+                            ->each(fn ($move) => $move->update(['is_picked' => true]));
                     } else {
                         if ($record->autoProductionChecks()) {
                             $record->setQuantities();
