@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
+use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Operation;
@@ -23,6 +24,7 @@ use Webkul\Manufacturing\Enums\ManufacturingOrderPriority;
 use Webkul\Manufacturing\Enums\ManufacturingOrderReservationState;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Enums\WorkOrderState;
+use Webkul\Product\Enums\ProductType;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 use Webkul\Support\Models\UOM;
@@ -376,7 +378,7 @@ class Order extends Model
 
         if (
             $this->workOrders->isEmpty()
-            && float_compare($this->quantity_producing, $this->product_qty, precisionRounding: $this->uom->rounding) >= 0
+            && float_compare($this->quantity_producing, $this->quantity, precisionRounding: $this->uom->rounding) >= 0
         ) {
             $this->state = ManufacturingOrderState::TO_CLOSE;
 
@@ -638,6 +640,67 @@ class Order extends Model
 
     public function getMovesRawValues(): array
     {
+        $moves = [];
+
+        if (! $this->bill_of_material_id) {
+            return $moves;
+        }
+
+        $factor = $this->product_uom_qty / $this->billOfMaterial->quantity;
+
+        [, $lines] = $this->billOfMaterial->explode($this->product, $factor);
+
+        foreach ($lines as [$bomLine, $lineData]) {
+            if ($bomLine->product->type === ProductType::SERVICE) {
+                continue;
+            }
+
+            $operationId = $bomLine->operation_id
+                ?? ($lineData['parent_line'] ? $lineData['parent_line']->operation_id : null);
+
+            $moves[] = $this->getMoveRawValues(
+                $bomLine->product_id,
+                $lineData['qty'],
+                $bomLine->uom_id,
+                $operationId,
+                $bomLine->id,
+                $bomLine->is_manual_consumption
+            );
+        }
+
+        return $moves;
+    }
+
+    public function getMoveRawValues(
+        int $productId,
+        float $productUomQty,
+        int $uomId,
+        ?int $operationId = null,
+        ?int $bomLineId = null,
+        bool $manualConsumption = false
+    ): array {
+        return [
+            'sort'                    => 10,
+            'name'                    => 'New',
+            'scheduled_at'            => $this->started_at,
+            'deadline'                => $this->started_at,
+            'bom_line_id'             => $bomLineId,
+            'operation_type_id'       => $this->operation_type_id,
+            'product_id'              => $productId,
+            'product_uom_qty'         => $productUomQty,
+            'uom_id'                  => $uomId,
+            'source_location_id'      => $this->source_location_id,
+            'destination_location_id' => $this->production_location_id,
+            'raw_material_order_id'   => $this->id,
+            'company_id'              => $this->company_id,
+            'operation_id'            => $operationId,
+            'procure_method'          => ProcureMethod::MAKE_TO_STOCK,
+            'origin'                  => $this->product->partner_ref,
+            'warehouse_id'            => $this->sourceLocation->warehouse_id,
+            'procurement_group_id'    => $this->procurementGroup?->id,
+            'propagate_cancel'        => $this->propagate_cancel,
+            'manual_consumption'      => $manualConsumption,
+        ];
     }
 
     public function updateOrCreateMoveFinished(): void
@@ -885,21 +948,21 @@ class Order extends Model
             return $issues;
         }
 
-        $expectedMoveValues = $this->getMovesRawValues($this);
+        $expectedMoveValues = $this->getMovesRawValues();
 
         $expectedQtyByProduct = [];
 
         foreach ($expectedMoveValues as $moveValues) {
             $moveProduct = Product::find($moveValues['product_id']);
 
-            $moveUom = UOM::find($moveValues['product_uom']);
+            $moveUom = UOM::find($moveValues['uom_id']);
 
             $moveProductQty = $moveUom->computeQuantity($moveValues['product_uom_qty'], $moveProduct->uom);
 
             $productId = $moveProduct->id;
-            
+
             $expectedQtyByProduct[$productId] = ($expectedQtyByProduct[$productId] ?? 0.0)
-                + $moveProductQty * $this->qty_producing / $this->product_qty;
+                + $moveProductQty * $this->quantity_producing / $this->quantity;
         }
 
         $doneQtyByProduct = [];
@@ -908,7 +971,7 @@ class Order extends Model
             $quantity = $move->uom->computeQuantity($move->getPickedQuantity(), $move->product->uom);
 
             $rounding = $move->product->uom->rounding;
-            
+
             $productId = $move->product_id;
 
             if (

@@ -452,6 +452,13 @@ class Move extends Model
         return $this->procurementGroup?->name ?? ($this->origin ?: $this->operation?->name ?: '/');
     }
 
+    public function getPickedQuantity()
+    {
+        return $this->lines->where('is_picked', true)->sum(function ($moveLine) {
+            return $moveLine->uom->computeQuantity($moveLine->qty, $this->uom, roundingMethod: 'HALF-UP');
+        });
+    }
+
     public function adjustProcureMethod($operationTypeCode = false)
     {
         $filters = [

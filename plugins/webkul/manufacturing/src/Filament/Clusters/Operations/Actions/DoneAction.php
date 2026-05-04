@@ -9,7 +9,6 @@ use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Livewire\Component;
 use Throwable;
-use Webkul\Manufacturing\Enums\BillOfMaterialConsumption;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
 use Webkul\Manufacturing\Models\Order;
@@ -46,7 +45,7 @@ class DoneAction extends Action
 
     private function hasAnyCondition(Order $record): bool
     {
-        return $this->hasUnderconsumedMaterials($record);
+        return $this->hasConsumptionIssues($record);
         // || $this->hasSomeOtherCondition($record)
     }
 
@@ -54,7 +53,7 @@ class DoneAction extends Action
     {
         $record = $this->getRecord();
 
-        if ($record instanceof Order && $this->hasUnderconsumedMaterials($record)) {
+        if ($record instanceof Order && $this->hasConsumptionIssues($record)) {
             return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.heading');
         }
 
@@ -65,7 +64,7 @@ class DoneAction extends Action
     {
         $record = $this->getRecord();
 
-        if ($record instanceof Order && $this->hasUnderconsumedMaterials($record)) {
+        if ($record instanceof Order && $this->hasConsumptionIssues($record)) {
             return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.description');
         }
 
@@ -76,7 +75,7 @@ class DoneAction extends Action
     {
         $record = $this->getRecord();
 
-        if ($record instanceof Order && $this->hasUnderconsumedMaterials($record)) {
+        if ($record instanceof Order && $this->hasConsumptionIssues($record)) {
             return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.actions.validate.label');
         }
 
@@ -88,7 +87,7 @@ class DoneAction extends Action
      */
     private function getExtraFooterActions(Order $record): array
     {
-        if ($this->hasUnderconsumedMaterials($record)) {
+        if ($this->hasConsumptionIssues($record)) {
             return [
                 Action::make('set-quantities')
                     ->label(__('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.actions.set-quantities.label'))
@@ -104,8 +103,8 @@ class DoneAction extends Action
     {
         $data = [];
 
-        if ($this->hasUnderconsumedMaterials($record)) {
-            $data['underconsumed_moves'] = $this->getUnderconsumedMovesData($record);
+        if ($this->hasConsumptionIssues($record)) {
+            $data['consumed_moves_issues'] = $this->getConsumedMovesData($record);
         }
 
         // if ($this->hasSomeOtherCondition($record)) {
@@ -118,30 +117,24 @@ class DoneAction extends Action
     private function buildForm(): array
     {
         return [
-            $this->makeUnderconsumedRepeater(),
+            $this->makeConsumedIssuesRepeater(),
             // $this->makeSomeOtherRepeater(),
         ];
     }
 
-    private function hasUnderconsumedMaterials(Order $record): bool
+    private function hasConsumptionIssues(Order $record): bool
     {
-        if ($record->billOfMaterial->consumption === BillOfMaterialConsumption::FLEXIBLE) {
-            return false;
-        }
-
-        return $record->rawMaterialMoves->some(
-            fn ($move) => float_compare($move->quantity, $move->product_uom_qty, precisionRounding: $move->uom->rounding) < 0
-        );
+        return ! empty($record->getConsumptionIssues());
     }
 
-    private function makeUnderconsumedRepeater(): Repeater
+    private function makeConsumedIssuesRepeater(): Repeater
     {
-        return Repeater::make('underconsumed_moves')
+        return Repeater::make('consumed_moves_issues')
             ->hiddenLabel()
             ->deletable(false)
             ->addable(false)
             ->reorderable(false)
-            ->visible(fn (Order $record) => $this->hasUnderconsumedMaterials($record))
+            ->visible(fn (Order $record) => $this->hasConsumptionIssues($record))
             ->table([
                 RepeaterTableColumn::make('product_name')
                     ->label(__('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.form.product')),
@@ -160,15 +153,14 @@ class DoneAction extends Action
             ]);
     }
 
-    private function getUnderconsumedMovesData(Order $record): array
+    private function getConsumedMovesData(Order $record): array
     {
-        return $record->rawMaterialMoves
-            ->filter(fn ($move) => float_compare($move->quantity, $move->product_uom_qty, precisionRounding: $move->uom->rounding) < 0)
-            ->map(fn ($move) => [
-                'product_name' => $move->product->name,
-                'to_consume'   => $move->product_uom_qty,
-                'consumed'     => $move->quantity,
-                'uom'          => $move->uom->name,
+        return collect($record->getConsumptionIssues())
+            ->map(fn ($issue) => [
+                'product_name' => $issue[1]->name,
+                'to_consume'   => $issue[3],
+                'consumed'     => $issue[2],
+                'uom'          => $issue[1]->uom->name,
             ])
             ->values()
             ->all();
