@@ -3,12 +3,13 @@
 namespace Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages;
 
 use Filament\Resources\Pages\EditRecord;
-use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
-use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\ConfirmAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\CancelAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\ConfirmAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\DoneAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\PlanAction;
-use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\UnplanAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\StartAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\UnplanAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
 use Webkul\Support\Filament\Concerns\HasRepeaterColumnManager;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
@@ -35,6 +36,7 @@ class EditManufacturingOrder extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            DoneAction::make('done'),
             ConfirmAction::make('confirm'),
             PlanAction::make('plan'),
             UnplanAction::make('unplan'),

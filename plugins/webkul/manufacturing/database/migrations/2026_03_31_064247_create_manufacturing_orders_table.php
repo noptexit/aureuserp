@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('consumption');
             $table->decimal('quantity', 15, 4)->default(1);
             $table->decimal('quantity_producing', 15, 4)->default(0);
+            $table->decimal('product_uom_qty', 15, 4)->default(0);
             $table->timestamp('deadline_at')->nullable();
             $table->timestamp('started_at')->useCurrent();
             $table->timestamp('finished_at')->nullable();

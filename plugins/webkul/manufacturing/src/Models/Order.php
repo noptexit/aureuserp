@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\Auth;
+use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
+use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Operation;
 use Webkul\Inventory\Models\OperationType;
@@ -41,6 +43,7 @@ class Order extends Model
         'consumption',
         'quantity',
         'quantity_producing',
+        'product_uom_qty',
         'is_planned',
         'deadline_at',
         'started_at',
@@ -73,6 +76,15 @@ class Order extends Model
         'started_at'         => 'datetime',
         'finished_at'        => 'datetime',
     ];
+
+    protected array $context = [];
+
+    public function setContext(array $context)
+    {
+        $this->context = array_merge($this->context, $context);
+
+        return $this;
+    }
 
     public function getModelTitle(): string
     {
@@ -287,6 +299,8 @@ class Order extends Model
 
             $order->computeIsPlanned();
 
+            $order->computeProductUOMQty();
+
             if ($order->wasChanged(['company_id', 'started_at', 'is_planned', 'product_id'])) {
                 $order->computeFinishedAt();
             }
@@ -310,6 +324,11 @@ class Order extends Model
     public function computeName()
     {
         $this->name = 'MO/'.$this->id;
+    }
+
+    public function computeProductUOMQty()
+    {
+        $this->product_uom_qty = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom);
     }
 
     public function computeState(): void
@@ -617,6 +636,10 @@ class Order extends Model
         return $moves;
     }
 
+    public function getMovesRawValues(): array
+    {
+    }
+
     public function updateOrCreateMoveFinished(): void
     {
         $movesFinishedValues = $this->getMovesFinishedValues();
@@ -706,5 +729,262 @@ class Order extends Model
                 ]);
             }
         }
+    }
+
+    public function autoProductionChecks(): bool
+    {
+        $products = $this->rawMaterialMoves->pluck('product')
+            ->merge($this->finishedMoves->pluck('product'))
+            ->unique('id');
+
+        return $products->every(fn ($product) => $product->tracking === ProductTracking::QTY)
+            || $this->product_uom_qty == 1
+            || (
+                $this->product->tracking !== ProductTracking::SERIAL
+                && in_array($this->reservation_state, [
+                    ManufacturingOrderReservationState::ASSIGNED,
+                    ManufacturingOrderReservationState::CONFIRMED,
+                    ManufacturingOrderReservationState::WAITING,
+                ])
+            );
+    }
+
+    public function checkSnUniqueness(): void
+    {
+        if (
+            $this->product->tracking === ProductTracking::SERIAL
+            && $this->producing_lot_id
+        ) {
+            if ($this->isFinishedSnAlreadyProduced($this->producingLot)) {
+                throw new \Exception(__('This serial number for product :product has already been produced', [
+                    'product' => $this->product->name,
+                ]));
+            }
+        }
+
+        foreach ($this->moveFinishedIds as $move) {
+            if (
+                $move->product->tracking !== ProductTracking::SERIAL
+                || $move->product_id === $this->product_id
+            ) {
+                continue;
+            }
+
+            foreach ($move->lines as $moveLine) {
+                if (float_is_zero($moveLine->quantity, precisionRounding: $moveLine->uom->rounding)) {
+                    continue;
+                }
+
+                if ($this->isFinishedSnAlreadyProduced($moveLine->lot, excludedSml: $moveLine)) {
+                    throw new \Exception(__('The serial number :number used for byproduct :product has already been produced', [
+                        'number'  => $moveLine->lot->name,
+                        'product' => $moveLine->product->name,
+                    ]));
+                }
+            }
+        }
+
+        $consumedSnIds = [];
+
+        $snErrorMsg = [];
+
+        foreach ($this->rawMaterialMoves as $move) {
+            if (
+                $move->product->tracking !== ProductTracking::SERIAL
+                || ! $move->is_picked
+            ) {
+                continue;
+            }
+
+            foreach ($move->lines as $moveLine) {
+                if (
+                    ! $moveLine->is_picked
+                    || float_is_zero($moveLine->quantity, precisionRounding: $moveLine->uom->rounding)
+                    || ! $moveLine->lot_id
+                ) {
+                    continue;
+                }
+
+                $smlSn = $moveLine->lot;
+
+                $message = __('The serial number :number used for component :component has already been consumed', [
+                    'number'    => $smlSn->name,
+                    'component' => $moveLine->product->name,
+                ]);
+
+                $consumedSnIds[] = $smlSn->id;
+
+                $snErrorMsg[$smlSn->id] = $message;
+
+                $coProdMoveLines = $this->rawMaterialMoves->flatMap->lines;
+
+                $duplicates = $coProdMoveLines
+                    ->filter(fn ($moveLine) => $moveLine->quantity && $moveLine->lot_id === $smlSn->id)
+                    ->filter(fn ($moveLine) => $moveLine->id !== $moveLine->id);
+
+                if ($duplicates->isNotEmpty()) {
+                    throw new \Exception($message);
+                }
+            }
+        }
+
+        if (empty($consumedSnIds)) {
+            return;
+        }
+
+        $consumedSmlGroups = MoveLine::whereIn('lot_id', $consumedSnIds)
+            ->where('quantity', 1)
+            ->where('state', MoveState::DONE)
+            ->whereHas('destinationLocation', fn ($q) => $q->where('type', LocationType::PRODUCTION))
+            ->whereNotNull('order_id')
+            ->groupBy('lot_id')
+            ->selectRaw('lot_id, SUM(quantity) as total')
+            ->pluck('total', 'lot_id')
+            ->all();
+
+        $problematicSnIds = array_keys($consumedSmlGroups);
+
+        if (empty($problematicSnIds)) {
+            return;
+        }
+
+        $cancelledSmlGroups = MoveLine::whereIn('lot_id', $problematicSnIds)
+            ->where('quantity', 1)
+            ->where('state', MoveState::DONE)
+            ->whereHas('sourceLocation', fn ($q) => $q->where('type', LocationType::PRODUCTION))
+            ->whereDoesntHave('move.order')
+            ->groupBy('lot_id')
+            ->selectRaw('lot_id, SUM(quantity) as total')
+            ->pluck('total', 'lot_id')
+            ->all();
+
+        foreach ($problematicSnIds as $snId) {
+            $consumedQty = $consumedSmlGroups[$snId];
+
+            $cancelledQty = $cancelledSmlGroups[$snId] ?? 0.0;
+
+            if ($consumedQty - $cancelledQty > 0) {
+                throw new \Exception($snErrorMsg[$snId]);
+            }
+        }
+    }
+
+    public function getConsumptionIssues(): array
+    {
+        if ($this->context['skip_consumption'] ?? false) {
+            return [];
+        }
+
+        $issues = [];
+
+        if (
+            $this->consumption === BillOfMaterialConsumption::FLEXIBLE
+            || ! $this->bill_of_material_id
+            || $this->billOfMaterial->lines->isEmpty()
+        ) {
+            return $issues;
+        }
+
+        $expectedMoveValues = $this->getMovesRawValues($this);
+
+        $expectedQtyByProduct = [];
+
+        foreach ($expectedMoveValues as $moveValues) {
+            $moveProduct = Product::find($moveValues['product_id']);
+
+            $moveUom = UOM::find($moveValues['product_uom']);
+
+            $moveProductQty = $moveUom->computeQuantity($moveValues['product_uom_qty'], $moveProduct->uom);
+
+            $productId = $moveProduct->id;
+            
+            $expectedQtyByProduct[$productId] = ($expectedQtyByProduct[$productId] ?? 0.0)
+                + $moveProductQty * $this->qty_producing / $this->product_qty;
+        }
+
+        $doneQtyByProduct = [];
+
+        foreach ($this->rawMaterialMoves as $move) {
+            $quantity = $move->uom->computeQuantity($move->getPickedQuantity(), $move->product->uom);
+
+            $rounding = $move->product->uom->rounding;
+            
+            $productId = $move->product_id;
+
+            if (
+                ! isset($expectedQtyByProduct[$productId])
+                && $move->is_picked
+                && ! float_is_zero($quantity, precisionRounding: $rounding)
+            ) {
+                $issues[] = [$this, $move->product, $quantity, 0.0];
+
+                continue;
+            }
+
+            $doneQtyByProduct[$productId] = ($doneQtyByProduct[$productId] ?? 0.0)
+                + ($move->is_picked ? $quantity : 0.0);
+        }
+
+        foreach ($expectedQtyByProduct as $productId => $qtyToConsume) {
+            $product = Product::find($productId);
+
+            $quantity = $doneQtyByProduct[$productId] ?? 0.0;
+
+            if (float_compare($qtyToConsume, $quantity, precisionRounding: $product->uom->rounding) !== 0) {
+                $issues[] = [$this, $product, $quantity, $qtyToConsume];
+            }
+        }
+
+        return $issues;
+    }
+
+    public function isFinishedSnAlreadyProduced(Lot $lot, ?MoveLine $excludedSml = null): bool
+    {
+        if (! $lot) {
+            return false;
+        }
+
+        $coProdMoveLines = $this->finishedMoves->flatMap->lines;
+
+        if ($excludedSml) {
+            $coProdMoveLines = $coProdMoveLines->filter(fn ($moveLine) => $moveLine->id !== $excludedSml->id);
+        }
+
+        $duplicates = MoveLine::where('lot_id', $lot->id)
+            ->where('quantity', 1)
+            ->where('state', MoveState::DONE)
+            ->whereHas('sourceLocation', fn ($q) => $q->where('type', LocationType::PRODUCTION))
+            ->whereHas('move', fn ($q) => $q->whereNull('unbuild_order_id'))
+            ->count();
+
+        if ($duplicates) {
+            $duplicatesUnbuild = MoveLine::where('lot_id', $lot->id)
+                ->where('quantity', 1)
+                ->where('state', MoveState::DONE)
+                ->whereNull('order_id')
+                ->whereHas('destinationLocation', fn ($q) => $q->where('type', LocationType::PRODUCTION))
+                ->whereHas('move', fn ($q) => $q->whereNotNull('unbuild_order_id'))
+                ->count();
+
+            $removed = MoveLine::where('lot_id', $lot->id)
+                ->where('state', MoveState::DONE)
+                ->whereHas('sourceLocation', fn ($q) => $q->where('is_scrap', false))
+                ->whereHas('destinationLocation', fn ($q) => $q->where('is_scrap', true))
+                ->count();
+
+            $unremoved = MoveLine::where('lot_id', $lot->id)
+                ->where('state', MoveState::DONE)
+                ->whereHas('sourceLocation', fn ($q) => $q->where('is_scrap', true))
+                ->whereHas('destinationLocation', fn ($q) => $q->where('is_scrap', false))
+                ->count();
+
+            if (! (($duplicatesUnbuild || $removed) && $duplicates - $duplicatesUnbuild - $removed + $unremoved === 0)) {
+                return true;
+            }
+        }
+
+        $duplicates = $coProdMoveLines->filter(fn ($moveLine) => $moveLine->quantity && $moveLine->lot_id === $lot->id);
+
+        return $duplicates->isNotEmpty();
     }
 }

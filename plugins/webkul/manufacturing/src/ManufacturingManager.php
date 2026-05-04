@@ -94,6 +94,63 @@ class ManufacturingManager
         return $order;
     }
 
+    public function doneManufacturingOrder(Order $order, mixed $moIdsToBackOrder = null)
+    {
+        if ($moIdsToBackOrder) {
+            $isToBackOrder = in_array($order->id, $moIdsToBackOrder);
+
+            $orderToBackOrder = $isToBackOrder ? $order : null;
+
+            $orderNotToBackOrder = $isToBackOrder ? null : $order;
+        } else {
+            $orderNotToBackOrder = $order;
+
+            $orderToBackOrder = null;
+        }
+
+        $order->workOrders->each->finish();
+
+        $backOrder = $orderToBackOrder
+            ? $this->splitProduction($orderToBackOrder)
+            : null;
+
+        if ($orderNotToBackOrder) {
+            $this->postInventory($orderNotToBackOrder, cancelBackOrder: true);
+        }
+
+        if ($orderToBackOrder) {
+            $this->postInventory($orderToBackOrder, cancelBackOrder: true);
+        }
+
+        $order->finishedMoves
+            ->filter(fn ($move) => $move->state === MoveState::DONE)
+            ->each
+            ->triggerAssign();
+
+        if ($orderNotToBackOrder) {
+            $orderNotToBackOrder->rawMaterialMoves
+                ->merge($orderNotToBackOrder->finishedMoves)
+                ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
+                ->each->update([
+                    'state'           => MoveState::DONE,
+                    'product_uom_qty' => 0.0,
+                ]);
+        }
+
+        $order->update([
+            'date_finished' => now(),
+            'priority'      => '0',
+            'is_locked'     => true,
+            'state'         => ManufacturingOrderState::DONE,
+        ]);
+
+        if ($backOrder && $backOrder->operationType->reservation_method === 'at_confirm') {
+            InventoryFacade::assignMoves($backOrder->rawMaterialMoves);
+        }
+    }
+
+    public function cancelManufacturingOrder($record): void {}
+
     public function confirmWorkOrders(Order $order, $workOrders)
     {
         $order->linkWorkOrdersAndMoves($workOrders);
@@ -242,5 +299,40 @@ class ManufacturingManager
         return $values;
     }
 
-    public function cancelManufacturingOrder($record): void {}
+    public function checkForErrors(Order $order): mixed
+    {
+        $order->checkSnUniqueness();
+
+        if (! float_is_zero($order->qty_producing, precisionRounding: $order->uom->rounding)) {
+            $order->rawMaterialMoves
+                ->filter(fn ($move) => $move->manual_consumption && ! $move->is_picked)
+                ->each->update(['is_picked' => true]);
+        } else {
+            if ($order->autoProductionChecks()) {
+                $order->setQuantities();
+            } else {
+                return $order->actionMassProduce();
+            }
+        }
+
+        $consumptionIssues = $this->getConsumptionIssues($order);
+
+        if ($consumptionIssues) {
+            return $this->actionGenerateConsumptionWizard($consumptionIssues);
+        }
+
+        $quantityIssues = $this->getQuantityProducedIssues($order);
+
+        if ($quantityIssues) {
+            if ($order->operationType->create_backorder === 'always') {
+                $res = $this->buttonMarkDone($order);
+
+                return $this->shouldReturnRecords() ? $res : true;
+            } elseif ($order->operationType->create_backorder === 'ask') {
+                return $this->actionGenerateBackorderWizard($order);
+            }
+        }
+
+        return true;
+    }
 }
