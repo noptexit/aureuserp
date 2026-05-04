@@ -6,6 +6,7 @@ use Closure;
 use Filament\Actions\Action;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Livewire\Component;
 use Throwable;
@@ -31,7 +32,22 @@ class DoneAction extends Action
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/done.label'))
             ->modal(fn (Order $record) => $this->hasAnyCondition($record))
-            ->fillForm(fn (Order $record) => $this->buildFormData($record))
+            ->mountUsing(function (Order $record, Schema $form): void {
+                try {
+                    $record->checkSnUniqueness();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->danger()
+                        ->body($e->getMessage())
+                        ->send();
+
+                    $this->halt();
+
+                    return;
+                }
+
+                $form->fill($this->buildFormData($record));
+            })
             ->form($this->buildForm())
             ->extraModalFooterActions(fn (Order $record) => $this->getExtraFooterActions($record))
             ->action(function (Order $record, Component $livewire): void {
@@ -45,8 +61,8 @@ class DoneAction extends Action
 
     private function hasAnyCondition(Order $record): bool
     {
-        return $this->hasConsumptionIssues($record);
-        // || $this->hasSomeOtherCondition($record)
+        return $this->hasConsumptionIssues($record)
+            || $this->hasQuantityIssues($record);
     }
 
     public function getModalHeading(): string|Htmlable
@@ -55,6 +71,10 @@ class DoneAction extends Action
 
         if ($record instanceof Order && $this->hasConsumptionIssues($record)) {
             return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.heading');
+        }
+
+        if ($record instanceof Order && $this->hasQuantityIssues($record)) {
+            return __('manufacturing::filament/clusters/operations/actions/done.modal.produced-warning.heading');
         }
 
         return parent::getModalHeading();
@@ -68,6 +88,10 @@ class DoneAction extends Action
             return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.description');
         }
 
+        if ($record instanceof Order && $this->hasQuantityIssues($record)) {
+            return __('manufacturing::filament/clusters/operations/actions/done.modal.produced-warning.description');
+        }
+
         return parent::getModalDescription();
     }
 
@@ -76,7 +100,7 @@ class DoneAction extends Action
         $record = $this->getRecord();
 
         if ($record instanceof Order && $this->hasConsumptionIssues($record)) {
-            return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.actions.validate.label');
+            return __('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.actions.confirm.label');
         }
 
         return parent::getModalSubmitActionLabel();
@@ -107,10 +131,6 @@ class DoneAction extends Action
             $data['consumed_moves_issues'] = $this->getConsumedMovesData($record);
         }
 
-        // if ($this->hasSomeOtherCondition($record)) {
-        //     $data['other_key'] = [...];
-        // }
-
         return $data;
     }
 
@@ -118,13 +138,17 @@ class DoneAction extends Action
     {
         return [
             $this->makeConsumedIssuesRepeater(),
-            // $this->makeSomeOtherRepeater(),
         ];
     }
 
     private function hasConsumptionIssues(Order $record): bool
     {
         return ! empty($record->getConsumptionIssues());
+    }
+
+    private function hasQuantityIssues(Order $record): bool
+    {
+        return ! empty($record->getQuantityProducedIssues());
     }
 
     private function makeConsumedIssuesRepeater(): Repeater
@@ -165,19 +189,6 @@ class DoneAction extends Action
             ->values()
             ->all();
     }
-
-    // private function makeSomeOtherRepeater(): Repeater
-    // {
-    //     return Repeater::make('some_other_key')
-    //         ->visible(fn (Order $record) => $this->hasSomeOtherCondition($record))
-    //         ->hiddenLabel()
-    //         ->deletable(false)
-    //         ->addable(false)
-    //         ->reorderable(false)
-    //         ->schema([
-    //             TextEntry::make('message')->hiddenLabel(),
-    //         ]);
-    // }
 
     private function executeDone(Order $record, Component $livewire): void
     {

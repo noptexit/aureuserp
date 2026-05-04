@@ -825,7 +825,7 @@ class Order extends Model
             }
         }
 
-        foreach ($this->moveFinishedIds as $move) {
+        foreach ($this->finishedMoves as $move) {
             if (
                 $move->product->tracking !== ProductTracking::SERIAL
                 || $move->product_id === $this->product_id
@@ -999,6 +999,26 @@ class Order extends Model
         }
 
         return $issues;
+    }
+
+    public function getQuantityProducedIssues(): array
+    {
+        $quantityIssues = [];
+
+        if ($this->context['skip_back_order'] ?? false) {
+            return $quantityIssues;
+        }
+
+        if (! float_is_zero($this->getQuantityToBackOrder(), precisionRounding: $this->uom->rounding)) {
+            $quantityIssues[] = $this;
+        }
+
+        return $quantityIssues;
+    }
+
+    public function getQuantityToBackOrder(): float
+    {
+        return max($this->quantity - $this->quantity_producing, 0);
     }
 
     public function isFinishedSnAlreadyProduced(Lot $lot, ?MoveLine $excludedSml = null): bool

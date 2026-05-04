@@ -299,7 +299,7 @@ class ManufacturingManager
         return $values;
     }
 
-    public function checkForErrors(Order $order): mixed
+    public function checkForErrors(Order $order)
     {
         $order->checkSnUniqueness();
 
@@ -314,25 +314,5 @@ class ManufacturingManager
                 return $order->actionMassProduce();
             }
         }
-
-        $consumptionIssues = $this->getConsumptionIssues($order);
-
-        if ($consumptionIssues) {
-            return $this->actionGenerateConsumptionWizard($consumptionIssues);
-        }
-
-        $quantityIssues = $this->getQuantityProducedIssues($order);
-
-        if ($quantityIssues) {
-            if ($order->operationType->create_backorder === 'always') {
-                $res = $this->buttonMarkDone($order);
-
-                return $this->shouldReturnRecords() ? $res : true;
-            } elseif ($order->operationType->create_backorder === 'ask') {
-                return $this->actionGenerateBackorderWizard($order);
-            }
-        }
-
-        return true;
     }
 }

@@ -5,8 +5,8 @@ return [
 
     'modal' => [
         'consumption-warning' => [
-            'heading'     => 'Immediate Transfer?',
-            'description' => 'Some products are not fully consumed. Do you want to validate the manufacturing order with the current quantities?',
+            'heading'     => 'Consumption Warning',
+            'description' => 'Some products consumed different quantity than expected. Do you want to validate the manufacturing order with the current quantities?',
 
             'form' => [
                 'product'    => 'Product',
@@ -16,14 +16,19 @@ return [
             ],
 
             'actions' => [
-                'validate' => [
-                    'label' => 'Validate',
+                'confirm' => [
+                    'label' => 'Confirm',
                 ],
 
                 'set-quantities' => [
-                    'label' => 'Set Quantities',
+                    'label' => 'Set Quantities and Confirm',
                 ],
             ],
+        ],
+
+        'produced-warning' => [
+            'heading'     => 'Produced is different than expected',
+            'description' => 'The quantity produced is different than expected. Do you want to confirm the manufacturing order with the current quantity?',
         ],
     ],
 
