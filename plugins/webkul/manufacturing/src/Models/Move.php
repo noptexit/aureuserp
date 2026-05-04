@@ -118,6 +118,30 @@ class Move extends BaseMove
         return $shouldBeAssigned && ! ($this->order_id or $this->raw_material_order_id);
     }
 
+    public function shouldBypassSetQtyProducing(): bool
+    {
+        if (in_array($this->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])) {
+            return true;
+        }
+
+        if (float_is_zero($this->product_uom_qty, precisionRounding: $this->uom->rounding)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function getUnitFactorAttribute()
+    {
+        if ($this->raw_material_order_id || $this->order_id) {
+            $order = $this->rawMaterialOrder ?? $this->order;
+
+            return $this->product_uom_qty / (($order->quantity_producing - $order->quantity_produced) ?: 1);
+        }
+
+        return 1.0;
+    }
+
     protected static function boot()
     {
         parent::boot();

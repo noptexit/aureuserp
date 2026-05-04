@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\LocationType;
+use Webkul\Inventory\Enums\ManufactureStep;
 use Webkul\Inventory\Enums\MoveState;
+use Webkul\Inventory\Enums\OperationState;
 use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Models\Location;
@@ -247,6 +249,11 @@ class Order extends Model
     public function shouldPostponeDateFinished($dateFinished): bool
     {
         return $dateFinished->equalTo($this->started_at);
+    }
+
+    public function getWarehouseAttribute()
+    {
+        return $this->sourceLocation?->warehouse;
     }
 
     protected static function newFactory(): OrderFactory
@@ -790,6 +797,99 @@ class Order extends Model
                 $move->update([
                     'work_order_id' => isset($lastWorkOrderPerBom[$bom]) ? $lastWorkOrderPerBom[$bom]->id : null,
                 ]);
+            }
+        }
+    }
+
+    public function setQuantities(): void
+    {
+        $missingLotIdProducts = '';
+
+        if (in_array($this->product->tracking, [ProductTracking::LOT, ProductTracking::SERIAL]) && ! $this->producing_lot_id) {
+            throw new \Exception(__('You need to set a Lot/Serial Number for the finished product'));
+        }
+
+        if ($this->product->tracking === ProductTracking::SERIAL && float_compare($this->quantity_producing, 1, precisionRounding: $this->uom->rounding) === 1) {
+            $this->update(['quantity_producing' => 1]);
+        } else {
+            $this->update(['quantity_producing' => $this->quantity - $this->quantity_produced]);
+        }
+
+        $this->setQuantityProducing();
+
+        foreach ($this->rawMaterialMoves as $move) {
+            if (
+                in_array($move->state, [MoveState::DONE, MoveState::CANCELED])
+                || ! $move->product_uom_qty
+            ) {
+                continue;
+            }
+
+            if (
+                $move->manual_consumption
+                && in_array($move->product->tracking, [ProductTracking::LOT, ProductTracking::SERIAL])
+                && (
+                    ! $move->is_picked
+                    || $move->lines->filter(fn ($line) => $line->quantity && $line->is_picked && ! $line->lot_id)->isNotEmpty()
+                )
+            ) {
+                $missingLotIdProducts .= "\n  - {$move->product->name}";
+            }
+        }
+
+        if ($missingLotIdProducts) {
+            throw new \Exception(__('You need to supply Lot/Serial Number for products and "consume" them: %(missing_products)s', [
+                'missing_products' => $missingLotIdProducts,
+            ]));
+        }
+    }
+
+    public function setQuantityProducing(bool $pickManualConsumptionMoves = true): void
+    {
+        if ($this->product->tracking === ProductTracking::SERIAL) {
+            $qtyProducingUom = $this->product->uom->computeQuantity($this->quantity_producing, $this->product->uom, roundingMethod: 'HALF_UP');
+
+            if (
+                $qtyProducingUom != 1
+                && ! (
+                    $qtyProducingUom == 0
+                    && $this->getOriginal('quantity_producing') != $this->quantity_producing
+                )
+            ) {
+                $this->update([
+                    'quantity_producing' => $this->product->uom->computeQuantity(1, $this->uom, roundingMethod: 'HALF_UP'),
+                ]);
+            }
+        }
+
+        $isWaiting = $this->warehouse->manufacture_steps !== ManufactureStep::ONE_STEP
+            && $this->inventoryOperations->some(
+                fn ($operation) => $operation->operation_type_id === $this->warehouse->pbm_type_id
+                    && ! in_array($operation->state, [OperationState::DONE, OperationState::CANCELED])
+            );
+
+        $rawMoves = $this->rawMaterialMoves->filter(fn ($move) => ! $isWaiting || $move->product->tracking === ProductTracking::QTY);
+
+        $finishedMoves = $this->finishedMoves->filter(fn ($move) => $move->product_id !== $this->product_id);
+        
+        foreach ($rawMoves->merge($finishedMoves) as $move) {
+            if ($move->manual_consumption && $move->is_picked) {
+                continue;
+            }
+
+            if ($move->shouldBypassSetQtyProducing()) {
+                continue;
+            }
+
+            $newQty = float_round(
+                ($this->quantity_producing - $this->quantity_produced) * $move->unit_factor,
+                precisionRounding: $move->uom->rounding
+            );
+
+            $move->setQuantityDone($newQty);
+
+            if (! $move->manual_consumption || $pickManualConsumptionMoves) {
+                $move->update(['is_picked' => true]);
             }
         }
     }

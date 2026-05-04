@@ -96,46 +96,22 @@ class ManufacturingManager
 
     public function doneManufacturingOrder(Order $order, mixed $moIdsToBackOrder = null)
     {
-        if ($moIdsToBackOrder) {
-            $isToBackOrder = in_array($order->id, $moIdsToBackOrder);
-
-            $orderToBackOrder = $isToBackOrder ? $order : null;
-
-            $orderNotToBackOrder = $isToBackOrder ? null : $order;
-        } else {
-            $orderNotToBackOrder = $order;
-
-            $orderToBackOrder = null;
-        }
-
         $order->workOrders->each->finish();
 
-        $backOrder = $orderToBackOrder
-            ? $this->splitProduction($orderToBackOrder)
-            : null;
-
-        if ($orderNotToBackOrder) {
-            $this->postInventory($orderNotToBackOrder, cancelBackOrder: true);
-        }
-
-        if ($orderToBackOrder) {
-            $this->postInventory($orderToBackOrder, cancelBackOrder: true);
-        }
+        $this->postInventory($order, cancelBackOrder: true);
 
         $order->finishedMoves
             ->filter(fn ($move) => $move->state === MoveState::DONE)
             ->each
             ->triggerAssign();
 
-        if ($orderNotToBackOrder) {
-            $orderNotToBackOrder->rawMaterialMoves
-                ->merge($orderNotToBackOrder->finishedMoves)
-                ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
-                ->each->update([
-                    'state'           => MoveState::DONE,
-                    'product_uom_qty' => 0.0,
-                ]);
-        }
+        $order->rawMaterialMoves
+            ->merge($order->finishedMoves)
+            ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
+            ->each->update([
+                'state'           => MoveState::DONE,
+                'product_uom_qty' => 0.0,
+            ]);
 
         $order->update([
             'date_finished' => now(),
@@ -143,10 +119,6 @@ class ManufacturingManager
             'is_locked'     => true,
             'state'         => ManufacturingOrderState::DONE,
         ]);
-
-        if ($backOrder && $backOrder->operationType->reservation_method === 'at_confirm') {
-            InventoryFacade::assignMoves($backOrder->rawMaterialMoves);
-        }
     }
 
     public function cancelManufacturingOrder($record): void {}
@@ -297,22 +269,5 @@ class ManufacturingManager
         }
 
         return $values;
-    }
-
-    public function checkForErrors(Order $order)
-    {
-        $order->checkSnUniqueness();
-
-        if (! float_is_zero($order->qty_producing, precisionRounding: $order->uom->rounding)) {
-            $order->rawMaterialMoves
-                ->filter(fn ($move) => $move->manual_consumption && ! $move->is_picked)
-                ->each->update(['is_picked' => true]);
-        } else {
-            if ($order->autoProductionChecks()) {
-                $order->setQuantities();
-            } else {
-                return $order->actionMassProduce();
-            }
-        }
     }
 }
