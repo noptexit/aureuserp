@@ -526,7 +526,7 @@ class InventoryManager
     public function doneMoves($moves, $cancelBackOrder = false)
     {
         $confirmedMoves = $moves->filter(
-            fn($move) => $move->state === MoveState::DRAFT
+            fn ($move) => $move->state === MoveState::DRAFT
                 || float_is_zero($move->product_uom_qty, precisionRounding: $move->uom->rounding)
         );
 

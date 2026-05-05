@@ -83,7 +83,7 @@ class Warehouse extends BaseWarehouse
 
     public function manufactureRoute(): BelongsTo
     {
-        return $this->belongsTo(Route::class, 'pbm_route_id');
+        return $this->belongsTo(Route::class, 'pbm_route_id')->withTrashed();
     }
 
     public function pbmLocation(): BelongsTo
@@ -338,8 +338,8 @@ class Warehouse extends BaseWarehouse
             'auto'                     => RuleAuto::MANUAL,
             'propagate_cancel'         => false,
             'propagate_carrier'        => false,
-            'source_location_id'       => $productionLocation->id,
-            'destination_location_id'  => $this->sam_loc_id,
+            'source_location_id'       => $this->sam_loc_id,
+            'destination_location_id'  => $this->lot_stock_location_id,
             'route_id'                 => $this->pbm_route_id,
             'operation_type_id'        => $this->sam_type_id,
             'creator_id'               => $this->creator_id,
@@ -438,7 +438,7 @@ class Warehouse extends BaseWarehouse
                         // WH: Pre-Production → Production => WH/Pre-Production → Virtual Locations/Production
                         ['source_location_id' => $this->pbm_loc_id, 'destination_location_id' => $productionLocation->id, 'operation_type_id' => $this->manu_type_id],
                         // WH: Post-Production → Stock => WH/Post-Production → WH/Stock
-                        ['source_location_id' => $productionLocation->id, 'destination_location_id' => $this->sam_loc_id, 'operation_type_id' => $this->sam_type_id],
+                        ['source_location_id' => $this->sam_loc_id, 'destination_location_id' => $this->lot_stock_location_id, 'operation_type_id' => $this->sam_type_id],
                     ],
                 ],
                 ManufactureStep::TWO_STEPS->value => [
@@ -450,7 +450,7 @@ class Warehouse extends BaseWarehouse
                     ],
                     'archive' => [
                         // WH: Post-Production → Stock => WH/Post-Production → WH/Stock
-                        ['source_location_id' => $productionLocation->id, 'destination_location_id' => $this->sam_loc_id, 'operation_type_id' => $this->sam_type_id],
+                        ['source_location_id' => $this->sam_loc_id, 'destination_location_id' => $this->lot_stock_location_id, 'operation_type_id' => $this->sam_type_id],
                     ],
                 ],
                 ManufactureStep::THREE_STEPS->value => [
@@ -460,7 +460,7 @@ class Warehouse extends BaseWarehouse
                         // WH: Pre-Production → Production => WH/Pre-Production → Virtual Locations/Production
                         ['source_location_id' => $this->pbm_loc_id, 'destination_location_id' => $productionLocation->id, 'operation_type_id' => $this->manu_type_id],
                         // WH: Post-Production → Stock => WH/Post-Production → WH/Stock
-                        ['source_location_id' => $productionLocation->id, 'destination_location_id' => $this->sam_loc_id, 'operation_type_id' => $this->sam_type_id],
+                        ['source_location_id' => $this->sam_loc_id, 'destination_location_id' => $this->lot_stock_location_id, 'operation_type_id' => $this->sam_type_id],
                     ],
                 ],
             ]

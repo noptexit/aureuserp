@@ -246,7 +246,8 @@ class ManufacturingOrderResource extends Resource
                                     ->native(false)
                                     ->default(now())
                                     ->seconds(false)
-                                    ->required(),
+                                    ->required()
+                                    ->disabled(fn (?Order $record) => $record && in_array($record->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])),
                                 DateTimePicker::make('finished_at')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.scheduled-end'))
                                     ->default(now())
@@ -259,7 +260,8 @@ class ManufacturingOrderResource extends Resource
                                     ->searchable()
                                     ->preload()
                                     ->native(false)
-                                    ->default(Auth::id()),
+                                    ->default(Auth::id())
+                                    ->disabled(fn (?Order $record) => $record && in_array($record->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])),
                             ]),
                     ]),
 
@@ -597,6 +599,7 @@ class ManufacturingOrderResource extends Resource
                 ->required(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                 ->hidden(fn (?Order $record) => ! $record || $record->state === ManufacturingOrderState::DRAFT)
                 ->dehydrated(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                ->disabled(fn (?Order $record) => $record && in_array($record->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL]))
                 ->columnSpan(1),
             TextInput::make('quantity')
                 ->numeric()

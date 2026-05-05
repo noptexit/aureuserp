@@ -251,7 +251,7 @@ class Move extends Model
                 && $this->moveDestinations->some(fn ($move) => $move->sourceLocation->isChildOf($this->destinationLocation))
             )
             || (
-                $this->location_final_id
+                $this->final_location_id
                 && $this->finalLocation->isChildOf($this->destinationLocation)
             );
     }

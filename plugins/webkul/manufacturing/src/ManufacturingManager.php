@@ -286,10 +286,7 @@ class ManufacturingManager
 
         InventoryFacade::doneMoves(Move::whereIn('id', $movesToDo->all())->get(), cancelBackOrder: $cancelBackOrder);
         
-        dd(Move::all());
-
         InventoryFacade::cancelMoves(Move::whereIn('id', $movesToCancel->all())->get());
-
 
         $movesToDo = $order->rawMaterialMoves
             ->filter(fn ($move) => $move->state === MoveState::DONE)
