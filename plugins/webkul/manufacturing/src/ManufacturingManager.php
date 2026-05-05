@@ -104,8 +104,7 @@ class ManufacturingManager
             ->merge($order->finishedMoves)
             ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
             ->each->update([
-                'state'           => MoveState::DONE,
-                'product_uom_qty' => 0.0,
+                'state' => MoveState::DONE,
             ]);
 
         $order->update([
