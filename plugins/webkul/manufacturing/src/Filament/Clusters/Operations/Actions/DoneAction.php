@@ -37,7 +37,7 @@ class DoneAction extends Action
                 try {
                     $record->checkSnUniqueness();
 
-                    if (! float_is_zero($record->qty_producing, precisionRounding: $record->uom->rounding)) {
+                    if (! float_is_zero($record->quantity_producing, precisionRounding: $record->uom->rounding)) {
                         $record->rawMaterialMoves
                             ->filter(fn ($move) => $move->manual_consumption && ! $move->is_picked)
                             ->each(fn ($move) => $move->update(['is_picked' => true]));
