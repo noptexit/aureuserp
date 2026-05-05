@@ -311,15 +311,22 @@ class ManufacturingManager
         }
 
         foreach ($order->workOrders as $workOrder) {
+            $expectedDuration = $workOrder->expected_duration;
+            
             if (! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
-                $workOrder->expected_duration = $workOrder->getDurationExpected();
+                $expectedDuration = $workOrder->getDurationExpected();
             }
 
             if ($workOrder->duration == 0.0) {
                 $workOrder->update([
-                    'duration' => ($duration = $workOrder->duration),
-                    'duration_per_unit' => round($duration / max($workOrder->quantity_produced, 1), 2),
+                    'expected_duration' => $expectedDuration,
+                    'duration'          => $expectedDuration,
+                    'duration_per_unit' => round($expectedDuration / max($workOrder->quantity_produced, 1), 2),
                 ]);
+
+                $workOrder->refresh();
+
+                $workOrder->setDuration();
             }
         }
 

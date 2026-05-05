@@ -828,7 +828,10 @@ class Order extends Model
             throw new \Exception(__('You need to set a Lot/Serial Number for the finished product'));
         }
 
-        if ($this->product->tracking === ProductTracking::SERIAL && float_compare($this->quantity_producing, 1, precisionRounding: $this->uom->rounding) === 1) {
+        if (
+            $this->product->tracking === ProductTracking::SERIAL
+            && float_compare($this->quantity_producing, 1, precisionRounding: $this->uom->rounding) === 1
+        ) {
             $this->update(['quantity_producing' => 1]);
         } else {
             $this->update(['quantity_producing' => $this->quantity - $this->quantity_produced]);

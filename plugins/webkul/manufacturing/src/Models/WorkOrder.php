@@ -268,17 +268,20 @@ class WorkOrder extends Model
         static::saving(function ($workOrder) {
             $workOrder->computeName();
 
-            $workOrder->computeBarcode();
-
             $workOrder->computeUOMId();
 
             $workOrder->computeState();
 
-            $workOrder->computeDuration();
+            if ($workOrder->isDirty('quantity_produced')) {
+                $workOrder->computeDuration();
+            }
         });
 
         static::created(function ($workOrder) {
-            $workOrder->updateQuietly(['name' => $workOrder->name]);
+            $workOrder->updateQuietly([
+                'name' => $workOrder->name,
+                'barcode' => 'MO/'.$workOrder->manufacturingOrder->id.'/'.$workOrder->id,
+            ]);
         });
 
         static::updated(function ($workOrder) {
@@ -305,11 +308,6 @@ class WorkOrder extends Model
         $this->name = $this->operation->name;
     }
 
-    public function computeBarcode()
-    {
-        $this->barcode = 'MO/'.$this->manufacturingOrder->id.'/'.$this->id;
-    }
-
     public function computeUOMId()
     {
         $this->uom_id = $this->product?->uom_id;
@@ -331,6 +329,79 @@ class WorkOrder extends Model
             );
         } else {
             $this->duration_percent = 0;
+        }
+    }
+
+    public function setDuration(): void
+    {
+        $floatDurationToSecond = function (float $duration): float {
+            $minutes = floor($duration);
+
+            $seconds = fmod($duration, 1) * 60;
+
+            return $minutes * 60 + $seconds;
+        };
+
+        $oldOrderDuration = $this->productivityLogs->sum('duration');
+
+        $newOrderDuration = $this->duration;
+
+        if ($newOrderDuration == $oldOrderDuration) {
+            return;
+        }
+
+        $deltaDuration = $newOrderDuration - $oldOrderDuration;
+
+        if ($deltaDuration > 0) {
+            if (! in_array($this->state, [WorkOrderState::PROGRESS, WorkOrderState::DONE])) {
+                $this->update(['state' => WorkOrderState::PROGRESS]);
+            }
+
+            $endDate = now();
+            
+            $dateStart = $endDate->clone()->subSeconds($floatDurationToSecond($deltaDuration));
+
+            if ($this->expected_duration >= $newOrderDuration || $oldOrderDuration >= $this->expected_duration) {
+                $values = $this->prepareTimelineVals($newOrderDuration, $dateStart, $endDate);
+
+                WorkCenterProductivityLog::create($values);
+            } else {
+                $maxDate = $endDate->clone()->subMinutes($newOrderDuration - $this->expected_duration);
+
+                $values = $this->prepareTimelineVals($this->expected_duration, $dateStart, $maxDate);
+
+                WorkCenterProductivityLog::create($values);
+
+                $values = $this->prepareTimelineVals($newOrderDuration, $maxDate, $endDate);
+
+                WorkCenterProductivityLog::create($values);
+            }
+        } else {
+            $durationToRemove = abs($deltaDuration);
+
+            $timelinesToUnlink = collect();
+
+            foreach ($this->productivityLogs->sortBy('id') as $timeline) {
+                if ($durationToRemove <= 0.0) {
+                    break;
+                }
+
+                if ($timeline->duration <= $durationToRemove) {
+                    $durationToRemove -= $timeline->duration;
+
+                    $timelinesToUnlink->push($timeline->id);
+                } else {
+                    $newTimeLineDuration = $timeline->duration - $durationToRemove;
+
+                    $timeline->update([
+                        'started_at' => Carbon::parse($timeline->finished_at)->subSeconds($floatDurationToSecond($newTimeLineDuration)),
+                    ]);
+
+                    break;
+                }
+            }
+
+            WorkCenterProductivityLog::whereIn('id', $timelinesToUnlink)->delete();
         }
     }
 
