@@ -10,7 +10,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Livewire\Component;
 use Throwable;
-use Webkul\Inventory\Models\Move;
+use Webkul\Manufacturing\Models\Move;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
 use Webkul\Manufacturing\Models\Order;
@@ -235,8 +235,6 @@ class DoneAction extends Action
 
     public function setQuantities(Order $record, Component $livewire)
     {
-        $missingMoveVals = [];
-
         $consumptionWarningLines = $record->getConsumptionIssues();
 
         foreach ($consumptionWarningLines as [, $product, $consumed, $toConsume]) {
@@ -253,21 +251,6 @@ class DoneAction extends Action
 
                 $move->update($values);
             }
-
-            if (! float_is_zero($toConsume, precisionRounding: $product->uom->rounding)) {
-                $missingMoveVals[] = [
-                    'product_id'            => $product->id,
-                    'uom_id'                => $product->uom_id,
-                    'product_uom_qty'       => $toConsume,
-                    'quantity'              => $toConsume,
-                    'raw_material_order_id' => $record->id,
-                    'is_picked'             => true,
-                ];
-            }
-        }
-
-        if (! empty($missingMoveVals)) {
-            collect($missingMoveVals)->each(fn($vals) => Move::create($vals));
         }
 
         $this->executeDone($record, $livewire);

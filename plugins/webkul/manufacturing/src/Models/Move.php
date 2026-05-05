@@ -156,7 +156,7 @@ class Move extends BaseMove
             }
 
             $move->name = $mo->name;
-            $move->origin = $mo->origin;
+            $move->origin = $mo->getOrigin();
             $move->procurement_group_id = $mo->procurement_group_id;
             // $move->propagate_cancel  = $mo->propagate_cancel;
 
@@ -167,7 +167,7 @@ class Move extends BaseMove
 
                 $move->deadline = $mo->started_at;
 
-                $move->origin = $mo->name;
+                $move->origin = $mo->getOrigin();
 
                 if (empty($move->source_location_id)) {
                     $move->source_location_id = $mo->source_location_id;

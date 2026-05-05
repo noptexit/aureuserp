@@ -434,12 +434,12 @@ class Move extends Model
 
     public function computeSourceLocationId()
     {
-        $this->source_location_id ??= $this->operation?->source_location_id ?? $this->operationType->source_location_id;
+        $this->source_location_id ??= $this->operation?->source_location_id ?? $this->operationType?->source_location_id;
     }
 
     public function computeDestinationLocationId()
     {
-        $this->destination_location_id ??= $this->operation?->destination_location_id ?? $this->operationType->destination_location_id;
+        $this->destination_location_id ??= $this->operation?->destination_location_id ?? $this->operationType?->destination_location_id;
     }
 
     public function computeScheduledAt()

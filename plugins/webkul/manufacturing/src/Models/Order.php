@@ -258,6 +258,23 @@ class Order extends Model
         return $this->sourceLocation?->warehouse;
     }
 
+    public function getOrigin()
+    {
+        $origin = $this->name;
+
+        if ($this->order_point_id && $this->origin) {
+            $origin = str_replace(
+                sprintf('%s - ', $this->orderPoint->name),
+                '',
+                $this->origin
+            );
+
+            $origin = sprintf('%s,%s', $origin, $this->name);
+        }
+
+        return $origin;
+    }
+
     protected static function newFactory(): OrderFactory
     {
         return OrderFactory::new();
@@ -599,7 +616,7 @@ class Order extends Model
             'company_id'              => $this->company_id,
             'order_id'                => $this->id,
             'warehouse_id'            => $this->destinationLocation->warehouse_id,
-            'origin'                  => $this->product->partner_ref,
+            'origin'                  => $this->product->name,
             'procurement_group_id'    => $this->procurementGroup?->id,
             'propagate_cancel'        => $this->propagate_cancel,
             'move_destination_ids'    => ! $byproductId ? $moveDestinationIds : [],
@@ -704,7 +721,7 @@ class Order extends Model
             'company_id'              => $this->company_id,
             'operation_id'            => $operationId,
             'procure_method'          => ProcureMethod::MAKE_TO_STOCK,
-            'origin'                  => $this->product->partner_ref,
+            'origin'                  => $this->getOrigin(),
             'warehouse_id'            => $this->sourceLocation->warehouse_id,
             'procurement_group_id'    => $this->procurementGroup?->id,
             'propagate_cancel'        => $this->propagate_cancel,
