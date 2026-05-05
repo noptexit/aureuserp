@@ -27,6 +27,7 @@ return new class extends Migration
             $table->timestamp('started_at')->useCurrent();
             $table->timestamp('finished_at')->nullable();
             $table->boolean('is_planned')->default(0);
+            $table->boolean('is_locked')->default(0);
 
             $table->foreignId('product_id')
                 ->constrained('products_products')

@@ -10,6 +10,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Livewire\Component;
 use Throwable;
+use Webkul\Inventory\Models\Move;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
 use Webkul\Manufacturing\Models\Order;
@@ -131,8 +132,9 @@ class DoneAction extends Action
                     ->label(__('manufacturing::filament/clusters/operations/actions/done.modal.consumption-warning.actions.set-quantities.label'))
                     ->color('gray')
                     ->cancelParentActions()
+                    ->databaseTransaction()
                     ->action(function (Order $record, Component $livewire): void {
-                        
+                        $this->setQuantities($record, $livewire);
                     }),
             ];
         }
@@ -229,5 +231,45 @@ class DoneAction extends Action
 
             $this->halt(shouldRollBackDatabaseTransaction: true);
         }
+    }
+
+    public function setQuantities(Order $record, Component $livewire)
+    {
+        $missingMoveVals = [];
+
+        $consumptionWarningLines = $record->getConsumptionIssues();
+
+        foreach ($consumptionWarningLines as [, $product, $consumed, $toConsume]) {
+            $rawMaterialMoves = $record->rawMaterialMoves->filter(fn ($move) => $move->product_id === $product->id);
+            
+            foreach ($rawMaterialMoves as $move) {
+                $qtyExpected = $product->uom->computeQuantity($toConsume, $move->uom);
+
+                $values = ['is_picked' => true];
+
+                if (float_compare($qtyExpected, $move->quantity, precisionRounding: $move->uom->rounding) !== 0) {
+                    $values['quantity'] = $qtyExpected;
+                }
+
+                $move->update($values);
+            }
+
+            if (! float_is_zero($toConsume, precisionRounding: $product->uom->rounding)) {
+                $missingMoveVals[] = [
+                    'product_id'            => $product->id,
+                    'uom_id'                => $product->uom_id,
+                    'product_uom_qty'       => $toConsume,
+                    'quantity'              => $toConsume,
+                    'raw_material_order_id' => $record->id,
+                    'is_picked'             => true,
+                ];
+            }
+        }
+
+        if (! empty($missingMoveVals)) {
+            collect($missingMoveVals)->each(fn($vals) => Move::create($vals));
+        }
+
+        $this->executeDone($record, $livewire);
     }
 }

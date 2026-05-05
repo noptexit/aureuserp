@@ -589,6 +589,15 @@ class ManufacturingOrderResource extends Resource
     protected static function getQuantityUomField(): FusedGroup
     {
         return FusedGroup::make([
+            TextInput::make('quantity_producing')
+                ->numeric()
+                ->minValue(0)
+                ->step('0.0001')
+                ->default(0)
+                ->required(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                ->hidden(fn (?Order $record) => ! $record || $record->state === ManufacturingOrderState::DRAFT)
+                ->dehydrated(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                ->columnSpan(1),
             TextInput::make('quantity')
                 ->numeric()
                 ->minValue(0.0001)
@@ -607,6 +616,8 @@ class ManufacturingOrderResource extends Resource
                         $get('uom_id'),
                     );
                 })
+                ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                ->prefix(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT ? '/' : null)
                 ->required()
                 ->columnSpan(2),
             Select::make('uom_id')
@@ -615,6 +626,7 @@ class ManufacturingOrderResource extends Resource
                 ->required()
                 ->searchable()
                 ->preload()
+                ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                 ->live()
                 ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
                     $billOfMaterial = BillOfMaterial::query()->withTrashed()->find($get('bill_of_material_id'));
@@ -671,7 +683,7 @@ class ManufacturingOrderResource extends Resource
                 ->placeholder('UoM'),
         ])
             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.quantity'))
-            ->columns(3);
+            ->columns(4);
     }
 
     protected static function getComponentsRepeater(): Repeater

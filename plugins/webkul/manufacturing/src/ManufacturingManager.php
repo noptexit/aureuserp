@@ -94,16 +94,11 @@ class ManufacturingManager
         return $order;
     }
 
-    public function doneManufacturingOrder(Order $order, mixed $moIdsToBackOrder = null)
+    public function doneManufacturingOrder(Order $order)
     {
         $order->workOrders->each->finish();
 
         $this->postInventory($order, cancelBackOrder: true);
-
-        $order->finishedMoves
-            ->filter(fn ($move) => $move->state === MoveState::DONE)
-            ->each
-            ->triggerAssign();
 
         $order->rawMaterialMoves
             ->merge($order->finishedMoves)
@@ -114,10 +109,10 @@ class ManufacturingManager
             ]);
 
         $order->update([
-            'date_finished' => now(),
-            'priority'      => '0',
-            'is_locked'     => true,
-            'state'         => ManufacturingOrderState::DONE,
+            'state'       => ManufacturingOrderState::DONE,
+            'is_locked'   => true,
+            'priority'    => '0',
+            'finished_at' => now(),
         ]);
     }
 
@@ -269,5 +264,83 @@ class ManufacturingManager
         }
 
         return $values;
+    }
+
+    public function postInventory(Order $order, bool $cancelBackOrder = false): bool
+    {
+        $movesToDo = collect();
+
+        $movesNotToDo = collect();
+
+        $movesToCancel = collect();
+
+        foreach ($order->rawMaterialMoves as $move) {
+            if ($move->state === MoveState::DONE) {
+                $movesNotToDo->push($move->id);
+            } elseif (! $move->is_picked) {
+                $movesToCancel->push($move->id);
+            } elseif ($move->state !== MoveState::CANCELED) {
+                $movesToDo->push($move->id);
+            }
+        }
+
+        InventoryFacade::doneMoves(Move::whereIn('id', $movesToDo->all())->get(), cancelBackOrder: $cancelBackOrder);
+        
+        dd(Move::all());
+
+        InventoryFacade::cancelMoves(Move::whereIn('id', $movesToCancel->all())->get());
+
+
+        $movesToDo = $order->rawMaterialMoves
+            ->filter(fn ($move) => $move->state === MoveState::DONE)
+            ->filter(fn ($move) => ! $movesNotToDo->contains($move->id));
+
+        $finishMoves = $order->finishedMoves->filter(
+            fn ($move) => $move->product_id === $order->product_id
+                && ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED])
+        );
+
+        foreach ($finishMoves as $move) {
+            $move->update([
+                'quantity' => float_round(
+                    $order->qty_producing - $order->qty_produced,
+                    precisionRounding: $order->uom->rounding,
+                    roundingMethod: 'HALF-UP'
+                ),
+            ]);
+
+            if ($order->producing_lot_id) {
+                $move->lines->each->update(['lot_id' => $order->producing_lot_id]);
+            }
+        }
+
+        foreach ($order->workOrders as $workOrder) {
+            if (! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
+                $workOrder->expected_duration = $workOrder->getDurationExpected();
+            }
+
+            if ($workOrder->duration == 0.0) {
+                $workOrder->update([
+                    'duration' => ($duration = $workOrder->duration),
+                    'duration_per_unit' => round($duration / max($workOrder->qty_produced, 1), 2),
+                ]);
+            }
+        }
+
+        $movesToFinish = $order->finishedMoves->filter(
+            fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED])
+        );
+
+        $movesToFinish->each->update(['is_picked' => true]);
+
+        $movesToFinish = InventoryFacade::doneMoves($movesToFinish, cancelBackOrder: $cancelBackOrder);
+
+        // $consumeMoveLines = $movesToDo->flatMap->lines;
+
+        // $order->finishedMoves->flatMap->lines->each->update([
+        //     'consume_line_ids' => $consumeMoveLines->pluck('id')->all(),
+        // ]);
+
+        return true;
     }
 }

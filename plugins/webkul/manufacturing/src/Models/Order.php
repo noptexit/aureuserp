@@ -49,6 +49,7 @@ class Order extends Model
         'quantity_producing',
         'product_uom_qty',
         'is_planned',
+        'is_locked',
         'deadline_at',
         'started_at',
         'finished_at',
@@ -74,6 +75,7 @@ class Order extends Model
         'reservation_state'  => ManufacturingOrderReservationState::class,
         'consumption'        => BillOfMaterialConsumption::class,
         'is_planned'         => 'boolean',
+        'is_locked'          => 'boolean',
         'quantity'           => 'decimal:4',
         'quantity_producing' => 'decimal:4',
         'deadline_at'        => 'datetime',
@@ -542,7 +544,7 @@ class Order extends Model
             $firstOperation = $operations->first();
 
             $movesInFirstOperation = $this->rawMaterialMoves
-                ->filter(fn ($move) => $move->operation_id === $firstOperation->id);
+                ->filter(fn ($move) => $move->mo_operation_id === $firstOperation->id);
         }
 
         $movesInFirstOperation = $movesInFirstOperation->filter(
@@ -783,10 +785,10 @@ class Order extends Model
         $allMoves = $this->rawMaterialMoves->merge($this->finishedMoves);
 
         foreach ($allMoves as $move) {
-            if ($move->operation_id) {
+            if ($move->mo_operation_id) {
                 $move->update([
-                    'work_order_id' => $workOrderPerOperation->has($move->operation_id)
-                        ? $workOrderPerOperation->get($move->operation_id)->id
+                    'work_order_id' => $workOrderPerOperation->has($move->mo_operation_id)
+                        ? $workOrderPerOperation->get($move->mo_operation_id)->id
                         : null,
                 ]);
             } else {
