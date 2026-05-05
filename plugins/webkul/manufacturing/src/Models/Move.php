@@ -201,9 +201,9 @@ class Move extends BaseMove
 
     }
 
-    public function keyAssignPicking(): array
+    public function keyAssignOperation(): array
     {
-        $keys = parent::keyAssignPicking();
+        $keys = parent::keyAssignOperation();
 
         $keys[] = $this->created_order_id;
 

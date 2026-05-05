@@ -300,7 +300,7 @@ class ManufacturingManager
         foreach ($finishMoves as $move) {
             $move->update([
                 'quantity' => float_round(
-                    $order->qty_producing - $order->qty_produced,
+                    $order->quantity_producing - $order->quantity_produced,
                     precisionRounding: $order->uom->rounding,
                     roundingMethod: 'HALF-UP'
                 ),
@@ -319,7 +319,7 @@ class ManufacturingManager
             if ($workOrder->duration == 0.0) {
                 $workOrder->update([
                     'duration' => ($duration = $workOrder->duration),
-                    'duration_per_unit' => round($duration / max($workOrder->qty_produced, 1), 2),
+                    'duration_per_unit' => round($duration / max($workOrder->quantity_produced, 1), 2),
                 ]);
             }
         }

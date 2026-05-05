@@ -47,6 +47,6 @@ class StartAction extends Action
                     $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
-            ->visible(fn (Order $record) => $record->state !== ManufacturingOrderState::DRAFT && $record->state !== ManufacturingOrderState::PROGRESS);
+            ->visible(fn (Order $record) => ! in_array($record->state, [ManufacturingOrderState::DRAFT, ManufacturingOrderState::PROGRESS, ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL]));
     }
 }

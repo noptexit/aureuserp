@@ -775,7 +775,7 @@ class Move extends Model
         }
     }
 
-    public function keyAssignPicking(): array
+    public function keyAssignOperation(): array
     {
         $keys = [
             $this->procurement_group_id,

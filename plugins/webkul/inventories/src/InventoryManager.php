@@ -175,7 +175,7 @@ class InventoryManager
             }
 
             if ($move->shouldBeAssigned()) {
-                $key = implode('_', $move->keyAssignPicking());
+                $key = implode('_', $move->keyAssignOperation());
 
                 $movesToAssign[$key][] = $move;
             }
@@ -1138,7 +1138,7 @@ class InventoryManager
         } else {
             $newMoveValues = $this->preparePushMoveCopyValues($rule, $move, $newScheduledAt);
 
-            $newMove = $move->replicate()->fill($newMoveValues);
+            $newMove = $move->replicate(['order_id', 'work_order_id'])->fill($newMoveValues);
 
             $newMove->save();
 
@@ -1590,7 +1590,7 @@ class InventoryManager
             return;
         }
 
-        $groupedMoves = $moves->groupBy(fn ($move) => implode('_', $move->keyAssignPicking()));
+        $groupedMoves = $moves->groupBy(fn ($move) => implode('_', $move->keyAssignOperation()));
 
         foreach ($groupedMoves as $moves) {
             $operation = $this->searchOperationForAssignation($moves[0]);

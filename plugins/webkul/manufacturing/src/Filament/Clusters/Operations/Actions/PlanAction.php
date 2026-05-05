@@ -46,6 +46,6 @@ class PlanAction extends Action
                     $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
-            ->visible(fn (Order $record) => $record->state !== ManufacturingOrderState::DRAFT && ! $record->is_planned);
+            ->visible(fn (Order $record) => ! in_array($record->state, [ManufacturingOrderState::DRAFT, ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL]) && ! $record->is_planned);
     }
 }
