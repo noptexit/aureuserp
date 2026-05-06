@@ -266,6 +266,7 @@ class WorkOrderResource extends Resource
     {
         return $table
             ->reorderableColumns()
+            ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('operation.name')
                     ->label(__('manufacturing::filament/clusters/operations/resources/work-order.table.columns.operation'))

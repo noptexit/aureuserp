@@ -305,6 +305,7 @@ class ManufacturingOrderResource extends Resource
                                             ->native(false)
                                             ->wrapOptionLabels(false)
                                             ->live()
+                                            ->required()
                                             ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->afterStateUpdated(function (Set $set, ?string $state): void {
                                                 $operationType = OperationType::query()->withTrashed()->find($state);
@@ -317,6 +318,7 @@ class ManufacturingOrderResource extends Resource
                                             ->relationship('sourceLocation', 'full_name', fn (Builder $query) => $query->withTrashed())
                                             ->searchable()
                                             ->preload()
+                                            ->required()
                                             ->native(false)
                                             ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->wrapOptionLabels(false),
@@ -325,6 +327,7 @@ class ManufacturingOrderResource extends Resource
                                             ->relationship('destinationLocation', 'full_name', fn (Builder $query) => $query->withTrashed())
                                             ->searchable()
                                             ->preload()
+                                            ->required()
                                             ->native(false)
                                             ->wrapOptionLabels(false)
                                             ->live()
@@ -353,6 +356,7 @@ class ManufacturingOrderResource extends Resource
     {
         return $table
             ->reorderableColumns()
+            ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('name')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.columns.reference'))
@@ -1101,7 +1105,7 @@ class ManufacturingOrderResource extends Resource
                     ->hiddenLabel()
                     ->live()
                     ->native(false)
-                    ->seconds(false)
+                    ->seconds(true)
                     ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
                         if (blank($state)) {
                             return;
@@ -1110,10 +1114,6 @@ class ManufacturingOrderResource extends Resource
                         $expectedDuration = (float) parse_float_time((string) ($get('expected_duration') ?: '00:00'), 'minutes');
                         $finishedAt = Carbon::parse($state)
                             ->addSeconds((int) round($expectedDuration * 60));
-
-                        if ($finishedAt->second > 0) {
-                            $finishedAt->addMinute()->second(0);
-                        }
 
                         $set(
                             'finished_at',
@@ -1124,7 +1124,7 @@ class ManufacturingOrderResource extends Resource
                 DateTimePicker::make('finished_at')
                     ->hiddenLabel()
                     ->native(false)
-                    ->seconds(false)
+                    ->seconds(true)
                     ->disabled(fn ($record): bool => $record && ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 TextInput::make('expected_duration')
                     ->hiddenLabel()
