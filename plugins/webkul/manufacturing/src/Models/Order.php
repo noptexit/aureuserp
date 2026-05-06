@@ -339,9 +339,11 @@ class Order extends Model
         static::saving(function ($order) {
             $order->computeName();
 
-            $order->computeIsPlanned();
-
             $order->computeProductUOMQty();
+
+            if ($order->wasChanged('started_at')) {
+                $order->computeIsPlanned();
+            }
 
             if ($order->wasChanged(['company_id', 'started_at', 'is_planned', 'product_id'])) {
                 $order->computeFinishedAt();
@@ -524,15 +526,17 @@ class Order extends Model
     public function computeIsPlanned()
     {
         if ($this->workOrders->isEmpty()) {
+            $this->is_planned = false;
+
             return;
         }
 
         $activeWorkOrders = $this->workOrders->filter(
-            fn ($wo) => ! in_array($wo->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
+            fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
         );
 
         $this->is_planned = $activeWorkOrders->isNotEmpty()
-            && $activeWorkOrders->every(fn ($wo) => $wo->calendar_leave_id !== null);
+            && $activeWorkOrders->every(fn ($workOrder) => $workOrder->calendar_leave_id !== null);
     }
 
     public function computeFinishedMoves(): void

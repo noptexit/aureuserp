@@ -84,6 +84,8 @@ class WorkCenterProductivityLog extends Model
             $productivityLog->description ??= "Time Tracking: {$user->name}";
 
             $productivityLog->loss_type ??= $productivityLog->loss->loss_type ?? 'other';
+
+            $productivityLog->work_center_id ??= $productivityLog->workOrder->work_center_id ?? null;
         });
 
         static::created(function (self $productivityLog): void {
@@ -91,6 +93,12 @@ class WorkCenterProductivityLog extends Model
                 $workCenter->computeWorkingState();
 
                 $workCenter->save();
+            }
+
+            if ($productivityLog->duration) {
+                $productivityLog->workOrder->computeDuration();
+
+                $productivityLog->workOrder->save();
             }
         });
 
@@ -113,6 +121,12 @@ class WorkCenterProductivityLog extends Model
                 $productivityLog->workOrder->save();
 
             }
+        });
+
+        static::deleted(function (self $productivityLog): void {
+            $productivityLog->workOrder->computeDuration();
+
+            $productivityLog->workOrder->save();
         });
     }
 

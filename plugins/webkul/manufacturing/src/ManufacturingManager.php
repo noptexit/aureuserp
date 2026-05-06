@@ -24,7 +24,7 @@ class ManufacturingManager
 
         if (
             $order->product_tracking === ProductTracking::SERIAL
-            && $order->product_uom_id !== $order->product->uom_id
+            && $order->uom_id !== $order->product->uom_id
         ) {
             $orderVals['quantity'] = $order->uom->computeQuantity($order->quantity, $order->product->uom);
 
@@ -91,6 +91,30 @@ class ManufacturingManager
 
         $order = $this->planWorkOrders($order);
 
+        return $order;
+    }
+
+    public function unplanManufacturingOrder(Order $order)
+    {
+        if ($order->workOrders->some(fn($workOrder) => $workOrder->state === WorkOrderState::DONE)) {
+            throw new \Exception(__("Some work orders are already done, so you cannot un-plan this manufacturing order.\n\nIt'd be a shame to waste all that progress, right?"));
+        }
+
+        if ($order->workOrders->some(fn($workOrder) => $workOrder->state === WorkOrderState::PROGRESS)) {
+            throw new \Exception(__("Some work orders have already started, so you cannot un-plan this manufacturing order.\n\nIt'd be a shame to waste all that progress, right?"));
+        }
+
+        $order->workOrders->each(function ($workOrder) {
+            $workOrder->calendarLeave?->delete();
+
+            $workOrder->update([
+                'started_at'  => null,
+                'finished_at' => null,
+            ]);
+        });
+
+        $order->update(['is_planned' => false]);
+        
         return $order;
     }
 
@@ -284,7 +308,7 @@ class ManufacturingManager
         }
 
         InventoryFacade::doneMoves(Move::whereIn('id', $movesToDo->all())->get(), cancelBackOrder: $cancelBackOrder);
-        
+
         InventoryFacade::cancelMoves(Move::whereIn('id', $movesToCancel->all())->get());
 
         $movesToDo = $order->rawMaterialMoves
@@ -312,7 +336,7 @@ class ManufacturingManager
 
         foreach ($order->workOrders as $workOrder) {
             $expectedDuration = $workOrder->expected_duration;
-            
+
             if (! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])) {
                 $expectedDuration = $workOrder->getDurationExpected();
             }
@@ -335,7 +359,6 @@ class ManufacturingManager
         );
 
         $movesToFinish->each->update(['is_picked' => true]);
-
 
         $movesToFinish = InventoryFacade::doneMoves($movesToFinish, cancelBackOrder: $cancelBackOrder);
 

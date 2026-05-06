@@ -309,6 +309,12 @@ class WorkOrder extends Model
                     $workOrder->manufacturingOrder->save();
                 }
             }
+
+            if ($workOrder->wasChanged('started_at') || $workOrder->wasChanged('finished_at')) {
+                $workOrder->manufacturingOrder->computeIsPlanned();
+
+                $workOrder->manufacturingOrder->save();
+            }
         });
     }
 

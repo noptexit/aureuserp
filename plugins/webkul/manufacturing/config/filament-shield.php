@@ -5,6 +5,7 @@ use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\OperationRes
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource;
 use Webkul\Manufacturing\Filament\Clusters\Operations;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\WorkOrderResource;
 use Webkul\Manufacturing\Filament\Clusters\Products;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\BillsOfMaterialResource;
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\LotResource;
@@ -24,6 +25,7 @@ return [
             ManufacturingOrderResource::class => [...$basic, ...$delete],
             OperationResource::class          => [...$basic, ...$delete, ...$restore, ...$forceDelete, ...$reorder],
             ProductResource::class            => [...$basic, ...$delete, ...$restore, ...$forceDelete, ...$reorder],
+            WorkOrderResource::class          => [...$basic, ...$delete],
             WorkCenterResource::class         => [...$basic, ...$delete, ...$restore, ...$forceDelete, ...$reorder],
         ],
         'exclude' => [],
