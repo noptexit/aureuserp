@@ -346,6 +346,10 @@ class Order extends Model
 
                 $order->saveQuietly();
             }
+
+            if ($order->wasChanged('quantity_producing')) {
+                $order->setQuantityProducing();
+            }
         });
     }
 

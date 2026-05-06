@@ -6,6 +6,7 @@ use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Collection;
 use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Manufacturing\Enums\ManufacturingOrderReservationState;
+use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
 use Webkul\Manufacturing\Models\Move;
 use Webkul\Manufacturing\Models\WorkOrder;
@@ -161,6 +162,17 @@ class OverviewManufacturingOrder extends ViewRecord
         return round($this->getComponentUnitCost($move) * (float) $move->product_uom_qty, 2);
     }
 
+    public function getComponentRealCost(Move $move): float
+    {
+        if ($this->getRecord()->state !== ManufacturingOrderState::DONE) {
+            return 0.0;
+        }
+
+        $actualQuantity = (float) ($move->quantity ?: $move->product_uom_qty);
+
+        return round($this->getComponentUnitCost($move) * $actualQuantity, 2);
+    }
+
     public function getWorkOrderUnitCost(WorkOrder $workOrder): float
     {
         $costPerHour = (float) ($workOrder->costs_per_hour ?: $workOrder->workCenter?->costs_per_hour ?: 0);
@@ -173,6 +185,17 @@ class OverviewManufacturingOrder extends ViewRecord
         $costPerHour = (float) ($workOrder->costs_per_hour ?: $workOrder->workCenter?->costs_per_hour ?: 0);
 
         return round(((float) $workOrder->expected_duration / 60) * $costPerHour, 2);
+    }
+
+    public function getWorkOrderRealCost(WorkOrder $workOrder): float
+    {
+        if ($this->getRecord()->state !== ManufacturingOrderState::DONE) {
+            return 0.0;
+        }
+
+        $costPerHour = (float) ($workOrder->costs_per_hour ?: $workOrder->workCenter?->costs_per_hour ?: 0);
+
+        return round(((float) $workOrder->duration / 60) * $costPerHour, 2);
     }
 
     public function getTotalOperationDuration(): float
@@ -201,6 +224,14 @@ class OverviewManufacturingOrder extends ViewRecord
         );
     }
 
+    public function getTotalRealComponentCost(): float
+    {
+        return round(
+            $this->getComponentRows()->sum(fn (Move $move): float => $this->getComponentRealCost($move)),
+            2,
+        );
+    }
+
     public function getUnitCost(): float
     {
         $quantity = (float) ($this->getRecord()->quantity ?: 0);
@@ -212,9 +243,33 @@ class OverviewManufacturingOrder extends ViewRecord
         return round($this->getTotalMoCost() / $quantity, 2);
     }
 
+    public function getRealUnitCost(): float
+    {
+        $quantity = (float) ($this->getRecord()->quantity ?: 0);
+
+        if ($quantity <= 0) {
+            return 0;
+        }
+
+        return round($this->getTotalRealCost() / $quantity, 2);
+    }
+
     public function getTotalMoCost(): float
     {
         return round($this->getTotalComponentCost() + $this->getTotalOperationCost(), 2);
+    }
+
+    public function getTotalRealOperationCost(): float
+    {
+        return round(
+            $this->getWorkOrderRows()->sum(fn (WorkOrder $workOrder): float => $this->getWorkOrderRealCost($workOrder)),
+            2,
+        );
+    }
+
+    public function getTotalRealCost(): float
+    {
+        return round($this->getTotalRealComponentCost() + $this->getTotalRealOperationCost(), 2);
     }
 
     public function getTotalBomCost(): float

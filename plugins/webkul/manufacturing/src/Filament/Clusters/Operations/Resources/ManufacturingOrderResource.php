@@ -61,6 +61,8 @@ use Webkul\Manufacturing\Models\WorkOrder;
 use Webkul\Product\Enums\ProductType;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTableColumn;
+use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
+use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\UOM;
 
 class ManufacturingOrderResource extends Resource
@@ -421,8 +423,17 @@ class ManufacturingOrderResource extends Resource
                                     ->placeholder('—'),
                                 TextEntry::make('quantity')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.sections.general.entries.quantity'))
-                                    ->numeric(decimalPlaces: 4)
-                                    ->suffix(fn (Order $record): string => ' '.($record->uom?->name ?? '—')),
+                                    ->state(function (Order $record): string {
+                                        $expectedQuantity = number_format((float) $record->quantity, 4, '.', '');
+
+                                        if ($record->state === ManufacturingOrderState::DRAFT) {
+                                            return $expectedQuantity.' '.($record->uom?->name ?? '—');
+                                        }
+
+                                        $producingQuantity = number_format((float) ($record->quantity_producing ?: 0), 4, '.', '');
+
+                                        return $producingQuantity.' / '.$expectedQuantity.' '.($record->uom?->name ?? '—');
+                                    }),
                                 TextEntry::make('bill_of_material_id')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.sections.general.entries.bill-of-material'))
                                     ->state(fn (Order $record): string => static::getBillOfMaterialLabel($record->billOfMaterial)),
@@ -430,52 +441,165 @@ class ManufacturingOrderResource extends Resource
                         Group::make()
                             ->columns(1)
                             ->schema([
-                                TextEntry::make('deadline_at')
+                                TextEntry::make('started_at')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.sections.general.entries.scheduled-date'))
                                     ->dateTime(),
+                                TextEntry::make('finished_at')
+                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.scheduled-end'))
+                                    ->dateTime()
+                                    ->placeholder('—')
+                                    ->visible(fn (Order $record): bool => $record->state !== ManufacturingOrderState::DRAFT),
                                 TextEntry::make('assignedUser.name')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.sections.general.entries.responsible'))
                                     ->placeholder('—'),
                             ]),
-
-                        Tabs::make('manufacturing-order-details')
-                            ->tabs([
-                                Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.components.title'))
+                    ]),
+                Tabs::make('manufacturing-order-details')
+                    ->tabs([
+                        Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.components.title'))
+                            ->schema([
+                                RepeatableEntry::make('rawMaterialMoves')
+                                    ->hiddenLabel()
+                                    ->contained(false)
+                                    ->table([
+                                        InfolistTableColumn::make('product.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.component')),
+                                        InfolistTableColumn::make('sourceLocation.full_name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from')),
+                                        InfolistTableColumn::make('product_uom_qty')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.to-consume')),
+                                        InfolistTableColumn::make('quantity')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.quantity'))
+                                            ->toggleable(isToggledHiddenByDefault: true),
+                                        InfolistTableColumn::make('uom.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.uom')),
+                                    ])
                                     ->schema([
-                                        TextEntry::make('components_process_note')
+                                        TextEntry::make('product.name')
                                             ->hiddenLabel()
-                                            ->state(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.components.process-note')),
-                                    ]),
-                                Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.work-orders.title'))
-                                    ->schema([
-                                        TextEntry::make('work_orders_process_note')
+                                            ->placeholder('—'),
+                                        TextEntry::make('sourceLocation.full_name')
                                             ->hiddenLabel()
-                                            ->state(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.work-orders.process-note')),
-                                    ]),
-                                Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.by-products.title'))
-                                    ->hidden(true)
-                                    ->schema([
-                                        TextEntry::make('by_products_process_note')
+                                            ->placeholder('—'),
+                                        TextEntry::make('product_uom_qty')
                                             ->hiddenLabel()
-                                            ->state(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.by-products.process-note')),
+                                            ->numeric(decimalPlaces: 4),
+                                        TextEntry::make('quantity')
+                                            ->hiddenLabel()
+                                            ->numeric(decimalPlaces: 4)
+                                            ->placeholder('—'),
+                                        TextEntry::make('uom.name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
                                     ]),
-                                Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.title'))
+                            ]),
+                        Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.work-orders.title'))
+                            ->schema([
+                                RepeatableEntry::make('workOrders')
+                                    ->hiddenLabel()
+                                    ->contained(false)
+                                    ->table([
+                                        InfolistTableColumn::make('operation.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.operation')),
+                                        InfolistTableColumn::make('workCenter.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.work-center')),
+                                        InfolistTableColumn::make('product.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.product')),
+                                        InfolistTableColumn::make('quantity_remaining')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.quantity-remaining')),
+                                        InfolistTableColumn::make('started_at')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.start'))
+                                            ->toggleable(isToggledHiddenByDefault: true),
+                                        InfolistTableColumn::make('finished_at')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.end'))
+                                            ->toggleable(isToggledHiddenByDefault: true),
+                                        InfolistTableColumn::make('expected_duration')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.expected-duration')),
+                                        InfolistTableColumn::make('duration')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.real-duration')),
+                                        InfolistTableColumn::make('state')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.status')),
+                                    ])
                                     ->schema([
-                                        Grid::make(2)
-                                            ->schema([
-                                                TextEntry::make('operationType.name')
-                                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.operation-type'))
-                                                    ->formatStateUsing(fn (mixed $state, Order $record): string => static::getOperationTypeLabel($record->operationType)),
-                                                TextEntry::make('sourceLocation.full_name')
-                                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.source'))
-                                                    ->placeholder('—'),
-                                                TextEntry::make('finalLocation.full_name')
-                                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.finished-products-location'))
-                                                    ->placeholder('—'),
-                                                TextEntry::make('company.name')
-                                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.company'))
-                                                    ->placeholder('—'),
-                                            ]),
+                                        TextEntry::make('operation.name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
+                                        TextEntry::make('workCenter.name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
+                                        TextEntry::make('product.name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
+                                        TextEntry::make('quantity_remaining')
+                                            ->hiddenLabel()
+                                            ->numeric(decimalPlaces: 4)
+                                            ->placeholder('—'),
+                                        TextEntry::make('started_at')
+                                            ->hiddenLabel()
+                                            ->dateTime()
+                                            ->placeholder('—'),
+                                        TextEntry::make('finished_at')
+                                            ->hiddenLabel()
+                                            ->dateTime()
+                                            ->placeholder('—'),
+                                        TextEntry::make('expected_duration')
+                                            ->hiddenLabel()
+                                            ->formatStateUsing(fn (mixed $state): string => format_float_time((float) ($state ?: 0), 'minutes')),
+                                        TextEntry::make('duration')
+                                            ->hiddenLabel()
+                                            ->formatStateUsing(fn (mixed $state): string => format_float_time((float) ($state ?: 0), 'minutes')),
+                                        TextEntry::make('state')
+                                            ->hiddenLabel()
+                                            ->badge(),
+                                    ]),
+                            ]),
+                        Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.by-products.title'))
+                            ->hidden(true)
+                            ->schema([
+                                RepeatableEntry::make('moveByproducts')
+                                    ->hiddenLabel()
+                                    ->contained(false)
+                                    ->table([
+                                        InfolistTableColumn::make('product.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.columns.product')),
+                                        InfolistTableColumn::make('destinationLocation.full_name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.columns.to')),
+                                        InfolistTableColumn::make('product_uom_qty')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.columns.to-produce')),
+                                        InfolistTableColumn::make('uom.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.columns.uom')),
+                                    ])
+                                    ->schema([
+                                        TextEntry::make('product.name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
+                                        TextEntry::make('destinationLocation.full_name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
+                                        TextEntry::make('product_uom_qty')
+                                            ->hiddenLabel()
+                                            ->numeric(decimalPlaces: 4),
+                                        TextEntry::make('uom.name')
+                                            ->hiddenLabel()
+                                            ->placeholder('—'),
+                                    ]),
+                            ]),
+                        Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.title'))
+                            ->schema([
+                                Grid::make(2)
+                                    ->schema([
+                                        TextEntry::make('operationType.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.operation-type'))
+                                            ->formatStateUsing(fn (mixed $state, Order $record): string => static::getOperationTypeLabel($record->operationType)),
+                                        TextEntry::make('sourceLocation.full_name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.source'))
+                                            ->placeholder('—'),
+                                        TextEntry::make('finalLocation.full_name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.finished-products-location'))
+                                            ->placeholder('—'),
+                                        TextEntry::make('company.name')
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.company'))
+                                            ->placeholder('—'),
                                     ]),
                             ]),
                     ]),
