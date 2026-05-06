@@ -336,6 +336,7 @@ class ManufacturingManager
 
         $movesToFinish->each->update(['is_picked' => true]);
 
+
         $movesToFinish = InventoryFacade::doneMoves($movesToFinish, cancelBackOrder: $cancelBackOrder);
 
         // $consumeMoveLines = $movesToDo->flatMap->lines;

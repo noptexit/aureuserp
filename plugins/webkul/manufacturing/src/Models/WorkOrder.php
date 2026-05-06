@@ -111,7 +111,16 @@ class WorkOrder extends Model
 
     public function rawMaterialMoves(): HasMany
     {
-        return $this->hasMany(Move::class, 'work_order_id');
+        return $this->hasMany(Move::class, 'work_order_id')
+            ->whereNotNull('raw_material_order_id')
+            ->whereNull('order_id');
+    }
+
+    public function finishedMoves(): HasMany
+    {
+        return $this->hasMany(Move::class, 'work_order_id')
+            ->whereNull('raw_material_order_id')
+            ->whereNotNull('order_id');
     }
 
     public function blockedByWorkOrders(): BelongsToMany

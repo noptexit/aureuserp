@@ -71,6 +71,7 @@ class DoneAction extends Action
             ->hidden(fn () => ! in_array($this->getRecord()->state, [
                 ManufacturingOrderState::CONFIRMED,
                 ManufacturingOrderState::PROGRESS,
+                ManufacturingOrderState::TO_CLOSE,
             ]));
     }
 
