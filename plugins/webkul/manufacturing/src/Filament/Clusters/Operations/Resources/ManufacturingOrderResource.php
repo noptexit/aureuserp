@@ -761,7 +761,7 @@ class ManufacturingOrderResource extends Resource
                 ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                 ->prefix(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT ? '/' : null)
                 ->required()
-                ->columnSpan(2),
+                ->columnSpan(fn (?Order $record): int => $record && $record->state !== ManufacturingOrderState::DRAFT ? 2 : 3),
             Select::make('uom_id')
                 ->hiddenLabel()
                 ->native(false)
@@ -839,7 +839,8 @@ class ManufacturingOrderResource extends Resource
                         ->pluck('name', 'id')
                         ->all();
                 })
-                ->placeholder('UoM'),
+                ->placeholder('UoM')
+                ->columnSpan(1),
         ])
             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.fields.quantity'))
             ->columns(4);
