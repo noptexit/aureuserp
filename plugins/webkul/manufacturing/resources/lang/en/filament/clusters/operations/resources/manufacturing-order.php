@@ -46,6 +46,7 @@ return [
                     'work-center'        => 'Work Center',
                     'product'            => 'Product',
                     'quantity-remaining' => 'Quantity Remaining',
+                    'quantity-produced'  => 'Quantity Produced',
                     'start'              => 'Start',
                     'end'                => 'End',
                     'expected-duration'  => 'Expected Duration',

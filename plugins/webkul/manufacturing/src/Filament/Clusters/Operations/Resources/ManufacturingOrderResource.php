@@ -825,7 +825,11 @@ class ManufacturingOrderResource extends Resource
                 RepeaterTableColumn::make('rendered_display_product')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.product')),
                 RepeaterTableColumn::make('rendered_display_quantity_remaining')
-                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.quantity-remaining')),
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.quantity-remaining'))
+                    ->visible(fn () => $record && ! in_array($record->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])),
+                RepeaterTableColumn::make('rendered_display_quantity_produced')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.quantity-produced'))
+                    ->visible(fn () => $record && in_array($record->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])),
                 RepeaterTableColumn::make('started_at')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.start'))
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -918,6 +922,9 @@ class ManufacturingOrderResource extends Resource
 
                         return number_format((float) ($get('quantity_remaining') ?: 0), 4);
                     }),
+                Placeholder::make('rendered_display_quantity_produced')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => number_format((float) ($get('quantity_produced') ?: 0), 4)),
                 DateTimePicker::make('started_at')
                     ->hiddenLabel()
                     ->native(false)
