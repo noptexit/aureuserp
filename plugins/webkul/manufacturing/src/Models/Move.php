@@ -136,7 +136,7 @@ class Move extends BaseMove
         if ($this->raw_material_order_id || $this->order_id) {
             $order = $this->rawMaterialOrder ?? $this->order;
 
-            return $this->product_uom_qty / (($order->quantity_producing - $order->quantity_produced) ?: 1);
+            return $this->product_uom_qty / (($order->quantity - $order->quantity_produced) ?: 1);
         }
 
         return 1.0;

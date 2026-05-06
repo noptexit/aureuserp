@@ -720,6 +720,21 @@ class ManufacturingOrderResource extends Resource
                 ->minValue(0)
                 ->step('0.0001')
                 ->default(0)
+                ->live(debounce: 300)
+                ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                    $billOfMaterial = BillOfMaterial::query()->withTrashed()->find($get('bill_of_material_id'));
+                    $product = Product::query()->withTrashed()->find($get('product_id'));
+
+                    static::applyQuantityProducingDefaults(
+                        $set,
+                        $billOfMaterial,
+                        $product,
+                        (float) ($state ?: 0),
+                        $get('uom_id'),
+                        $get('rawMaterialMoves') ?? [],
+                        $get('workOrders') ?? [],
+                    );
+                })
                 ->required(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                 ->hidden(fn (?Order $record) => ! $record || $record->state === ManufacturingOrderState::DRAFT)
                 ->dehydrated(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
@@ -763,40 +778,57 @@ class ManufacturingOrderResource extends Resource
                     }
 
                     $uomId = $state ? (int) $state : null;
+                    $product = Product::query()->withTrashed()->find($get('product_id'));
+                    $stateValue = $get('state');
+                    $isDraft = $stateValue === null || $stateValue === ManufacturingOrderState::DRAFT->value;
 
-                    $effectiveQuantity = static::convertOrderQuantityToBillOfMaterialUom(
-                        $billOfMaterial,
-                        (float) ($get('quantity') ?: 1),
-                        $uomId,
-                    );
+                    if ($isDraft) {
+                        $effectiveQuantity = static::convertOrderQuantityToBillOfMaterialUom(
+                            $billOfMaterial,
+                            (float) ($get('quantity') ?: 1),
+                            $uomId,
+                        );
 
-                    $quantityMultiplier = $billOfMaterial->getQuantityMultiplier($effectiveQuantity);
+                        $quantityMultiplier = $billOfMaterial->getQuantityMultiplier($effectiveQuantity);
 
-                    $bomLinesById = $billOfMaterial->lines()->get()->keyBy('id');
+                        $bomLinesById = $billOfMaterial->lines()->get()->keyBy('id');
 
-                    $updatedMoves = [];
+                        $updatedMoves = [];
 
-                    foreach (($get('rawMaterialMoves') ?? []) as $key => $move) {
-                        $bomLineId = $move['bom_line_id'] ?? null;
+                        foreach (($get('rawMaterialMoves') ?? []) as $key => $move) {
+                            $bomLineId = $move['bom_line_id'] ?? null;
 
-                        if ($bomLineId && $bomLinesById->has($bomLineId)) {
-                            $move['product_uom_qty'] = round((float) $bomLinesById->get($bomLineId)->quantity * $quantityMultiplier, 4);
+                            if ($bomLineId && $bomLinesById->has($bomLineId)) {
+                                $move['product_uom_qty'] = round((float) $bomLinesById->get($bomLineId)->quantity * $quantityMultiplier, 4);
+                            }
+
+                            $updatedMoves[$key] = $move;
                         }
 
-                        $updatedMoves[$key] = $move;
+                        $set('rawMaterialMoves', $updatedMoves);
+
+                        $updatedWorkOrders = [];
+
+                        foreach (($get('workOrders') ?? []) as $key => $workOrder) {
+                            $workOrder['quantity_remaining'] = round($effectiveQuantity, 4);
+
+                            $updatedWorkOrders[$key] = $workOrder;
+                        }
+
+                        $set('workOrders', $updatedWorkOrders);
+
+                        return;
                     }
 
-                    $set('rawMaterialMoves', $updatedMoves);
-
-                    $updatedWorkOrders = [];
-
-                    foreach (($get('workOrders') ?? []) as $key => $workOrder) {
-                        $workOrder['quantity_remaining'] = round($effectiveQuantity, 4);
-
-                        $updatedWorkOrders[$key] = $workOrder;
-                    }
-
-                    $set('workOrders', $updatedWorkOrders);
+                    static::applyQuantityProducingDefaults(
+                        $set,
+                        $billOfMaterial,
+                        $product,
+                        (float) ($get('quantity_producing') ?: 0),
+                        $uomId,
+                        $get('rawMaterialMoves') ?? [],
+                        $get('workOrders') ?? [],
+                    );
                 })
                 ->options(function (Get $get): array {
                     $product = Product::query()->withTrashed()->find($get('product_id'));
@@ -1247,6 +1279,60 @@ class ManufacturingOrderResource extends Resource
             ->where('name', 'Units')
             ->value('id')
             ?? UOM::query()->value('id');
+    }
+
+    protected static function applyQuantityProducingDefaults(
+        Set $set,
+        ?BillOfMaterial $billOfMaterial,
+        ?Product $product,
+        float $quantityProducing,
+        ?int $uomId,
+        array $rawMaterialMoves,
+        array $workOrders,
+    ): void {
+        if (! $billOfMaterial) {
+            return;
+        }
+
+        $effectiveQuantity = static::convertOrderQuantityToBillOfMaterialUom(
+            $billOfMaterial,
+            $quantityProducing,
+            $uomId,
+        );
+
+        $quantityMultiplier = $billOfMaterial->getQuantityMultiplier($effectiveQuantity);
+        $bomLinesById = $billOfMaterial->lines()->get()->keyBy('id');
+        $operationsById = $billOfMaterial->operations()->with(['workCenter'])->get()->keyBy('id');
+
+        $updatedMoves = [];
+
+        foreach ($rawMaterialMoves as $key => $move) {
+            $bomLineId = $move['bom_line_id'] ?? null;
+
+            if ($bomLineId && $bomLinesById->has($bomLineId)) {
+                $move['quantity'] = round((float) $bomLinesById->get($bomLineId)->quantity * $quantityMultiplier, 4);
+            }
+
+            $updatedMoves[$key] = $move;
+        }
+
+        $set('rawMaterialMoves', $updatedMoves);
+
+        $updatedWorkOrders = [];
+
+        foreach ($workOrders as $key => $workOrder) {
+            $operationId = $workOrder['operation_id'] ?? null;
+
+            if ($operationId && $operationsById->has($operationId)) {
+                $operation = $operationsById->get($operationId);
+                $workOrder['expected_duration'] = format_float_time($operation->getExpectedDuration($product, $effectiveQuantity), 'minutes');
+            }
+
+            $workOrder['quantity_remaining'] = round($effectiveQuantity, 4);
+            $updatedWorkOrders[$key] = $workOrder;
+        }
+
+        $set('workOrders', $updatedWorkOrders);
     }
 
     protected static function convertOrderQuantityToBillOfMaterialUom(BillOfMaterial $billOfMaterial, float $quantity, ?int $uomId): float

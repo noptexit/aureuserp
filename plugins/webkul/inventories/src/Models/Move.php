@@ -505,8 +505,8 @@ class Move extends Model
                 }
 
                 if (
-                    float_compare($ml->qty, $qtyMlDec, precisionRounding: $ml->uom->rounding) === 0 &&
-                    ! in_array($ml->state, [MoveState::DONE, MoveState::CANCELED])
+                    float_compare($ml->qty, $qtyMlDec, precisionRounding: $ml->uom->rounding) === 0
+                    && ! in_array($ml->state, [MoveState::DONE, MoveState::CANCELED])
                 ) {
                     $toDelete->push($ml->id);
                 } else {

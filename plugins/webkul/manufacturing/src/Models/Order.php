@@ -244,10 +244,12 @@ class Order extends Model
 
     public function getQuantityProducedAttribute()
     {
-        $doneMoves = $this->finishedMoves->filter(
-            fn ($move) => $move->state !== MoveState::CANCELED
-                && $move->product_id === $this->product_id
-        );
+        $doneMoves = $this->finishedMoves()
+            ->get()
+            ->filter(
+                fn ($move) => $move->state !== MoveState::CANCELED
+                    && $move->product_id === $this->product_id
+            );
 
         return $doneMoves
             ->filter(fn ($move) => $move->is_picked)
@@ -906,9 +908,9 @@ class Order extends Model
                     && ! in_array($operation->state, [OperationState::DONE, OperationState::CANCELED])
             );
 
-        $rawMoves = $this->rawMaterialMoves->filter(fn ($move) => ! $isWaiting || $move->product->tracking === ProductTracking::QTY);
+        $rawMoves = $this->rawMaterialMoves()->get()->filter(fn ($move) => ! $isWaiting || $move->product->tracking === ProductTracking::QTY);
 
-        $finishedMoves = $this->finishedMoves->filter(fn ($move) => $move->product_id !== $this->product_id);
+        $finishedMoves = $this->finishedMoves()->get()->filter(fn ($move) => $move->product_id !== $this->product_id);
         
         foreach ($rawMoves->merge($finishedMoves) as $move) {
             if ($move->manual_consumption && $move->is_picked) {
