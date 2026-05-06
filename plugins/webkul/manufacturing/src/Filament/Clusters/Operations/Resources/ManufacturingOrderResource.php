@@ -3,6 +3,7 @@
 namespace Webkul\Manufacturing\Filament\Clusters\Operations\Resources;
 
 use BackedEnum;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -31,6 +32,7 @@ use Filament\Support\Enums\Size;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group as TableGroup;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -374,6 +376,19 @@ class ManufacturingOrderResource extends Resource
                 TextColumn::make('state')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.columns.state'))
                     ->badge(),
+            ])
+            ->groups([
+                TableGroup::make('state')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.groups.state')),
+                TableGroup::make('product.name')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.groups.product')),
+                TableGroup::make('billOfMaterial.reference')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.groups.bill-of-material')),
+                TableGroup::make('assignedUser.name')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.groups.responsible')),
+                TableGroup::make('deadline_at')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.groups.scheduled-date'))
+                    ->date(),
             ])
             ->recordTitleAttribute('name')
             ->actions([
@@ -1084,8 +1099,27 @@ class ManufacturingOrderResource extends Resource
                     ->content(fn (Get $get): string => number_format((float) ($get('quantity_produced') ?: 0), 4)),
                 DateTimePicker::make('started_at')
                     ->hiddenLabel()
+                    ->live()
                     ->native(false)
                     ->seconds(false)
+                    ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                        if (blank($state)) {
+                            return;
+                        }
+
+                        $expectedDuration = (float) parse_float_time((string) ($get('expected_duration') ?: '00:00'), 'minutes');
+                        $finishedAt = Carbon::parse($state)
+                            ->addSeconds((int) round($expectedDuration * 60));
+
+                        if ($finishedAt->second > 0) {
+                            $finishedAt->addMinute()->second(0);
+                        }
+
+                        $set(
+                            'finished_at',
+                            $finishedAt->format('Y-m-d H:i:s')
+                        );
+                    })
                     ->disabled(fn ($record): bool => $record && ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 DateTimePicker::make('finished_at')
                     ->hiddenLabel()

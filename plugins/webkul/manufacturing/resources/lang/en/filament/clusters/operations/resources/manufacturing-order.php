@@ -87,6 +87,13 @@ return [
             'responsible'      => 'Responsible',
             'state'            => 'State',
         ],
+        'groups' => [
+            'state'            => 'State',
+            'product'          => 'Product',
+            'bill-of-material' => 'Bill of Material',
+            'responsible'      => 'Responsible',
+            'scheduled-date'   => 'Scheduled Date',
+        ],
     ],
 
     'infolist' => [
@@ -152,13 +159,6 @@ return [
     ],
 
     'pages' => [
-        'list' => [
-            'header-actions' => [
-                'create' => [
-                    'label' => 'New Manufacturing Order',
-                ],
-            ],
-        ],
         'shared' => [
             'header-actions' => [
                 'confirm' => [
@@ -167,6 +167,7 @@ return [
                         'title' => 'Manufacturing order confirmed',
                     ],
                 ],
+
                 'cancel' => [
                     'label'        => 'Cancel',
                     'notification' => [
