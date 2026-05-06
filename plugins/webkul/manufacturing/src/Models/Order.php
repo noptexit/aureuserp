@@ -230,16 +230,28 @@ class Order extends Model
             $this->rawMaterialMoves->flatMap->moveOrigins->pluck('operation')->filter()->unique('id')
         );
 
-        [$operations, $deliveryCount] = $this->computeInventoryOperations();
+        [$operations] = $this->computeInventoryOperations();
 
         return $operations;
     }
 
     public function getDeliveryCountAttribute()
     {
-        [$operations, $deliveryCount] = $this->computeInventoryOperations();
+        [, $deliveryCount] = $this->computeInventoryOperations();
 
         return $deliveryCount;
+    }
+
+    public function getQuantityProducedAttribute()
+    {
+        $doneMoves = $this->finishedMoves->filter(
+            fn ($move) => $move->state !== MoveState::CANCELED
+                && $move->product_id === $this->product_id
+        );
+
+        return $doneMoves
+            ->filter(fn ($move) => $move->is_picked)
+            ->sum('quantity');
     }
 
     public function getMoveByproductsAttribute()
