@@ -265,6 +265,7 @@ class WorkCenterResource extends Resource
 
                                         TextInput::make('oee_target')
                                             ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.information.fields.oee-target'))
+                                            ->hidden()
                                             ->numeric()
                                             ->default(90)
                                             ->minValue(0)
