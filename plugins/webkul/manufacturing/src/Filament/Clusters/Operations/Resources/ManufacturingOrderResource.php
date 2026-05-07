@@ -849,15 +849,19 @@ class ManufacturingOrderResource extends Resource
                         $get('workOrders') ?? [],
                     );
                 })
-                ->options(function (Get $get): array {
-                    $product = Product::query()->withTrashed()->find($get('product_id'));
-                    $categoryId = $product?->uom?->category_id;
+                ->relationship(
+                    'uom',
+                    'name',
+                    function (Builder $query, Get $get): Builder {
+                        $product = Product::query()->withTrashed()->find($get('product_id'));
+                        $categoryId = $product?->uom?->category_id;
 
-                    return UOM::query()
-                        ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
-                        ->pluck('name', 'id')
-                        ->all();
-                })
+                        return $query
+                            ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                            ->orderBy('name');
+                    },
+                )
+                ->default(fn (Get $get): ?int => Product::query()->withTrashed()->find($get('product_id'))?->uom_id)
                 ->placeholder('UoM')
                 ->columnSpan(1),
         ])
@@ -908,12 +912,14 @@ class ManufacturingOrderResource extends Resource
                 Hidden::make('display_forecast'),
                 Select::make('product_id')
                     ->hiddenLabel()
-                    ->options(fn (): array => Product::query()
-                        ->withTrashed()
-                        ->where('type', ProductType::GOODS)
-                        ->whereNull('is_configurable')
-                        ->pluck('name', 'id')
-                        ->all())
+                    ->relationship(
+                        'product',
+                        'name',
+                        fn (Builder $query) => $query
+                            ->withTrashed()
+                            ->where('type', ProductType::GOODS)
+                            ->whereNull('is_configurable'),
+                    )
                     ->searchable()
                     ->preload()
                     ->native(false)
@@ -959,17 +965,19 @@ class ManufacturingOrderResource extends Resource
                 // ->suffixAction(fn (Move $record) => static::getMoveLinesAction($record)),
                 Select::make('uom_id')
                     ->hiddenLabel()
-                    ->default(fn (Get $get): mixed => $get('../../uom_id'))
-                    ->options(function (Get $get): array {
-                        $product = Product::query()->withTrashed()->find($get('product_id'));
+                    ->default(fn (Get $get): ?int => Product::query()->withTrashed()->find($get('product_id'))?->uom_id)
+                    ->relationship(
+                        'uom',
+                        'name',
+                        function (Builder $query, Get $get): Builder {
+                            $product = Product::query()->withTrashed()->find($get('product_id'));
+                            $categoryId = $product?->uom?->category_id;
 
-                        $categoryId = $product?->uom?->category_id;
-
-                        return UOM::query()
-                            ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
-                            ->pluck('name', 'id')
-                            ->all();
-                    })
+                            return $query
+                                ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                                ->orderBy('name');
+                        },
+                    )
                     ->searchable()
                     ->preload()
                     ->native(false)
@@ -1037,7 +1045,11 @@ class ManufacturingOrderResource extends Resource
                     }),
                 Select::make('operation_id')
                     ->hiddenLabel()
-                    ->options(fn (): array => Operation::query()->withTrashed()->pluck('name', 'id')->all())
+                    ->relationship(
+                        'operation',
+                        'name',
+                        fn (Builder $query) => $query->withTrashed(),
+                    )
                     ->searchable()
                     ->preload()
                     ->native(false)
@@ -1055,7 +1067,11 @@ class ManufacturingOrderResource extends Resource
                     ->disabled(fn ($record): bool => $record && ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 Select::make('work_center_id')
                     ->hiddenLabel()
-                    ->options(fn (): array => WorkCenter::query()->withTrashed()->pluck('name', 'id')->all())
+                    ->relationship(
+                        'workCenter',
+                        'name',
+                        fn (Builder $query) => $query->withTrashed(),
+                    )
                     ->searchable()
                     ->preload()
                     ->native(false)

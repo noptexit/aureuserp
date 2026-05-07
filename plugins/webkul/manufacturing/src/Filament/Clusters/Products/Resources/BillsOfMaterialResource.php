@@ -69,7 +69,6 @@ use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTab
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\Company;
-use Webkul\Support\Models\UOM;
 
 class BillsOfMaterialResource extends Resource
 {
@@ -167,8 +166,19 @@ class BillsOfMaterialResource extends Resource
                                         ->columnSpan(2),
                                     Select::make('uom_id')
                                         ->placeholder(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.general.fields.uom'))
-                                        ->options(fn (): array => UOM::query()->orderBy('name')->pluck('name', 'id')->all())
-                                        ->default(UOM::first()?->id)
+                                        ->relationship(
+                                            'uom',
+                                            'name',
+                                            function (Builder $query, Get $get): Builder {
+                                                $product = Product::query()->withTrashed()->find($get('product_id'));
+                                                $categoryId = $product?->uom?->category_id;
+
+                                                return $query
+                                                    ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                                                    ->orderBy('name');
+                                            },
+                                        )
+                                        ->default(fn (Get $get): ?int => Product::query()->withTrashed()->find($get('product_id'))?->uom_id)
                                         ->searchable()
                                         ->preload()
                                         ->required(),
@@ -775,7 +785,19 @@ class BillsOfMaterialResource extends Resource
                     ->step('0.0001')
                     ->required(),
                 Select::make('uom_id')
-                    ->options(fn (): array => UOM::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->relationship(
+                        'uom',
+                        'name',
+                        function (Builder $query, Get $get): Builder {
+                            $product = Product::query()->withTrashed()->find($get('product_id'));
+                            $categoryId = $product?->uom?->category_id;
+
+                            return $query
+                                ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                                ->orderBy('name');
+                        },
+                    )
+                    ->default(fn (Get $get): ?int => Product::query()->withTrashed()->find($get('product_id'))?->uom_id)
                     ->searchable()
                     ->preload()
                     ->required(),
@@ -1063,7 +1085,19 @@ class BillsOfMaterialResource extends Resource
                     ->step('0.0001')
                     ->required(),
                 Select::make('uom_id')
-                    ->options(fn (): array => UOM::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->relationship(
+                        'uom',
+                        'name',
+                        function (Builder $query, Get $get): Builder {
+                            $product = Product::query()->withTrashed()->find($get('product_id'));
+                            $categoryId = $product?->uom?->category_id;
+
+                            return $query
+                                ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                                ->orderBy('name');
+                        },
+                    )
+                    ->default(fn (Get $get): ?int => Product::query()->withTrashed()->find($get('product_id'))?->uom_id)
                     ->searchable()
                     ->preload()
                     ->required(),
