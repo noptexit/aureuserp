@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('manufacturing_work_orders', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->integer('sort')->nullable();
             $table->string('barcode')->nullable()->index();
             $table->string('production_availability')->nullable();
             $table->string('state')->default('pending')->index();

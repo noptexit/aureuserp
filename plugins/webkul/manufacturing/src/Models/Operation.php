@@ -9,15 +9,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
+use Spatie\EloquentSortable\Sortable;
+use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Manufacturing\Database\Factories\OperationFactory;
 use Webkul\Manufacturing\Enums\OperationTimeMode;
 use Webkul\Manufacturing\Enums\OperationWorksheetType;
 use Webkul\Product\Models\ProductAttributeValue;
 use Webkul\Security\Models\User;
 
-class Operation extends Model
+class Operation extends Model implements Sortable
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, SortableTrait;
 
     protected $table = 'manufacturing_operations';
 
@@ -41,6 +43,11 @@ class Operation extends Model
         'worksheet_type'    => OperationWorksheetType::class,
         'time_mode'         => OperationTimeMode::class,
         'manual_cycle_time' => 'decimal:4',
+    ];
+
+    public $sortable = [
+        'order_column_name'  => 'sort',
+        'sort_when_creating' => true,
     ];
 
     public function getModelTitle(): string

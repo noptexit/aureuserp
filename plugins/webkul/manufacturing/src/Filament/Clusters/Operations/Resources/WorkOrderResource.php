@@ -266,7 +266,11 @@ class WorkOrderResource extends Resource
     {
         return $table
             ->reorderableColumns()
-            ->defaultSort('id', 'desc')
+            ->modifyQueryUsing(fn (Builder $query) => $query
+                ->orderBy('sort')
+                ->orderBy('calendar_leave_id')
+                ->orderBy('started_at')
+                ->orderBy('id'))
             ->columns([
                 TextColumn::make('operation.name')
                     ->label(__('manufacturing::filament/clusters/operations/resources/work-order.table.columns.operation'))

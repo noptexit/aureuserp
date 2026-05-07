@@ -752,21 +752,6 @@ class BillsOfMaterialResource extends Resource
                         $set('uom_id', $product->uom_id);
                         $set('company_id', $get('../../company_id'));
                     }),
-                Select::make('attributeValues')
-                    ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.components.columns.apply-on-variants'))
-                    ->relationship(
-                        name: 'attributeValues',
-                        titleAttribute: 'id',
-                        modifyQueryUsing: function (Builder $query, Get $get) {
-                            $bomProductId = $get('../../product_id');
-
-                            return $query->where('product_id', $bomProductId);
-                        },
-                    )
-                    ->getOptionLabelFromRecordUsing(fn ($record): string => $record->attribute?->name && $record->attributeOption?->name ? "{$record->attribute->name}: {$record->attributeOption->name}" : ($record->attributeOption?->name ?? (string) $record->id))
-                    ->searchable()
-                    ->preload()
-                    ->multiple(),
                 Select::make('operation_id')
                     ->relationship('operation', 'name')
                     ->native(false)
@@ -801,6 +786,21 @@ class BillsOfMaterialResource extends Resource
                     ->searchable()
                     ->preload()
                     ->required(),
+                Select::make('attributeValues')
+                    ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.components.columns.apply-on-variants'))
+                    ->relationship(
+                        name: 'attributeValues',
+                        titleAttribute: 'id',
+                        modifyQueryUsing: function (Builder $query, Get $get) {
+                            $bomProductId = $get('../../product_id');
+
+                            return $query->where('product_id', $bomProductId);
+                        },
+                    )
+                    ->getOptionLabelFromRecordUsing(fn ($record): string => $record->attribute?->name && $record->attributeOption?->name ? "{$record->attribute->name}: {$record->attributeOption->name}" : ($record->attributeOption?->name ?? (string) $record->id))
+                    ->searchable()
+                    ->preload()
+                    ->multiple(),
             ]);
     }
 

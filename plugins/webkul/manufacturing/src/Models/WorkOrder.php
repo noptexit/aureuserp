@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
+use Spatie\EloquentSortable\Sortable;
+use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Manufacturing\Database\Factories\WorkOrderFactory;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
@@ -19,9 +21,9 @@ use Webkul\Security\Models\User;
 use Webkul\Support\Models\CalendarLeave;
 use Webkul\Support\Models\UOM;
 
-class WorkOrder extends Model
+class WorkOrder extends Model implements Sortable
 {
-    use HasFactory;
+    use HasFactory, SortableTrait;
 
     protected $table = 'manufacturing_work_orders';
 
@@ -58,6 +60,11 @@ class WorkOrder extends Model
         'duration_per_unit'       => 'decimal:4',
         'duration_percent'        => 'integer',
         'costs_per_hour'          => 'decimal:4',
+    ];
+
+    public $sortable = [
+        'order_column_name'  => 'sort',
+        'sort_when_creating' => true,
     ];
 
     protected array $context = [];
