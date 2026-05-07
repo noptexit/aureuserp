@@ -1728,7 +1728,7 @@ class InventoryManager
 
         $partner = $partners->count() === 1 ? $partners->first() : null;
 
-        $vals = [
+        $values = [
             'origin'               => $origin,
             'company_id'           => $moves->pluck('company_id')->first(),
             'user_id'              => null,
@@ -1741,10 +1741,14 @@ class InventoryManager
         $destinationLocationIds = $moves->pluck('destination_location_id')->filter()->unique();
 
         if ($destinationLocationIds->isNotEmpty()) {
-            $vals['destination_location_id'] = $destinationLocationIds->first();
+            $values['destination_location_id'] = $destinationLocationIds->first();
         }
 
-        return $vals;
+        if ($saleOrderId = $moves->first()?->procurementGroup?->sale_order_id) {
+            $values['sale_order_id'] = $saleOrderId;
+        }
+
+        return $values;
     }
 
     public function searchOperationForAssignation(Move $move)

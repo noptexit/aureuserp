@@ -242,6 +242,25 @@ class Order extends Model
         return $deliveryCount;
     }
 
+    public function getConsumptionEfficiencyAttribute(): ?float
+    {
+        $bomLines = $this->billOfMaterial?->lines ?? collect();
+
+        if ($bomLines->isEmpty()) {
+            return null;
+        }
+
+        $expected = $bomLines->sum(fn ($line) => (float) $line->quantity * (float) $this->quantity);
+
+        $actual = $this->rawMaterialMoves->sum(fn ($move) => (float) $move->quantity);
+
+        if ($actual <= 0) {
+            return null;
+        }
+
+        return round(($expected / $actual) * 100, 2);
+    }
+
     public function getQuantityProducedAttribute()
     {
         $doneMoves = $this->finishedMoves()
@@ -818,7 +837,7 @@ class Order extends Model
                 $previousWorkOrder = $workOrder;
 
                 $bomId = $workOrder->operation?->bill_of_material_id;
-                
+
                 $lastWorkOrderPerBom[$bomId] = $workOrder;
             }
         }
@@ -917,7 +936,7 @@ class Order extends Model
         $rawMoves = $this->rawMaterialMoves()->get()->filter(fn ($move) => ! $isWaiting || $move->product->tracking === ProductTracking::QTY);
 
         $finishedMoves = $this->finishedMoves()->get()->filter(fn ($move) => $move->product_id !== $this->product_id);
-        
+
         foreach ($rawMoves->merge($finishedMoves) as $move) {
             if ($move->manual_consumption && $move->is_picked) {
                 continue;

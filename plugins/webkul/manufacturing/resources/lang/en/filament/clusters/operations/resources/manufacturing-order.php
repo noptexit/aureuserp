@@ -79,13 +79,14 @@ return [
 
     'table' => [
         'columns' => [
-            'reference'        => 'Reference',
-            'product'          => 'Product',
-            'bill-of-material' => 'Bill of Material',
-            'quantity'         => 'Quantity',
-            'scheduled-date'   => 'Scheduled Date',
-            'responsible'      => 'Responsible',
-            'state'            => 'State',
+            'reference'                => 'Reference',
+            'product'                  => 'Product',
+            'bill-of-material'         => 'Bill of Material',
+            'quantity'                 => 'Quantity',
+            'scheduled-date'           => 'Scheduled Date',
+            'responsible'              => 'Responsible',
+            'state'                    => 'State',
+            'consumption-efficiency'   => 'Consumption Efficiency',
         ],
         'groups' => [
             'state'            => 'State',
@@ -101,13 +102,14 @@ return [
             'general' => [
                 'title'   => 'General',
                 'entries' => [
-                    'product'          => 'Product',
-                    'scheduled-date'   => 'Scheduled Date',
-                    'responsible'      => 'Responsible',
-                    'quantity'         => 'Quantity',
-                    'uom'              => 'UoM',
-                    'bill-of-material' => 'Bill of Material',
-                    'operation-type'   => 'Operation Type',
+                    'product'                  => 'Product',
+                    'scheduled-date'           => 'Scheduled Date',
+                    'responsible'              => 'Responsible',
+                    'quantity'                 => 'Quantity',
+                    'uom'                      => 'UoM',
+                    'bill-of-material'         => 'Bill of Material',
+                    'operation-type'           => 'Operation Type',
+                    'consumption-efficiency'   => 'Consumption Efficiency',
                 ],
             ],
         ],

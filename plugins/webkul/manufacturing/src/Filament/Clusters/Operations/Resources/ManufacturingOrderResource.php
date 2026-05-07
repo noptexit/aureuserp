@@ -374,6 +374,10 @@ class ManufacturingOrderResource extends Resource
                 TextColumn::make('assignedUser.name')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.columns.responsible'))
                     ->placeholder('—'),
+                TextColumn::make('consumption_efficiency')
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.columns.consumption-efficiency'))
+                    ->state(fn (Order $record): string => $record->consumption_efficiency !== null ? $record->consumption_efficiency.'%' : '—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('state')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.table.columns.state'))
                     ->badge(),
@@ -453,6 +457,9 @@ class ManufacturingOrderResource extends Resource
                                 TextEntry::make('bill_of_material_id')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.sections.general.entries.bill-of-material'))
                                     ->state(fn (Order $record): string => static::getBillOfMaterialLabel($record->billOfMaterial)),
+                                TextEntry::make('consumption_efficiency')
+                                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.sections.general.entries.consumption-efficiency'))
+                                    ->state(fn (Order $record): string => $record->consumption_efficiency !== null ? $record->consumption_efficiency.'%' : '—'),
                             ]),
                         Group::make()
                             ->columns(1)
