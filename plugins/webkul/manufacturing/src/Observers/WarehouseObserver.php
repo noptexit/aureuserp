@@ -2,6 +2,7 @@
 
 namespace Webkul\Manufacturing\Observers;
 
+use Webkul\PluginManager\Package;
 use Webkul\Inventory\Models\Warehouse as InventoryWarehouse;
 use Webkul\Manufacturing\Models\Warehouse as ManufacturingWarehouse;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
@@ -10,6 +11,10 @@ class WarehouseObserver implements ShouldHandleEventsAfterCommit
 {
     public function created(InventoryWarehouse $warehouse): void
     {
+        if (! Package::isPluginInstalled('manufacturing')) {
+            return;
+        }
+
         $warehouse = ManufacturingWarehouse::find($warehouse->id);
 
         $warehouse->handleManufacturingWarehouseCreation();

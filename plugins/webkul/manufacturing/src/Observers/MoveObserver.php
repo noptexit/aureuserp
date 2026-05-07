@@ -2,6 +2,7 @@
 
 namespace Webkul\Manufacturing\Observers;
 
+use Webkul\PluginManager\Package;
 use Webkul\Inventory\Models\Move as InventoryMove;
 use Webkul\Manufacturing\Models\Move as ManufacturingMove;
 use Webkul\Manufacturing\Enums\WorkOrderProductionAvailability;
@@ -10,6 +11,10 @@ class MoveObserver
 {
     public function updated(InventoryMove $move): void
     {
+        if (! Package::isPluginInstalled('manufacturing')) {
+            return;
+        }
+
         $move = ManufacturingMove::find($move->id);
 
         if (! $move->raw_material_order_id) {
