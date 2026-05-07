@@ -186,6 +186,11 @@ class Move extends Model
         return $this->belongsTo(self::class);
     }
 
+    public function returnedMoves(): HasMany
+    {
+        return $this->hasMany(self::class, 'origin_returned_move_id');
+    }
+
     public function restrictPartner(): BelongsTo
     {
         return $this->belongsTo(Partner::class);
