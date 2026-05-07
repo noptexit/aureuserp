@@ -191,6 +191,7 @@ class BillsOfMaterialResource extends Resource
                                     ->placeholder(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.general.fields.reference-placeholder')),
                                 Radio::make('type')
                                     ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.general.fields.type'))
+                                    ->hidden()
                                     ->options(BillOfMaterialType::class)
                                     ->default(BillOfMaterialType::NORMAL->value)
                                     ->live()

@@ -242,18 +242,25 @@ class BillOfMaterial extends Model
             $authUser = Auth::user();
 
             $billOfMaterial->creator_id ??= $authUser?->id;
+
             $billOfMaterial->company_id ??= $authUser?->default_company_id;
+
             $billOfMaterial->type ??= BillOfMaterialType::NORMAL;
+
             $billOfMaterial->ready_to_produce ??= BillOfMaterialReadyToProduce::ALL_AVAILABLE;
+
             $billOfMaterial->consumption ??= BillOfMaterialConsumption::WARNING;
+
             $billOfMaterial->produce_delay ??= 0;
+
             $billOfMaterial->days_to_prepare_mo ??= 0;
         });
     }
 
     public static function bomFindFilters($products, $operationType = null, $companyId = null, $bomType = false)
     {
-        $productIds     = $products->pluck('id')->all();
+        $productIds = $products->pluck('id')->all();
+        
         $productTmplIds = $products->pluck('product_tmpl_id')->unique()->all();
 
         $query = static::query()
