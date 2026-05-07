@@ -262,6 +262,11 @@ class Order extends Model
             ->filter(fn ($move) => $move->product_id !== $this->product_id);
     }
 
+    public function getDocumentIterateKey(Move $move)
+    {
+        return $move->moveOrigins ? 'moveOrigins' : false;
+    }
+
     public function shouldPostponeDateFinished($dateFinished): bool
     {
         return $dateFinished->equalTo($this->started_at);

@@ -4,7 +4,9 @@ namespace Webkul\Manufacturing;
 
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\ProductTracking;
+use Webkul\Inventory\Enums\OperationState;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
+use Webkul\Manufacturing\Enums\BillOfMaterialConsumption;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Manufacturing\Models\BillOfMaterial;
@@ -139,7 +141,45 @@ class ManufacturingManager
         ]);
     }
 
-    public function cancelManufacturingOrder($record): void {}
+    public function cancelManufacturingOrder(Order $order)
+    {
+        $order->workOrders
+            ->filter(fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
+            ->each(function ($workOrder) {
+                $workOrder->calendarLeave?->delete();
+                
+                $workOrder->endAll(collect([$workOrder]));
+
+                $workOrder->update(['state' => WorkOrderState::CANCEL]);
+            });
+
+        $finishMoves = $order->finishedMoves->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]));
+
+        $rawMaterialMoves = $order->rawMaterialMoves->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]));
+
+        InventoryFacade::cancelMoves($finishMoves->merge($rawMaterialMoves));
+
+        $order->inventoryOperations
+            ->filter(fn($operation) => ! in_array($operation->state, [OperationState::DONE, OperationState::CANCELED]))
+            ->each(function ($operation) {
+                InventoryFacade::cancelTransfer($operation);
+            });
+
+        $order->refresh();
+
+        $order->computeState();
+
+        $order->save();
+
+        if (
+            ! in_array($order->state, [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])
+            && $order->billOfMaterial->consumption === BillOfMaterialConsumption::FLEXIBLE
+        ) {
+            $order->update(['state' => ManufacturingOrderState::DONE]);
+        }
+
+        return $order;
+    }
 
     public function confirmWorkOrders(Order $order, $workOrders)
     {
@@ -153,6 +193,36 @@ class ManufacturingManager
         $mergeInto = $mergeInto ? $this->explodeMoves($mergeInto) : false;
 
         InventoryFacade::confirmMoves($moves, merge: $merge, mergeInto: $mergeInto);
+    }
+
+    public function planWorkOrders(Order $order, bool $replan = false)
+    {
+        if ($order->workOrders->isEmpty()) {
+            $order->update(['is_planned' => true]);
+
+            return $order;
+        }
+
+        $order->linkWorkOrdersAndMoves();
+
+        $finalWorkOrders = $order->workOrders->filter(fn ($workOrder) => $workOrder->dependentWorkOrders->isEmpty());
+
+        $finalWorkOrders->each(fn ($workOrder) => $workOrder->plan($replan));
+
+        $workOrders = $order->workOrders->filter(
+            fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
+        );
+
+        if ($workOrders->isEmpty()) {
+            return $order;
+        }
+
+        $order->update([
+            'started_at'  => $workOrders->min(fn ($workOrder) => $workOrder->refresh()->calendarLeave->date_from),
+            'finished_at' => $workOrders->max(fn ($workOrder) => $workOrder->refresh()->calendarLeave->date_to),
+        ]);
+
+        return $order;
     }
 
     public function explodeMoves($moves)
@@ -224,36 +294,6 @@ class ManufacturingManager
         });
 
         return $movesToReturn;
-    }
-
-    public function planWorkOrders(Order $order, bool $replan = false)
-    {
-        if ($order->workOrders->isEmpty()) {
-            $order->update(['is_planned' => true]);
-
-            return $order;
-        }
-
-        $order->linkWorkOrdersAndMoves();
-
-        $finalWorkOrders = $order->workOrders->filter(fn ($workOrder) => $workOrder->dependentWorkOrders->isEmpty());
-
-        $finalWorkOrders->each(fn ($workOrder) => $workOrder->plan($replan));
-
-        $workOrders = $order->workOrders->filter(
-            fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
-        );
-
-        if ($workOrders->isEmpty()) {
-            return $order;
-        }
-
-        $order->update([
-            'started_at'  => $workOrders->min(fn ($workOrder) => $workOrder->refresh()->calendarLeave->date_from),
-            'finished_at' => $workOrders->max(fn ($workOrder) => $workOrder->refresh()->calendarLeave->date_to),
-        ]);
-
-        return $order;
     }
 
     public function preparePhantomMoveValues($move, $bomLine, $productQty, $quantityDone): array
