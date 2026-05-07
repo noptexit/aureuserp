@@ -26,6 +26,7 @@ class ConfirmAction extends Action
 
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/confirm.label'))
+            ->requiresConfirmation()
             ->action(function (Order $record, Component $livewire): void {
                 try {
                     ManufacturingFacade::confirmManufacturingOrder($record);

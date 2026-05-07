@@ -26,6 +26,7 @@ class StartAction extends Action
 
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/start.label'))
+            ->requiresConfirmation()
             ->color('gray')
             ->action(function (Order $record, Component $livewire): void {
                 try {

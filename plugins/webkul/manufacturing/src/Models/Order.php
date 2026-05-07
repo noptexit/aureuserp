@@ -530,18 +530,8 @@ class Order extends Model
 
     public function computeIsPlanned()
     {
-        if ($this->workOrders->isEmpty()) {
-            $this->is_planned = false;
-
-            return;
-        }
-
-        $activeWorkOrders = $this->workOrders->filter(
-            fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])
-        );
-
-        $this->is_planned = $activeWorkOrders->isNotEmpty()
-            && $activeWorkOrders->every(fn ($workOrder) => $workOrder->calendar_leave_id !== null);
+        $this->is_planned = $this->workOrders->isNotEmpty()
+            && $this->workOrders->some(fn ($workOrder) => $workOrder->started_at && $workOrder->finished_at);
     }
 
     public function computeFinishedMoves(): void
@@ -781,13 +771,14 @@ class Order extends Model
 
     public function linkWorkOrdersAndMoves(): void
     {
-        if ($this->workOrders->isEmpty()) {
-            return;
-        }
+        $workOrderPerOperation = $this->workOrders
+            ->filter(fn ($wo) => $wo->operation_id)
+            ->keyBy('operation_id');
 
-        $workOrderPerOperation = $this->workOrders->keyBy('operation_id');
-
-        $workOrderBoms = $this->workOrders->pluck('operation.bill_of_material_id')->unique()->filter();
+        $workOrderBillOfMaterials = $this->workOrders
+            ->pluck('operation.bill_of_material_id')
+            ->unique()
+            ->filter();
 
         $lastWorkOrderPerBom = [];
 
@@ -797,15 +788,19 @@ class Order extends Model
 
         if ($allowWorkOrderDependencies) {
             foreach ($this->workOrders->sortBy($workOrderOrder) as $workOrder) {
-                $blockedByIds = $workOrder->operation->blockedByOperations
-                    ->filter(fn ($operationId) => $workOrderPerOperation->has($operationId))
-                    ->map(fn ($operationId) => $workOrderPerOperation->get($operationId)->id)
-                    ->all();
+                if ($workOrder->operation) {
+                    $blockedByIds = $workOrder->operation->blockedByOperations
+                        ->filter(fn ($operationId) => $workOrderPerOperation->has($operationId))
+                        ->map(fn ($operationId) => $workOrderPerOperation->get($operationId)->id)
+                        ->all();
 
-                $workOrder->blockedByWorkOrders()->syncWithoutDetaching($blockedByIds);
+                    $workOrder->blockedByWorkOrders()->syncWithoutDetaching($blockedByIds);
+                }
 
                 if ($workOrder->dependentWorkOrders->isEmpty()) {
-                    $lastWorkOrderPerBom[$workOrder->operation->bill_of_material_id] = $workOrder;
+                    $bomId = $workOrder->operation?->bill_of_material_id;
+
+                    $lastWorkOrderPerBom[$bomId] = $workOrder;
                 }
             }
         } else {
@@ -822,7 +817,9 @@ class Order extends Model
 
                 $previousWorkOrder = $workOrder;
 
-                $lastWorkOrderPerBom[$workOrder->operation->bill_of_material_id] = $workOrder;
+                $bomId = $workOrder->operation?->bill_of_material_id;
+                
+                $lastWorkOrderPerBom[$bomId] = $workOrder;
             }
         }
 
@@ -836,7 +833,7 @@ class Order extends Model
                         : null,
                 ]);
             } else {
-                $bom = ($move->bomLine && $workOrderBoms->contains($move->bomLine->bill_of_material_id))
+                $bom = ($move->bomLine && $workOrderBillOfMaterials->contains($move->bomLine->bill_of_material_id))
                     ? $move->bomLine->bill_of_material_id
                     : $this->bill_of_material_id;
 

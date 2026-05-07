@@ -26,6 +26,7 @@ class UnplanAction extends Action
 
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/unplan.label'))
+            ->requiresConfirmation()
             ->color('gray')
             ->action(function (Order $record, Component $livewire): void {
                 try {
@@ -47,6 +48,6 @@ class UnplanAction extends Action
                     $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
-            ->visible(fn (Order $record) => $record->state !== ManufacturingOrderState::DRAFT && $record->is_planned);
+            ->visible(fn (Order $record) => ! in_array($record->state, [ManufacturingOrderState::DRAFT, ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL]) && $record->is_planned);
     }
 }

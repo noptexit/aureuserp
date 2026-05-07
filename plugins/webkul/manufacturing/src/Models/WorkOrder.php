@@ -291,6 +291,10 @@ class WorkOrder extends Model implements Sortable
             if ($workOrder->isDirty('quantity_produced')) {
                 $workOrder->computeDuration();
             }
+
+            if ($workOrder->isDirty('calendar_leave_id')) {
+                $workOrder->computeDates();
+            }
         });
 
         static::created(function ($workOrder) {
@@ -327,7 +331,7 @@ class WorkOrder extends Model implements Sortable
 
     public function computeName()
     {
-        $this->name = $this->operation->name;
+        $this->name ??= $this->operation->name;
     }
 
     public function computeUOMId()
@@ -352,6 +356,13 @@ class WorkOrder extends Model implements Sortable
         } else {
             $this->duration_percent = 0;
         }
+    }
+
+    public function computeDates()
+    {
+        $this->started_at = $this->calendarLeave?->date_from;
+
+        $this->finished_at = $this->calendarLeave?->date_to;
     }
 
     public function setDuration(): void
@@ -661,7 +672,7 @@ class WorkOrder extends Model implements Sortable
             $expectedDuration = $this->work_center_id === $workCenter->id
                 ? $this->expected_duration
                 : $this->getExpectedDuration(alternativeWorkCenter: $workCenter);
-
+            
             [$fromDate, $toDate] = $workCenter->getFirstAvailableSlot($dateStart, $expectedDuration);
 
             if (! $fromDate) {

@@ -26,9 +26,12 @@ class PlanAction extends Action
 
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/plan.label'))
+            ->requiresConfirmation()
             ->action(function (Order $record, Component $livewire): void {
                 try {
                     $record = ManufacturingFacade::planManufacturingOrder($record);
+
+                    $record->refresh();
 
                     $livewire->updateForm();
 

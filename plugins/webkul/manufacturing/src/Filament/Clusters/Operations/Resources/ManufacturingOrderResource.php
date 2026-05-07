@@ -30,7 +30,6 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Size;
 use Filament\Support\Enums\TextSize;
-use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group as TableGroup;
 use Filament\Tables\Table;
@@ -44,7 +43,6 @@ use Webkul\Inventory\Models\OperationType;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Manufacturing\Enums\WorkOrderState;
-use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\OperationResource as ConfigurationOperationResource;
 use Webkul\Manufacturing\Filament\Clusters\Operations;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\CreateManufacturingOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages\EditManufacturingOrder;
@@ -58,7 +56,6 @@ use Webkul\Manufacturing\Models\Move;
 use Webkul\Manufacturing\Models\Operation;
 use Webkul\Manufacturing\Models\Order;
 use Webkul\Manufacturing\Models\Product;
-use Webkul\Manufacturing\Models\WorkCenter;
 use Webkul\Manufacturing\Models\WorkOrder;
 use Webkul\Product\Enums\ProductType;
 use Webkul\Support\Filament\Forms\Components\Repeater;
@@ -1002,7 +999,7 @@ class ManufacturingOrderResource extends Resource
             ->reorderable(false)
             ->compact()
             ->table(fn ($record) => [
-                RepeaterTableColumn::make('operation_id')
+                RepeaterTableColumn::make('name')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.operation')),
                 RepeaterTableColumn::make('work_center_id')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.work-center')),
@@ -1030,7 +1027,11 @@ class ManufacturingOrderResource extends Resource
                     ->resizable(),
             ])
             ->schema([
-                Hidden::make('name'),
+                Hidden::make('operation_id'),
+                TextInput::make('name')
+                    ->hiddenLabel()
+                    ->required()
+                    ->disabled(fn ($record): bool => $record && ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 Hidden::make('product_id')
                     ->default(fn (Get $get): mixed => $get('../../product_id')),
                 Hidden::make('duration')
@@ -1043,28 +1044,7 @@ class ManufacturingOrderResource extends Resource
 
                         return $product?->name ?? '—';
                     }),
-                Select::make('operation_id')
-                    ->hiddenLabel()
-                    ->relationship(
-                        'operation',
-                        'name',
-                        fn (Builder $query) => $query->withTrashed(),
-                    )
-                    ->searchable()
-                    ->preload()
-                    ->native(false)
-                    ->wrapOptionLabels(false)
-                    ->createOptionForm(fn (Schema $schema): Schema => ConfigurationOperationResource::form($schema->model(Operation::class)))
-                    ->createOptionAction(fn (Action $action) => $action->modalWidth(Width::SevenExtraLarge))
-                    ->live()
-                    ->afterStateUpdated(function (Set $set, ?string $state): void {
-                        $operation = Operation::query()->withTrashed()->find($state);
 
-                        $set('name', $operation?->name);
-                        $set('work_center_id', $operation?->work_center_id);
-                    })
-                    ->required()
-                    ->disabled(fn ($record): bool => $record && ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
                 Select::make('work_center_id')
                     ->hiddenLabel()
                     ->relationship(
@@ -1313,6 +1293,7 @@ class ManufacturingOrderResource extends Resource
             ->get()
             ->map(fn (Operation $operation): array => [
                 'operation_id'              => $operation->id,
+                'name'                      => $operation->name,
                 'work_center_id'            => $operation->work_center_id,
                 'product_id'                => $product?->id,
                 'expected_duration'         => format_float_time($operation->getExpectedDuration($product, $quantity), 'minutes'),

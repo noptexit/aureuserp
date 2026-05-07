@@ -27,6 +27,7 @@ class CancelAction extends Action
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/cancel.label'))
             ->color('gray')
+            ->requiresConfirmation()
             ->action(function (Order $record, Component $livewire): void {
                 try {
                     $record = ManufacturingFacade::cancelManufacturingOrder($record);
