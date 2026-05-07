@@ -23,10 +23,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('manufacturing_bills_of_materials', function (Blueprint $table) {
-            $table->dropColumn([
-                'produce_delay',
-                'days_to_prepare_mo',
-            ]);
+            foreach (['produce_delay', 'days_to_prepare_mo'] as $column) {
+                if (Schema::hasColumn('manufacturing_bills_of_materials', $column)) {
+                    $table->dropColumn($column);
+                }
+            }
         });
     }
 };

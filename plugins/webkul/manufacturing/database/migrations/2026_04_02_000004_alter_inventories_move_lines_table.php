@@ -32,11 +32,15 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('inventories_move_lines', function (Blueprint $table) {
-            $table->dropForeign(['work_order_id']);
-            $table->dropColumn('work_order_id');
+            if (Schema::hasColumn('inventories_move_lines', 'work_order_id')) {
+                $table->dropForeign(['work_order_id']);
+                $table->dropColumn('work_order_id');
+            }
 
-            $table->dropForeign(['order_id']);
-            $table->dropColumn('order_id');
+            if (Schema::hasColumn('inventories_move_lines', 'order_id')) {
+                $table->dropForeign(['order_id']);
+                $table->dropColumn('order_id');
+            }
         });
     }
 };

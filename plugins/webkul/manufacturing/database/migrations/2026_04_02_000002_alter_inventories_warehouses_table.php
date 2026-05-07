@@ -77,38 +77,18 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('inventories_warehouses', function (Blueprint $table) {
-            $table->dropForeign(['manufacture_pull_id']);
-            $table->dropColumn('manufacture_pull_id');
+            foreach (['manufacture_pull_id', 'manufacture_mto_pull_id', 'pbm_mto_pull_id', 'sam_rule_id', 'manu_type_id', 'pbm_type_id', 'sam_type_id', 'pbm_route_id', 'pbm_loc_id', 'sam_loc_id'] as $column) {
+                if (Schema::hasColumn('inventories_warehouses', $column)) {
+                    $table->dropForeign([$column]);
+                    $table->dropColumn($column);
+                }
+            }
 
-            $table->dropForeign(['manufacture_mto_pull_id']);
-            $table->dropColumn('manufacture_mto_pull_id');
-
-            $table->dropForeign(['pbm_mto_pull_id']);
-            $table->dropColumn('pbm_mto_pull_id');
-
-            $table->dropForeign(['sam_rule_id']);
-            $table->dropColumn('sam_rule_id');
-
-            $table->dropForeign(['manu_type_id']);
-            $table->dropColumn('manu_type_id');
-
-            $table->dropForeign(['pbm_type_id']);
-            $table->dropColumn('pbm_type_id');
-
-            $table->dropForeign(['sam_type_id']);
-            $table->dropColumn('sam_type_id');
-
-            $table->dropForeign(['pbm_route_id']);
-            $table->dropColumn('pbm_route_id');
-
-            $table->dropForeign(['pbm_loc_id']);
-            $table->dropColumn('pbm_loc_id');
-
-            $table->dropForeign(['sam_loc_id']);
-            $table->dropColumn('sam_loc_id');
-
-            $table->dropColumn('manufacture_steps');
-            $table->dropColumn('manufacture_to_resupply');
+            foreach (['manufacture_steps', 'manufacture_to_resupply'] as $column) {
+                if (Schema::hasColumn('inventories_warehouses', $column)) {
+                    $table->dropColumn($column);
+                }
+            }
         });
     }
 };

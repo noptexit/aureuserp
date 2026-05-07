@@ -6,11 +6,16 @@ use Filament\Panel;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Foundation\AliasLoader;
-use Webkul\Inventory\Models\Warehouse;
+use Illuminate\Support\Facades\Schema;
+use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
+use Webkul\Inventory\Models\OperationType;
+use Webkul\Inventory\Models\Route;
+use Webkul\Inventory\Models\Rule;
+use Webkul\Inventory\Models\Warehouse;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
-use Webkul\Manufacturing\Observers\WarehouseObserver;
 use Webkul\Manufacturing\Observers\MoveObserver;
+use Webkul\Manufacturing\Observers\WarehouseObserver;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
@@ -77,7 +82,69 @@ class ManufacturingServiceProvider extends PackageServiceProvider
                     ->runsMigrations()
                     ->runsSeeders();
             })
-            ->hasUninstallCommand(function (UninstallCommand $command): void {})
+            ->hasUninstallCommand(function (UninstallCommand $command) {
+                $command->startWith(function (UninstallCommand $command) {
+                    if (! Schema::hasColumn('inventories_warehouses', 'pbm_route_id')) {
+                        return;
+                    }
+
+                    $warehouses = Models\Warehouse::all();
+
+                    foreach ($warehouses as $warehouse) {
+                        $pbmRouteId = $warehouse->pbm_route_id;
+
+                        $operationTypeIds = array_filter([
+                            $warehouse->manu_type_id,
+                            $warehouse->pbm_type_id,
+                            $warehouse->sam_type_id,
+                        ]);
+
+                        $locationIds = array_filter([
+                            $warehouse->pbm_loc_id,
+                            $warehouse->sam_loc_id,
+                        ]);
+
+                        $warehouse->updateQuietly([
+                            'manufacture_pull_id'     => null,
+                            'manufacture_mto_pull_id' => null,
+                            'pbm_mto_pull_id'         => null,
+                            'sam_rule_id'             => null,
+                            'manu_type_id'            => null,
+                            'pbm_type_id'             => null,
+                            'sam_type_id'             => null,
+                            'pbm_route_id'            => null,
+                            'pbm_loc_id'              => null,
+                            'sam_loc_id'              => null,
+                        ]);
+
+                        if ($pbmRouteId) {
+                            Rule::withTrashed()
+                                ->where('route_id', $pbmRouteId)
+                                ->forceDelete();
+
+                            $warehouse->routes()->detach($pbmRouteId);
+
+                            Route::withTrashed()
+                                ->where('id', $pbmRouteId)
+                                ->forceDelete();
+                        }
+
+                        // Delete operation types created by manufacturing
+                        if (! empty($operationTypeIds)) {
+                            OperationType::withTrashed()
+                                ->whereIn('id', $operationTypeIds)
+                                ->forceDelete();
+                        }
+
+                        // Delete locations created by manufacturing
+                        if (! empty($locationIds)) {
+                            Location::withTrashed()
+                                ->whereIn('id', $locationIds)
+                                ->forceDelete();
+                        }
+                    }
+                });
+            })
             ->icon('manufacturing');
     }
 

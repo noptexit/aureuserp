@@ -86,35 +86,18 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('inventories_moves', function (Blueprint $table) {
-            $table->dropForeign(['created_order_id']);
-            $table->dropColumn('created_order_id');
+            foreach (['created_order_id', 'order_id', 'raw_material_order_id', 'unbuild_order_id', 'consume_unbuild_order_id', 'mo_operation_id', 'work_order_id', 'bom_line_id', 'byproduct_id', 'order_finished_lot_id'] as $column) {
+                if (Schema::hasColumn('inventories_moves', $column)) {
+                    $table->dropForeign([$column]);
+                    $table->dropColumn($column);
+                }
+            }
 
-            $table->dropForeign(['order_id']);
-            $table->dropColumn('order_id');
-
-            $table->dropForeign(['raw_material_order_id']);
-            $table->dropColumn('raw_material_order_id');
-
-            $table->dropForeign(['unbuild_order_id']);
-            $table->dropColumn('unbuild_order_id');
-
-            $table->dropForeign(['consume_unbuild_order_id']);
-            $table->dropColumn('consume_unbuild_order_id');
-
-            $table->dropForeign(['work_order_id']);
-            $table->dropColumn('work_order_id');
-
-            $table->dropForeign(['bom_line_id']);
-            $table->dropColumn('bom_line_id');
-
-            $table->dropForeign(['byproduct_id']);
-            $table->dropColumn('byproduct_id');
-
-            $table->dropForeign(['order_finished_lot_id']);
-            $table->dropColumn('order_finished_lot_id');
-
-            $table->dropColumn('cost_share');
-            $table->dropColumn('manual_consumption');
+            foreach (['cost_share', 'manual_consumption'] as $column) {
+                if (Schema::hasColumn('inventories_moves', $column)) {
+                    $table->dropColumn($column);
+                }
+            }
         });
     }
 };
