@@ -165,6 +165,17 @@ class OperationResource extends Resource
                                     ->preload()
                                     ->multiple(),
 
+                                Select::make('blockedByOperations')
+                                    ->label(__('manufacturing::filament/clusters/configurations/resources/operation.form.sections.general.fields.blocked-by'))
+                                    ->relationship(
+                                        'blockedByOperations',
+                                        'name',
+                                        modifyQueryUsing: fn (Get $get, Builder $query) => $query->where('id', '!=', $get('id'))->where('bill_of_material_id', $get('bill_of_material_id'))
+                                    )
+                                    ->searchable()
+                                    ->preload()
+                                    ->multiple(),
+
                                 Placeholder::make('company')
                                     ->label(__('manufacturing::filament/clusters/configurations/resources/operation.form.sections.general.fields.company'))
                                     ->content(function (Get $get): string {

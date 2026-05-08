@@ -17,6 +17,7 @@ return [
                     'work-center'       => 'Work Center',
                     'apply-on-variants' => 'Apply on Variants',
                     'company'           => 'Company',
+                    'blocked-by'        => 'Blocked By',
                 ],
             ],
             'settings' => [

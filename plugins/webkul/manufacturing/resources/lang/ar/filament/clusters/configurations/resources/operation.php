@@ -17,6 +17,7 @@ return [
                     'work-center'       => 'مركز العمل',
                     'apply-on-variants' => 'تطبيق على المتغيرات',
                     'company'           => 'الشركة',
+                    'blocked-by'        => 'محظور بواسطة',
                 ],
             ],
             'settings' => [

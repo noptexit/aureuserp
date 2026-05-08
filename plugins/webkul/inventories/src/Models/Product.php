@@ -203,7 +203,7 @@ class Product extends BaseProduct
         );
     }
 
-    public function getDateInfo($date, $location, $routeIds = false): array
+    public function getDatesInfo($date, $location, $routeIds = false): array
     {
         $rules = $this->getRulesFromLocation($location, $routeIds);
 
