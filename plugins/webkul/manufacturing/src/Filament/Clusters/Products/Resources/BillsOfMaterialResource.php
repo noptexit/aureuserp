@@ -69,6 +69,7 @@ use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTab
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\Company;
+use Webkul\Manufacturing\Settings\OperationSettings;
 
 class BillsOfMaterialResource extends Resource
 {
@@ -213,6 +214,7 @@ class BillsOfMaterialResource extends Resource
                                         static::getComponentsRepeater(),
                                     ]),
                                 Tab::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.operations.title'))
+                                    ->visible(static::getOperationSettings()->enable_work_orders)
                                     ->schema([
                                         static::getOperationsRepeater(),
                                     ]),
@@ -1159,5 +1161,10 @@ class BillsOfMaterialResource extends Resource
         }
 
         return $state === $enum->value;
+    }
+
+    public static function getOperationSettings(): OperationSettings
+    {
+        return once(fn () => app(OperationSettings::class));
     }
 }
