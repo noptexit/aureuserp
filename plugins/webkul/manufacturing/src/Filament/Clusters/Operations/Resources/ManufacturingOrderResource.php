@@ -1012,6 +1012,18 @@ class ManufacturingOrderResource extends Resource
             ->deletable(true)
             ->reorderable(false)
             ->compact()
+            ->extraItemActions([
+                Action::make('openWorkOrder')
+                    ->tooltip('Open work order')
+                    ->icon('heroicon-m-arrow-top-right-on-square')
+                    ->url(fn (array $arguments, Get $get): ?string => filled($get("workOrders.{$arguments['item']}.id"))
+                        ? WorkOrderResource::getUrl('view', [
+                            'record' => $get("workOrders.{$arguments['item']}.id"),
+                        ])
+                        : null)
+                    ->openUrlInNewTab()
+                    ->visible(fn (array $arguments, Get $get): bool => filled($get("workOrders.{$arguments['item']}.id"))),
+            ])
             ->table(fn ($record) => [
                 RepeaterTableColumn::make('name')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.columns.operation')),
