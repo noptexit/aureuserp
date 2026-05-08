@@ -17,7 +17,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\LotResource;
@@ -60,7 +59,8 @@ class ManageQuantities extends ManageRelatedRecords
             || (
                 app(TraceabilitySettings::class)->enable_lots_serial_numbers
                 && $parameters['record']->tracking != ProductTracking::QTY
-            );
+            )
+            || $parameters['record']->is_configurable;
     }
 
     public static function getNavigationLabel(): string
@@ -256,7 +256,7 @@ class ManageQuantities extends ManageRelatedRecords
                         }
 
                         $record->update([
-                            'quantity' => $state,
+                            'quantity'                => $state,
                             'inventory_diff_quantity' => $state - $previousQuantity,
                         ]);
                     })

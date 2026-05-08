@@ -51,6 +51,13 @@ return [
                     'uom'        => 'UoM',
                 ],
             ],
+            'work-instruction' => [
+                'title'   => 'Work Instruction',
+                'entries' => [
+                    'operation' => 'Operation',
+                    'worksheet' => 'Worksheet',
+                ],
+            ],
             'blocked-by' => [
                 'title'  => 'Blocked By',
                 'fields' => [
@@ -123,6 +130,13 @@ return [
             ],
             'components' => [
                 'title' => 'Components',
+            ],
+            'work-instruction' => [
+                'title'   => 'Work Instruction',
+                'entries' => [
+                    'operation' => 'Operation',
+                    'worksheet' => 'Worksheet',
+                ],
             ],
             'blocked-by' => [
                 'title'   => 'Blocked By',

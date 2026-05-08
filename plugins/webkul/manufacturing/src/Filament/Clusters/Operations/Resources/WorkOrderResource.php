@@ -13,6 +13,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Group;
@@ -21,6 +22,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Size;
 use Filament\Support\Enums\Width;
@@ -69,7 +71,7 @@ class WorkOrderResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
     public static function getModelLabel(): string
     {
@@ -233,6 +235,11 @@ class WorkOrderResource extends Resource
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.form.tabs.components.title'))
                             ->schema([
                                 static::getComponentsRepeater(),
+                            ]),
+                        Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.form.tabs.work-instruction.title'))
+                            ->schema([
+                                View::make('manufacturing::filament.clusters.operations.resources.work-order.work-instruction-preview')
+                                    ->columnSpanFull(),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.form.tabs.blocked-by.title'))
                             ->schema([
@@ -589,6 +596,12 @@ class WorkOrderResource extends Resource
                                         TextEntry::make('product_uom_qty')->hiddenLabel()->numeric(decimalPlaces: 4),
                                         TextEntry::make('uom.name')->hiddenLabel()->placeholder('—'),
                                     ]),
+                            ]),
+                        Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.infolist.tabs.work-instruction.title'))
+                            ->schema([
+                                ViewEntry::make('work_instruction_preview')
+                                    ->hiddenLabel()
+                                    ->view('manufacturing::filament.clusters.operations.resources.work-order.work-instruction-preview'),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.infolist.tabs.blocked-by.title'))
                             ->schema([

@@ -51,6 +51,13 @@ return [
                     'uom'        => 'وحدة القياس',
                 ],
             ],
+            'work-instruction' => [
+                'title'   => 'تعليمات العمل',
+                'entries' => [
+                    'operation' => 'العملية',
+                    'worksheet' => 'ورقة العمل',
+                ],
+            ],
             'blocked-by' => [
                 'title'  => 'محظور بواسطة',
                 'fields' => [
@@ -123,6 +130,13 @@ return [
             ],
             'components' => [
                 'title' => 'المكونات',
+            ],
+            'work-instruction' => [
+                'title'   => 'تعليمات العمل',
+                'entries' => [
+                    'operation' => 'العملية',
+                    'worksheet' => 'ورقة العمل',
+                ],
             ],
             'blocked-by' => [
                 'title'   => 'محظور بواسطة',
