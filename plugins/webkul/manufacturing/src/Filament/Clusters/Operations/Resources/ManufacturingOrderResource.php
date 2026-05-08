@@ -40,6 +40,7 @@ use Webkul\Field\Filament\Infolists\Components\ProgressStepper as InfolistProgre
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\OperationType;
+use Webkul\Inventory\Settings\WarehouseSettings;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Manufacturing\Enums\WorkOrderState;
@@ -318,6 +319,7 @@ class ManufacturingOrderResource extends Resource
                                             ->required()
                                             ->native(false)
                                             ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                                            ->visible(static::getWarehouseSettings()->enable_locations)
                                             ->wrapOptionLabels(false),
                                         Select::make('destination_location_id')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.miscellaneous.fields.finished-products-location'))
@@ -329,6 +331,7 @@ class ManufacturingOrderResource extends Resource
                                             ->wrapOptionLabels(false)
                                             ->live()
                                             ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                                            ->visible(static::getWarehouseSettings()->enable_locations)
                                             ->afterStateUpdated(function (Set $set, ?string $state): void {
                                                 $set('destination_location_id', $state);
                                             }),
@@ -488,7 +491,8 @@ class ManufacturingOrderResource extends Resource
                                         InfolistTableColumn::make('product.name')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.component')),
                                         InfolistTableColumn::make('sourceLocation.full_name')
-                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from')),
+                                            ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from'))
+                                            ->visible(static::getWarehouseSettings()->enable_locations),
                                         InfolistTableColumn::make('product_uom_qty')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.to-consume')),
                                         InfolistTableColumn::make('quantity')
@@ -616,10 +620,12 @@ class ManufacturingOrderResource extends Resource
                                             ->formatStateUsing(fn (mixed $state, Order $record): string => static::getOperationTypeLabel($record->operationType)),
                                         TextEntry::make('sourceLocation.full_name')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.source'))
-                                            ->placeholder('—'),
+                                            ->placeholder('—')
+                                            ->visible(static::getWarehouseSettings()->enable_locations),
                                         TextEntry::make('finalLocation.full_name')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.finished-products-location'))
-                                            ->placeholder('—'),
+                                            ->placeholder('—')
+                                            ->visible(static::getWarehouseSettings()->enable_locations),
                                         TextEntry::make('company.name')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.miscellaneous.entries.company'))
                                             ->placeholder('—'),
@@ -888,7 +894,8 @@ class ManufacturingOrderResource extends Resource
                 RepeaterTableColumn::make('product_id')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.component')),
                 RepeaterTableColumn::make('rendered_display_from')
-                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from')),
+                    ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.from'))
+                    ->visible(static::getWarehouseSettings()->enable_locations),
                 RepeaterTableColumn::make('product_uom_qty')
                     ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.to-consume')),
                 RepeaterTableColumn::make('quantity')
@@ -1387,5 +1394,10 @@ class ManufacturingOrderResource extends Resource
         }
 
         return (float) $selectedUom->computeQuantity($quantity, $billOfMaterial->uom, roundingMethod: 'HALF-UP');
+    }
+
+    public static function getWarehouseSettings(): WarehouseSettings
+    {
+        return once(fn () => app(WarehouseSettings::class));
     }
 }

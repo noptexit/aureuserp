@@ -337,6 +337,10 @@ class Order extends Model
 
             $order->started_at ??= now();
 
+            $order->computeSourceLocationId();
+
+            $order->computeDestinationLocationId();
+
             $order->computeStartedAt();
 
             $order->computeFinishedAt();
@@ -401,6 +405,16 @@ class Order extends Model
     public function computeProductUOMQty()
     {
         $this->product_uom_qty = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom);
+    }
+
+    public function computeSourceLocationId()
+    {
+        $this->source_location_id ??= $this->operationType->source_location_id;
+    }
+
+    public function computeDestinationLocationId()
+    {
+        $this->destination_location_id ??= $this->operationType->destination_location_id;
     }
 
     public function computeState(): void

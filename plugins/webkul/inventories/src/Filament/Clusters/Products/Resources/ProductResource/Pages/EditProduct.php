@@ -9,11 +9,9 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Exceptions\Halt;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource;
-use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Warehouse;
@@ -95,6 +93,25 @@ class EditProduct extends BaseEditProduct
             Action::make('updateQuantity')
                 ->label(__('inventories::filament/clusters/products/resources/product/pages/edit-product.header-actions.update-quantity.label'))
                 ->modalHeading(__('inventories::filament/clusters/products/resources/product/pages/edit-product.header-actions.update-quantity.modal-heading'))
+                ->url(function (
+                    Product $record,
+                    OperationSettings $operationSettings,
+                    TraceabilitySettings $traceabilitySettings,
+                    WarehouseSettings $warehouseSettings,
+                ): ?string {
+                    if (
+                        $operationSettings->enable_packages
+                        || $warehouseSettings->enable_locations
+                        || (
+                            $traceabilitySettings->enable_lots_serial_numbers
+                            && $record->tracking != ProductTracking::QTY
+                        )
+                    ) {
+                        return ProductResource::getUrl('quantities', ['record' => $record]);
+                    }
+
+                    return null;
+                })
                 ->schema(fn (Product $record): array => [
                     Select::make('product_id')
                         ->label(__('inventories::filament/clusters/products/resources/product/pages/edit-product.header-actions.update-quantity.form.fields.product'))
@@ -114,27 +131,11 @@ class EditProduct extends BaseEditProduct
                         ->maxValue(99999999999)
                         ->required()
                         ->live()
+                        ->suffix($record->uom->name)
                         ->default(fn () => ! $record->is_configurable ? $record->available_qty : 0),
                 ])
                 ->modalSubmitActionLabel(__('inventories::filament/clusters/products/resources/product/pages/edit-product.header-actions.update-quantity.modal-submit-action-label'))
                 ->visible($this->getRecord()->is_storable)
-                ->beforeFormFilled(function (
-                    OperationSettings $operationSettings,
-                    TraceabilitySettings $traceabilitySettings,
-                    WarehouseSettings $warehouseSettings,
-                    Product $record
-                ) {
-                    if (
-                        $operationSettings->enable_packages
-                        || $warehouseSettings->enable_locations
-                        || (
-                            $traceabilitySettings->enable_lots_serial_numbers
-                            && $record->tracking != ProductTracking::QTY
-                        )
-                    ) {
-                        return redirect()->to(ProductResource::getUrl('quantities', ['record' => $record]));
-                    }
-                })
                 ->action(function (Product $record, array $data): void {
                     if (isset($data['product_id'])) {
                         $record = Product::find($data['product_id']);

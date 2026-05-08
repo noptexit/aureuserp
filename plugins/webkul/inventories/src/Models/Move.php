@@ -867,6 +867,7 @@ class Move extends Model
     public function prepareLineValues($quantity = null, $reservedQuantity = null): array
     {
         $values = [
+            'reference'               => $this->origin,
             'move_id'                 => $this->id,
             'product_id'              => $this->product_id,
             'uom_id'                  => $this->uom_id,

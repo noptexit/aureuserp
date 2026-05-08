@@ -394,19 +394,13 @@ class ManufacturingManager
             }
         }
 
-        $movesToFinish = $order->finishedMoves->filter(
+        $movesToFinish = $order->finishedMoves()->get()->filter(
             fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED])
         );
 
         $movesToFinish->each->update(['is_picked' => true]);
 
         $movesToFinish = InventoryFacade::doneMoves($movesToFinish, cancelBackOrder: $cancelBackOrder);
-
-        // $consumeMoveLines = $movesToDo->flatMap->lines;
-
-        // $order->finishedMoves->flatMap->lines->each->update([
-        //     'consume_line_ids' => $consumeMoveLines->pluck('id')->all(),
-        // ]);
 
         return true;
     }
