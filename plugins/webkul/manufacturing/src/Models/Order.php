@@ -868,7 +868,7 @@ class Order extends Model
         $missingLotIdProducts = '';
 
         if (in_array($this->product->tracking, [ProductTracking::LOT, ProductTracking::SERIAL]) && ! $this->producing_lot_id) {
-            throw new \Exception(__('You need to set a Lot/Serial Number for the finished product'));
+            $this->generateLot();
         }
 
         if (
@@ -1094,6 +1094,22 @@ class Order extends Model
             if ($consumedQty - $cancelledQty > 0) {
                 throw new \Exception($snErrorMsg[$snId]);
             }
+        }
+    }
+
+    public function generateLot()
+    {
+        $name = Lot::getNextSerial($this->company, $this->product);
+
+        $this->update([
+            'producing_lot_id' => Lot::create([
+                'product_id' => $this->product_id,
+                'name'       => $name,
+            ])->id,
+        ]);
+
+        if ($this->product->tracking === ProductTracking::SERIAL) {
+            $this->setQuantityProducing();
         }
     }
 
