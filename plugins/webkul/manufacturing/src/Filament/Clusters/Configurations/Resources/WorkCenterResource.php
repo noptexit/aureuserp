@@ -55,6 +55,7 @@ use Webkul\Product\Models\Product;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn;
 use Webkul\Support\Models\Calendar;
+use Webkul\Manufacturing\Settings\OperationSettings;
 
 class WorkCenterResource extends Resource
 {
@@ -67,6 +68,15 @@ class WorkCenterResource extends Resource
     protected static ?string $cluster = Configurations::class;
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function isDiscovered(): bool
+    {
+        if (app()->runningInConsole()) {
+            return true;
+        }
+
+        return app(OperationSettings::class)->enable_work_orders;
+    }
 
     public static function getModelLabel(): string
     {

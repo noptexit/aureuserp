@@ -71,6 +71,11 @@ class ManufacturingServiceProvider extends PackageServiceProvider
                 '2026_04_02_000004_alter_inventories_move_lines_table',
             ])
             ->runsMigrations()
+            ->hasSettings([
+                '2026_05_08_094021_create_manufacturing_operation_settings',
+                '2026_05_08_094031_create_manufacturing_planning_settings',
+            ])
+            ->runsSettings()
             ->hasDependencies([
                 'products',
                 'inventories',

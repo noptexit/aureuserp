@@ -45,7 +45,6 @@ use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Manufacturing\Enums\WorkOrderState;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\OperationResource;
 use Webkul\Manufacturing\Filament\Clusters\Operations;
-use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\WorkOrderResource\Pages\CreateWorkOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\WorkOrderResource\Pages\EditWorkOrder;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\WorkOrderResource\Pages\ListWorkOrders;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\WorkOrderResource\Pages\ViewWorkOrder;
@@ -60,6 +59,7 @@ use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTab
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\UOM;
+use Webkul\Manufacturing\Settings\OperationSettings;
 
 class WorkOrderResource extends Resource
 {
@@ -72,6 +72,15 @@ class WorkOrderResource extends Resource
     protected static ?int $navigationSort = 2;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-wrench-screwdriver';
+
+    public static function isDiscovered(): bool
+    {
+        if (app()->runningInConsole()) {
+            return true;
+        }
+
+        return app(OperationSettings::class)->enable_work_orders;
+    }
 
     public static function getModelLabel(): string
     {
@@ -630,10 +639,9 @@ class WorkOrderResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => ListWorkOrders::route('/'),
-            'create' => CreateWorkOrder::route('/create'),
-            'view'   => ViewWorkOrder::route('/{record}'),
-            'edit'   => EditWorkOrder::route('/{record}/edit'),
+            'index' => ListWorkOrders::route('/'),
+            'view'  => ViewWorkOrder::route('/{record}'),
+            'edit'  => EditWorkOrder::route('/{record}/edit'),
         ];
     }
 

@@ -64,6 +64,7 @@ use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTab
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\UOM;
+use Webkul\Manufacturing\Settings\OperationSettings;
 
 class ManufacturingOrderResource extends Resource
 {
@@ -274,6 +275,7 @@ class ManufacturingOrderResource extends Resource
                                 static::getComponentsRepeater(),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.work-orders.title'))
+                            ->visible(static::getOperationSettings()->enable_work_orders)
                             ->schema([
                                 static::getWorkOrdersRepeater(),
                             ]),
@@ -1411,5 +1413,10 @@ class ManufacturingOrderResource extends Resource
     public static function getWarehouseSettings(): WarehouseSettings
     {
         return once(fn () => app(WarehouseSettings::class));
+    }
+
+    public static function getOperationSettings(): OperationSettings
+    {
+        return once(fn () => app(OperationSettings::class));
     }
 }

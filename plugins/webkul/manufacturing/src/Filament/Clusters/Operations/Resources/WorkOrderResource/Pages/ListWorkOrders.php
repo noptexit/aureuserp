@@ -22,14 +22,6 @@ class ListWorkOrders extends ListRecords
         return __('manufacturing::filament/clusters/operations/resources/work-order/pages/list-work-orders.title');
     }
 
-    protected function getHeaderActions(): array
-    {
-        return [
-            CreateAction::make()
-                ->label(__('manufacturing::filament/clusters/operations/resources/work-order.pages.list.header-actions.create.label')),
-        ];
-    }
-
     public function getPresetTableViews(): array
     {
         return [

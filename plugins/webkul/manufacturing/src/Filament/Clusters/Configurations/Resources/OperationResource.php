@@ -55,6 +55,7 @@ use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource\Pa
 use Webkul\Manufacturing\Models\BillOfMaterial;
 use Webkul\Manufacturing\Models\Operation;
 use Webkul\Product\Models\ProductAttributeValue;
+use Webkul\Manufacturing\Settings\OperationSettings;
 
 class OperationResource extends Resource
 {
@@ -67,6 +68,15 @@ class OperationResource extends Resource
     protected static ?string $cluster = Configurations::class;
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function isDiscovered(): bool
+    {
+        if (app()->runningInConsole()) {
+            return true;
+        }
+
+        return app(OperationSettings::class)->enable_work_orders;
+    }
 
     public static function getModelLabel(): string
     {
