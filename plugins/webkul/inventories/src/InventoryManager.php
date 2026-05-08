@@ -33,10 +33,8 @@ use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Rule;
 use Webkul\PluginManager\Package;
 use Webkul\Purchase\Enums as PurchaseOrderEnums;
-use Webkul\Purchase\Facades\PurchaseOrder as PurchaseOrderFacade;
 use Webkul\Purchase\Models\OrderLine as PurchaseOrderLine;
 use Webkul\Purchase\Models\PurchaseOrder;
-use Webkul\Sale\Facades\SaleOrder as SaleFacade;
 
 class InventoryManager
 {
@@ -135,18 +133,6 @@ class InventoryManager
         $record->save();
 
         ProductQuantity::deleteZeroQuantities();
-
-        if (Package::isPluginInstalled('purchases')) {
-            foreach ($record->purchaseOrders as $purchaseOrder) {
-                PurchaseOrderFacade::computePurchaseOrder($purchaseOrder);
-            }
-        }
-
-        if (Package::isPluginInstalled('sales')) {
-            if ($record->saleOrder) {
-                SaleFacade::computeSaleOrder($record->saleOrder);
-            }
-        }
 
         OperationDone::dispatch($record);
 
@@ -1385,10 +1371,6 @@ class InventoryManager
 
         if (Package::isPluginInstalled('purchases')) {
             $backOrderOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
-
-            foreach ($record->purchaseOrders as $purchaseOrder) {
-                PurchaseOrderFacade::computePurchaseOrder($purchaseOrder);
-            }
         }
 
         OperationBackOrdered::dispatch($record);

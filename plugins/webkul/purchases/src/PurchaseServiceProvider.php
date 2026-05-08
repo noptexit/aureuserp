@@ -4,12 +4,16 @@ namespace Webkul\Purchase;
 
 use Filament\Panel;
 use Illuminate\Foundation\AliasLoader;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Webkul\Inventory\Events\OperationBackOrdered;
+use Webkul\Inventory\Events\OperationDone;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
 use Webkul\PluginManager\PackageServiceProvider;
 use Webkul\Purchase\Facades\PurchaseOrder as PurchaseOrderFacade;
+use Webkul\Purchase\Listeners\ComputePurchaseOrderListener;
 use Webkul\Purchase\Livewire\Customer\ListProducts;
 use Webkul\Purchase\Livewire\OrderSummary;
 
@@ -69,6 +73,8 @@ class PurchaseServiceProvider extends PackageServiceProvider
         Livewire::component('order-summary', OrderSummary::class);
 
         Livewire::component('list-products', ListProducts::class);
+
+        Event::listen([OperationDone::class, OperationBackOrdered::class], ComputePurchaseOrderListener::class);
 
         // \Webkul\Account\Models\Move::observe(\Webkul\Purchase\Observers\AccountMoveObserver::class);
     }

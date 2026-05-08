@@ -4,12 +4,15 @@ namespace Webkul\Sale;
 
 use Filament\Panel;
 use Illuminate\Foundation\AliasLoader;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Webkul\Inventory\Events\OperationDone;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
 use Webkul\PluginManager\PackageServiceProvider;
 use Webkul\Sale\Facades\SaleOrder as SaleOrderFacade;
+use Webkul\Sale\Listeners\ComputeSaleOrderListener;
 use Webkul\Sale\Livewire\QuotationSummary;
 
 class SaleServiceProvider extends PackageServiceProvider
@@ -76,6 +79,8 @@ class SaleServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         Livewire::component('quotation-summary', QuotationSummary::class);
+
+        Event::listen(OperationDone::class, ComputeSaleOrderListener::class);
     }
 
     public function packageRegistered(): void
