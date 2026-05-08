@@ -3,7 +3,6 @@
 namespace Webkul\Inventory;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Account\Facades\Tax as TaxFacade;
 use Webkul\Inventory\Enums\GroupPropagation;
 use Webkul\Inventory\Enums\LocationType;
@@ -16,6 +15,11 @@ use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Enums\ReservationMethod;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\RuleAuto;
+use Webkul\Inventory\Events\OperationAssigned;
+use Webkul\Inventory\Events\OperationCanceled;
+use Webkul\Inventory\Events\OperationConfirmed;
+use Webkul\Inventory\Events\OperationDone;
+use Webkul\Inventory\Events\OperationReturned;
 use Webkul\Inventory\Filament\Clusters\Operations\Resources\OperationResource;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Lot;
@@ -45,6 +49,8 @@ class InventoryManager
 
         $record->save();
 
+        OperationConfirmed::dispatch($record);
+
         return $record;
     }
 
@@ -73,6 +79,8 @@ class InventoryManager
         $record->computeState();
 
         $record->save();
+
+        OperationAssigned::dispatch($record);
 
         return $record;
     }
@@ -139,7 +147,100 @@ class InventoryManager
             }
         }
 
+        OperationDone::dispatch($record);
+
         return $record;
+    }
+
+    public function cancelTransfer(Operation $record): Operation
+    {
+        $this->cancelMoves($record->moves);
+
+        $record->computeState();
+
+        $record->save();
+
+        OperationCanceled::dispatch($record);
+
+        return $record;
+    }
+
+    public function returnTransfer(Operation $record, array $moveQuantities = []): Operation
+    {
+        $movesToReturn = Move::whereIn('id', array_keys($moveQuantities))
+            ->where('operation_id', $record->id)
+            ->get();
+
+        foreach ($movesToReturn as $move) {
+            $movesToUnreserve = $move->moveDestinations->filter(fn ($mv) => ! in_array($mv->state, [MoveState::DONE, MoveState::CANCELED]));
+
+            $this->unreserveMoves($movesToUnreserve);
+        }
+
+        $newOperation = $record->replicate()
+            ->fill($this->prepareReturnOperationValues($record));
+
+        $newOperation->save();
+
+        foreach ($movesToReturn as $move) {
+            $values = $this->prepareReturnMoveValues($newOperation, $move, $moveQuantities[$move->id]);
+
+            $newMove = $move->replicate()
+                ->fill($values);
+
+            $newMove->save();
+
+            $moveOriginToLink = $move->moveDestinations->flatMap->returnedMoves;
+
+            $moveOriginToLink = $moveOriginToLink->merge(collect([$move]));
+
+            $moveOriginToLink = $moveOriginToLink->merge(
+                $move->moveDestinations
+                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
+                    ->flatMap->moveOrigins
+                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
+            );
+
+            $moveDestinationToLink = $move->moveOrigins->flatMap->returnedMoves;
+
+            $moveDestinationToLink = $moveDestinationToLink->merge(
+                $move->moveOrigins->flatMap->returnedMoves
+                    ->flatMap->moveOrigins
+                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
+                    ->flatMap->moveDestinations
+                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
+            );
+
+            $newMove->moveOrigins()->syncWithoutDetaching($moveOriginToLink->pluck('id')->all());
+
+            $newMove->moveDestinations()->syncWithoutDetaching($moveDestinationToLink->pluck('id')->all());
+        }
+
+        $newOperation->refresh();
+
+        $newOperation = $this->assignTransfer($newOperation);
+
+        if (Package::isPluginInstalled('purchases')) {
+            $newOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
+        }
+
+        $url = OperationResource::getUrl('view', ['record' => $record]);
+
+        $newOperation->addMessage([
+            'body' => "This transfer has been created from <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$record->name}</a>.",
+            'type' => 'comment',
+        ]);
+
+        $url = OperationResource::getUrl('view', ['record' => $newOperation]);
+
+        $record->addMessage([
+            'body' => "The return <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$newOperation->name}</a> has been created.",
+            'type' => 'comment',
+        ]);
+
+        OperationReturned::dispatch($record);
+
+        return $newOperation;
     }
 
     public function confirmMoves($moves, $merge = true, $mergeInto = null, $bypassEntirePack = true)
@@ -645,6 +746,112 @@ class InventoryManager
         return $movesTodo;
     }
 
+    public function cancelMoves($moves)
+    {
+        if ($moves->some(fn ($move) => $move->state === MoveState::DONE && ! $move->is_scraped)) {
+            throw new \Exception(__('You cannot cancel a stock move that has been set to \'Done\'. Create a return in order to reverse the moves which took place.'));
+        }
+
+        $movesToCancel = $moves->filter(
+            fn ($move) => $move->state !== MoveState::CANCELED
+                && ! ($move->state === MoveState::DONE && $move->is_scraped)
+        );
+
+        $movesToCancel->each->update(['is_picked' => false]);
+
+        $this->unreserveMoves($movesToCancel);
+
+        $cancelMovesOrigin = false;
+
+        $movesToCancel->each->update(['state' => MoveState::CANCELED]);
+
+        foreach ($movesToCancel as $move) {
+            $siblingsStates = $move->moveDestinations
+                ->flatMap
+                ->moveOrigins
+                ->diff(collect([$move]))
+                ->pluck('state');
+
+            if ($move->propagate_cancel) {
+                if ($siblingsStates->every(fn ($state) => $state === MoveState::CANCELED)) {
+                    $this->cancelMoves(
+                        $move->moveDestinations->filter(
+                            fn ($move) => $move->state !== MoveState::DONE &&
+                                $move->destination_location_id === $move->moveDestinations->first()?->source_location_id
+                        )
+                    );
+
+                    if ($cancelMovesOrigin) {
+                        $this->cancelMoves($move->moveOrigins->filter(fn ($move) => $move->state !== MoveState::DONE));
+                    }
+                }
+            } else {
+                if ($siblingsStates->every(fn ($state) => in_array($state, [MoveState::DONE, MoveState::CANCELED]))) {
+                    $move->moveDestinations->each(function ($destMove) use ($move) {
+                        $destMove->update(['procure_method' => ProcureMethod::MAKE_TO_STOCK]);
+
+                        $destMove->moveOrigins()->detach($move->id);
+                    });
+                }
+            }
+        }
+
+        $movesToCancel->each(function ($move) {
+            $move->update(['procure_method' => ProcureMethod::MAKE_TO_STOCK]);
+
+            $move->moveOrigins()->detach();
+        });
+
+        return true;
+    }
+
+    public function unreserveMoves($moves)
+    {
+        $movesToUnreserve = $moves->filter(function ($move) {
+            if (
+                $move->state === MoveState::CANCELED
+                || ($move->state === MoveState::DONE && $move->is_scraped)
+                || $move->is_picked
+            ) {
+                return false;
+            }
+
+            if ($move->state === MoveState::DONE) {
+                throw new \Exception(__("You can not unreserve a stock move that has been set to 'Done'."));
+            }
+
+            return true;
+        });
+
+        $moveLineToUnlink = collect();
+
+        $movesNotToRecompute = collect();
+
+        foreach ($movesToUnreserve->flatMap->lines as $moveLine) {
+            if ($moveLine->is_picked) {
+                $movesNotToRecompute->push($moveLine->move_id);
+
+                continue;
+            }
+
+            $moveLineToUnlink->push($moveLine->id);
+        }
+
+        MoveLine::whereIn('id', $moveLineToUnlink)->get()->each->delete();
+
+        $movesToUnreserve
+            ->filter(fn ($move) => ! $movesNotToRecompute->contains('id', $move->id))
+            ->each(function ($move) {
+                $move->computeQuantity();
+
+                $move->computeState();
+
+                $move->saveQuietly();
+            });
+
+        return true;
+    }
+
     public function doneMoveLines($moveLines)
     {
         $moveLineIdsTrackedWithoutLot = collect();
@@ -793,978 +1000,6 @@ class InventoryManager
         }
 
         $moveLinesTodo->each->update(['scheduled_at' => now()]);
-    }
-
-    public function createMovesBackOrder($moves)
-    {
-        $backOrderMovesValues = collect();
-
-        foreach ($moves as $move) {
-            if (float_compare($move->quantity, $move->product_uom_qty, precisionRounding: 2) < 0) {
-                $qtySplit = $move->uom->computeQuantity(
-                    $move->product_uom_qty - $move->quantity,
-                    $move->product->uom,
-                    roundingMethod: 'HALF-UP'
-                );
-
-                $backOrderMovesValues->push($move->split($qtySplit));
-            }
-        }
-
-        $backOrderMoves = collect();
-
-        foreach ($backOrderMovesValues as $moveValues) {
-            $originIds = $moveValues['move_origin_ids'] ?? [];
-
-            $destinationIds = $moveValues['move_destination_ids'] ?? [];
-
-            unset($moveValues['move_origin_ids'], $moveValues['move_destination_ids']);
-
-            $move = Move::create($moveValues);
-
-            if (! empty($originIds)) {
-                $move->moveOrigins()->attach($originIds);
-            }
-
-            if (! empty($destinationIds)) {
-                $move->moveDestinations()->attach($destinationIds);
-            }
-
-            $backOrderMoves->push($move);
-        }
-
-        $this->confirmMoves($backOrderMoves, merge: false);
-
-        return $backOrderMoves;
-    }
-
-    public function cancelTransfer(Operation $record): Operation
-    {
-        $this->cancelMoves($record->moves);
-
-        $record->computeState();
-
-        $record->save();
-
-        return $record;
-    }
-
-    public function returnTransfer(Operation $record, array $moveQuantities = []): Operation
-    {
-        $movesToReturn = Move::whereIn('id', array_keys($moveQuantities))
-            ->where('operation_id', $record->id)
-            ->get();
-
-        foreach ($movesToReturn as $move) {
-            $movesToUnreserve = $move->moveDestinations->filter(fn ($mv) => ! in_array($mv->state, [MoveState::DONE, MoveState::CANCELED]));
-
-            $this->doUnreserve($movesToUnreserve);
-        }
-
-        $newOperation = $record->replicate()
-            ->fill($this->prepareReturnOperationValues($record));
-
-        $newOperation->save();
-
-        foreach ($movesToReturn as $move) {
-            $values = $this->prepareReturnMoveValues($newOperation, $move, $moveQuantities[$move->id]);
-
-            $newMove = $move->replicate()
-                ->fill($values);
-
-            $newMove->save();
-
-            $moveOriginToLink = $move->moveDestinations->flatMap->returnedMoves;
-
-            $moveOriginToLink = $moveOriginToLink->merge(collect([$move]));
-
-            $moveOriginToLink = $moveOriginToLink->merge(
-                $move->moveDestinations
-                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
-                    ->flatMap->moveOrigins
-                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
-            );
-
-            $moveDestinationToLink = $move->moveOrigins->flatMap->returnedMoves;
-
-            $moveDestinationToLink = $moveDestinationToLink->merge(
-                $move->moveOrigins->flatMap->returnedMoves
-                    ->flatMap->moveOrigins
-                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
-                    ->flatMap->moveDestinations
-                    ->filter(fn ($move) => $move->state !== MoveState::CANCELED)
-            );
-
-            $newMove->moveOrigins()->syncWithoutDetaching($moveOriginToLink->pluck('id')->all());
-
-            $newMove->moveDestinations()->syncWithoutDetaching($moveDestinationToLink->pluck('id')->all());
-        }
-
-        $newOperation->refresh();
-
-        $newOperation = $this->assignTransfer($newOperation);
-
-        if (Package::isPluginInstalled('purchases')) {
-            $newOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
-        }
-
-        $url = OperationResource::getUrl('view', ['record' => $record]);
-
-        $newOperation->addMessage([
-            'body' => "This transfer has been created from <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$record->name}</a>.",
-            'type' => 'comment',
-        ]);
-
-        $url = OperationResource::getUrl('view', ['record' => $newOperation]);
-
-        $record->addMessage([
-            'body' => "The return <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$newOperation->name}</a> has been created.",
-            'type' => 'comment',
-        ]);
-        
-        return $newOperation;
-    }
-
-    public function checkForErrors($operation): void
-    {
-        $noQuantitiesDoneIds = collect();
-
-        $productsWithoutLots = collect();
-
-        $hasLotsIssue = false;
-
-        $hasNoMoves = $operation->moves->isEmpty() && $operation->moveLines->isEmpty();
-
-        $hasNoQuantities = $operation->moves
-            ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
-            ->every(fn ($move) => float_is_zero($move->quantity, precisionDigits: 2));
-
-        if ($operation->operationType->use_create_lots || $operation->operationType->use_existing_lots) {
-            $linesToCheck = $this->getLotMoveLinesForErrorsCheck($operation, $noQuantitiesDoneIds);
-
-            foreach ($linesToCheck as $line) {
-                if (! $line->lot_name && ! $line->lot_id) {
-                    $hasLotsIssue = true;
-
-                    $productsWithoutLots->push($line->product);
-                }
-            }
-        }
-
-        if ($hasNoMoves) {
-            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.lines-missing.body'));
-        }
-
-        if ($hasNoQuantities) {
-            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.no-quantities-reserved.body'));
-        }
-
-        if ($hasLotsIssue) {
-            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.lot-missing.body', [
-                'products' => $productsWithoutLots->pluck('name')->implode(', '),
-            ]));
-        }
-    }
-
-    public function getLotMoveLinesForErrorsCheck(Operation $operation, $noQuantitiesDoneIds)
-    {
-        $getLineWithDoneQty = fn ($moveLines) => $moveLines->filter(
-            fn ($moveLine) => $moveLine->product
-                && $moveLine->product->tracking !== ProductTracking::QTY
-                && $moveLine->is_picked
-                && float_compare($moveLine->qty, 0, precisionRounding: $moveLine->uom->rounding) > 0
-        );
-
-        if ($noQuantitiesDoneIds->contains($operation->id)) {
-            $linesToCheck = $operation->moveLines->filter(
-                fn ($moveLine) => $moveLine->product && $moveLine->product->tracking !== ProductTracking::QTY
-            );
-        } else {
-            $linesToCheck = $getLineWithDoneQty($operation->moveLines);
-        }
-
-        return $linesToCheck;
-    }
-
-    /**
-     * Process back order for the operation.
-     */
-    public function createBackOrder(Operation $record, $backOrderMoves = null)
-    {
-        if ($backOrderMoves) {
-            $movesToBackOrder = $backOrderMoves->filter(fn ($move) => $move->operation_id === $record->id);
-        } else {
-            $movesToBackOrder = $record->moves()->get()->filter(
-                fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED])
-            );
-        }
-
-        $movesToBackOrder->each(function ($move) {
-            $move->computeState();
-
-            $move->save();
-        });
-
-        if ($movesToBackOrder->isEmpty()) {
-            return;
-        }
-
-        $backOrderOperation = $record->replicate(['name', 'moves', 'moveLines']);
-
-        $backOrderOperation->fill([
-            'name'          => '/',
-            'back_order_id' => $record->id,
-            'user_id'       => null,
-        ]);
-
-        $backOrderOperation->save();
-
-        $movesToBackOrder->each->update([
-            'operation_id' => $backOrderOperation->id,
-            'is_picked'    => false,
-        ]);
-
-        $movesToBackOrder
-            ->flatMap->lines
-            ->flatMap->packageLevel
-            ->filter()
-            ->each->update(['operation_id' => $backOrderOperation->id]);
-
-        $movesToBackOrder
-            ->flatMap->lines
-            ->each->update(['operation_id' => $backOrderOperation->id]);
-
-        if ($backOrderOperation->operationType->reservation_method === ReservationMethod::AT_CONFIRM) {
-            $this->assignTransfer($backOrderOperation);
-        }
-
-        if (Package::isPluginInstalled('purchases')) {
-            $backOrderOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
-
-            foreach ($record->purchaseOrders as $purchaseOrder) {
-                PurchaseOrderFacade::computePurchaseOrder($purchaseOrder);
-            }
-        }
-
-        $url = OperationResource::getUrl('view', ['record' => $record]);
-
-        $backOrderOperation->addMessage([
-            'body' => "This transfer has been created from <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$record->name}</a>.",
-            'type' => 'comment',
-        ]);
-
-        $url = OperationResource::getUrl('view', ['record' => $backOrderOperation]);
-
-        $record->addMessage([
-            'body' => "The back order <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$backOrderOperation->name}</a> has been created.",
-            'type' => 'comment',
-        ]);
-
-        return $backOrderOperation;
-    }
-
-    /**
-     * Apply push rules for the operation.
-     */
-    public function applyPushRules($moves)
-    {
-        $newMoves = collect();
-
-        foreach ($moves as $move) {
-            $newMove = null;
-
-            $warehouse = $move->warehouse ?? $move->operation?->operationType->warehouse;
-
-            $rule = $this->getPushRule($move->product, $move->destinationLocation, [
-                'routes'    => $move->routes,
-                'packaging' => $move->productPackaging,
-                'warehouse' => $warehouse,
-            ]);
-
-            if (
-                $rule
-                && (
-                    ! $move->origin_returned_move_id
-                    || $move->originReturnedMove->destination_location_id !== $rule->destination_location_id
-                )
-            ) {
-                $newMove = $this->runPushRule($rule, $move);
-
-                if ($newMove) {
-                    $newMoves->push($newMove);
-                }
-            }
-
-            $movesToPropagate = collect();
-
-            $movesToMts = collect();
-
-            foreach ($move->moveDestinations->diff($newMove ? collect([$newMove]) : collect()) as $m) {
-                if ($newMove && $move->final_location_id && $m->source_location_id === $move->final_location_id) {
-                    $movesToPropagate->push($m);
-                } elseif (! $m->sourceLocation->isChildOf($move->destinationLocation)) {
-                    $movesToMts->push($m);
-                }
-            }
-
-            foreach ($movesToMts as $m) {
-                $m->moveOrigins()->detach($move->id);
-
-                $m->procure_method = ProcureMethod::MAKE_TO_STOCK;
-
-                $m->computeState();
-
-                $m->save();
-            }
-
-            $move->moveDestinations()->detach($movesToPropagate->pluck('id')->all());
-
-            $newMove?->moveDestinations()->syncWithoutDetaching($movesToPropagate->pluck('id')->all());
-        }
-
-        $this->confirmMoves($newMoves);
-
-        return $newMoves;
-    }
-
-    /**
-     * Run a push rule on a move.
-     */
-    public function runPushRule(Rule $rule, Move $move)
-    {
-        $newScheduledAt = $move->scheduled_at->addDays($rule->delay);
-
-        if ($rule->auto == RuleAuto::TRANSPARENT) {
-            $move->update([
-                'scheduled_at'            => $newScheduledAt,
-                'destination_location_id' => $rule->destination_location_id,
-            ]);
-
-            if ($move->lines->isNotEmpty()) {
-                $putAwayLocation = $move->destinationLocation->getPutAwayStrategy($move->product);
-
-                foreach ($move->lines as $moveLine) {
-                    $moveLine->update([
-                        'destination_location_id' => $putAwayLocation?->id ?? $move->destination_location_id,
-                    ]);
-                }
-            }
-
-            if ($rule->destination_location_id !== $move->destination_location_id) {
-                return $this->applyPushRules(collect([$move]))->first();
-            }
-        } else {
-            $newMoveValues = $this->preparePushMoveCopyValues($rule, $move, $newScheduledAt);
-
-            $newMove = $move->replicate(['order_id', 'work_order_id'])->fill($newMoveValues);
-
-            $newMove->save();
-
-            if ($newMove->shouldBypassReservation()) {
-                $newMove->update([
-                    'procure_method' => ProcureMethod::MAKE_TO_STOCK,
-                ]);
-            }
-
-            if (! $newMove->sourceLocation->shouldBypassReservation()) {
-                $move->moveDestinations()->attach($newMove->id);
-            }
-        }
-
-        return $newMove->refresh();
-    }
-
-    public function prepareProcurementQty($moves)
-    {
-        $quantities = [];
-
-        $mtsoProductsByLocations = [];
-
-        $mtsoMoveIds = [];
-
-        foreach ($moves as $move) {
-            if ($move->rule?->procure_method === ProcureMethod::MTS_ELSE_MTO) {
-                $mtsoMoveIds[$move->id] = true;
-
-                $mtsoProductsByLocations[$move->source_location_id][] = $move->product_id;
-            }
-        }
-
-        $forecastedQuantitiesByLocation = [];
-
-        foreach ($mtsoProductsByLocations as $locationId => $productIds) {
-            $location = Location::find($locationId);
-
-            if (! $location || $location->shouldBypassReservation()) {
-                continue;
-            }
-
-            $forecastedQuantitiesByLocation[$locationId] = Product::whereIn('id', array_unique($productIds))
-                ->get()
-                ->mapWithKeys(function ($product) use ($locationId) {
-                    $product->context = ['location_id' => $locationId];
-
-                    return [$product->id => $product->free_qty];
-                })
-                ->all();
-        }
-
-        foreach ($moves as $move) {
-            $rounding = $move->product->uom->rounding ?? 0.01;
-
-            if (
-                ! isset($mtsoMoveIds[$move->id])
-                || float_compare($move->product_qty, 0, precisionRounding: $rounding) <= 0
-            ) {
-                $quantities[] = $move->product_uom_qty;
-
-                continue;
-            }
-
-            if ($move->shouldBypassReservation()) {
-                $quantities[] = $move->product_uom_qty;
-
-                continue;
-            }
-
-            $freeQty = max($forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] ?? 0, 0);
-
-            $quantity = max($move->product_qty - $freeQty, 0);
-
-            $productUomQty = $move->product->uom->computeQuantity(
-                $quantity,
-                $move->uom,
-                roundingMethod: 'HALF-UP'
-            );
-
-            $quantities[] = $productUomQty;
-
-            $forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] =
-                ($forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] ?? 0)
-                - min($move->product_qty, $freeQty);
-        }
-
-        return $quantities;
-    }
-
-    public function preparePushMoveCopyValues(Rule $rule, Move $moveToCopy, $newScheduledAt)
-    {
-        $companyId = $rule->company_id;
-
-        $copiedQuantity = $moveToCopy->quantity;
-
-        if (float_compare($moveToCopy->product_uom_qty, 0, precisionRounding: $moveToCopy->uom->rounding) < 0) {
-            $copiedQuantity = $moveToCopy->product_uom_qty;
-        }
-
-        if (! $companyId) {
-            $companyId = $rule->warehouse?->company_id
-                ?? $rule->operationType?->warehouse?->company_id;
-        }
-
-        return [
-            'state'                   => MoveState::DRAFT,
-            'reference'               => null,
-            'product_uom_qty'         => $copiedQuantity,
-            'product_qty'             => $moveToCopy->uom->computeQuantity($copiedQuantity, $moveToCopy->product->uom, true, 'HALF-UP'),
-            'quantity'                => 0,
-            'is_picked'               => false,
-            'origin'                  => $moveToCopy->origin ?? $moveToCopy->operation->name ?? '/',
-            'operation_id'            => null,
-            'source_location_id'      => $moveToCopy->destination_location_id,
-            'destination_location_id' => $rule->destination_location_id,
-            'final_location_id'       => $moveToCopy->final_location_id,
-            'rule_id'                 => $rule->id,
-            'scheduled_at'            => $newScheduledAt,
-            'company_id'              => $companyId,
-            'operation_type_id'       => $rule->operation_type_id,
-            'propagate_cancel'        => $rule->propagate_cancel,
-            'warehouse_id'            => $rule->warehouse_id,
-            'procure_method'          => ProcureMethod::MAKE_TO_ORDER,
-        ];
-    }
-
-    /**
-     * Traverse up the location tree to find a matching push rule.
-     */
-    public function getPushRule(Product $product, Location $destinationLocation, array $values = [])
-    {
-        $foundRule = null;
-
-        $location = $destinationLocation;
-
-        $filters['action'] = [RuleAction::PUSH, RuleAction::PULL_PUSH];
-
-        while (! $foundRule && $location) {
-            $filters['source_location_id'] = $location->id;
-
-            $foundRule = $this->searchRule(
-                $values['routes'] ?? collect(),
-                $values['packaging'] ?? null,
-                $product,
-                $values['warehouse'] ?? null,
-                $filters
-            );
-
-            $location = $location->parent;
-        }
-
-        return $foundRule;
-    }
-
-    /**
-     * Traverse up the location tree to find a matching pull rule.
-     */
-    public function getRule(Product $product, Location $location, array $values = [])
-    {
-        $foundRule = null;
-
-        $filters['action'] = ['!=', RuleAction::PUSH];
-
-        while (! $foundRule && $location) {
-            $filters['destination_location_id'] = $location->id;
-
-            $foundRule = $this->searchRule(
-                $values['routes'] ?? collect(),
-                $values['packaging'] ?? null,
-                $product,
-                $values['warehouse'] ?? null,
-                $filters
-            );
-
-            $location = $location->parent;
-        }
-
-        return $foundRule;
-    }
-
-    /**
-     * Search for a push rule based on the provided filters.
-     */
-    public function searchRule($routes, $productPackaging, $product, $warehouse, array $filters)
-    {
-        if ($warehouse) {
-            $filters['warehouse_id'] = $warehouse->id;
-        }
-
-        $routeIds = collect();
-
-        if ($routes?->isNotEmpty()) {
-            $routeIds = $routeIds->merge($routes->pluck('id'));
-        }
-
-        $routeSources = [
-            [$productPackaging, 'routes'],
-            [$product, 'routes'],
-            [$product?->category, 'routes'],
-            [$warehouse, 'routes'],
-        ];
-
-        foreach ($routeSources as [$source, $relationName]) {
-            if (! $source || ! $source->{$relationName}) {
-                continue;
-            }
-
-            $routeIds = $routeIds->merge($source->{$relationName}->pluck('id'))
-                ->unique();
-
-            if ($routeIds->isEmpty()) {
-                continue;
-            }
-
-            $foundRule = Rule::whereIn('route_id', $routeIds)
-                ->where(function ($query) use ($filters) {
-                    foreach ($filters as $column => $value) {
-                        if (is_array($value)) {
-                            if (count($value) === 2 && $value[0] === '!=') {
-                                [, $val] = $value;
-
-                                $query->where($column, '!=', $val);
-                            } else {
-                                $query->whereIn($column, $value);
-                            }
-                        } else {
-                            $query->where($column, $value);
-                        }
-                    }
-                })
-                ->orderBy('route_sort', 'asc')
-                ->orderBy('sort', 'asc')
-                ->first();
-
-            if ($foundRule) {
-                return $foundRule;
-            }
-        }
-
-        return null;
-    }
-
-    public function runProcurements($procurements)
-    {
-        if ($procurements->isEmpty()) {
-            return;
-        }
-
-        $actionsToRun = [];
-
-        $procurementErrors = [];
-
-        foreach ($procurements as $procurement) {
-            $procurement['values']['company'] = $procurement['values']['company'] ?? $procurement['location']->company;
-            $procurement['values']['priority'] = $procurement['values']['priority'] ?? '0';
-            $procurement['values']['planned'] = $procurement['values']['planned'] ?? now();
-
-            $rule = $this->getRule($procurement['product'], $procurement['location'], $procurement['values']);
-
-            if (! $rule) {
-                $error = __('No rule has been found to replenish ":product" in ":location".\nVerify the routes configuration on the product.', [
-                    'product'  => $procurement['product']->name,
-                    'location' => $procurement['location']->full_name,
-                ]);
-
-                $procurementErrors[] = ['procurement' => $procurement, 'error' => $error];
-            } else {
-                $action = $rule->action === RuleAction::PULL_PUSH ? RuleAction::PULL : $rule->action;
-
-                if (! isset($actionsToRun[$action->value])) {
-                    $actionsToRun[$action->value] = [];
-                }
-
-                $actionsToRun[$action->value][] = [$procurement, $rule];
-            }
-        }
-
-        foreach ($actionsToRun as $action => $procurements) {
-            $method = 'run'.ucfirst($action).'Rule';
-
-            try {
-                $this->$method($procurements);
-            } catch (\Exception $e) {
-                $procurementErrors[] = $e->getMessage();
-            }
-        }
-
-        if (! empty($procurementErrors)) {
-            $errorMessage = collect($procurementErrors)->map(function ($error) {
-                if (isset($error['error'])) {
-                    return $error['error'];
-                }
-
-                return $error;
-            })->implode("\n");
-
-            throw new \Exception($errorMessage);
-        }
-    }
-
-    /**
-     * Run a pull rule on a line.
-     */
-    public function runPullRule($procurements)
-    {
-        foreach ($procurements as [$procurement, $rule]) {
-            if (! $rule->source_location_id) {
-                throw new \Exception(__('No source location defined on stock rule: :name!', [
-                    'name' => $rule->name,
-                ]));
-            }
-        }
-
-        usort($procurements, function ($procurement) {
-            return float_compare($procurement[0]['product_qty'], 0.0, precisionRounding: $procurement[0]['product_uom']->rounding) > 0 ? 1 : 0;
-        });
-
-        $movesValuesByCompany = [];
-
-        foreach ($procurements as [$procurement, $rule]) {
-            $procureMethod = $rule->procure_method;
-
-            if ($rule->procure_method === ProcureMethod::MTS_ELSE_MTO) {
-                $procureMethod = ProcureMethod::MAKE_TO_STOCK;
-            }
-
-            $moveValues = $this->prepareMoveValues($rule, $procurement);
-
-            $moveValues['procure_method'] = $procureMethod;
-
-            $movesValuesByCompany[$procurement['company']->id][] = $moveValues;
-        }
-
-        foreach ($movesValuesByCompany as $companyId => $moveValues) {
-            $moves = collect();
-
-            foreach ($moveValues as $moveValue) {
-                $move = Move::create($moveValue);
-
-                $moves->push($move);
-
-                if ($moveValue['move_destinations']->isNotEmpty()) {
-                    $move->moveDestinations()->attach($moveValue['move_destinations']->pluck('id')->all());
-                }
-            }
-
-            $this->confirmMoves($moves);
-        }
-    }
-
-    public function prepareMoveValues($rule, $procurement)
-    {
-        $procurementGroupId = null;
-
-        if ($rule->group_propagation_option === GroupPropagation::PROPAGATE) {
-            $procurementGroupId = $procurement['values']['procurement_group']?->id;
-        } elseif ($rule->group_propagation_option === GroupPropagation::FIXED) {
-            $procurementGroupId = $rule->procurement_group_id;
-        }
-
-        $dateScheduled = $procurement['values']['planned']->copy()->subDays($rule->delay ?? 0);
-
-        $dateDeadline = isset($procurement['values']['deadline'])
-            ? $procurement['values']['deadline']->copy()->subDays($rule->delay ?? 0)
-            : null;
-
-        $partner = $rule->partnerAddress ?? $procurement['values']['procurement_group']?->partner;
-
-        $pickingDescription = $procurement['product']->getDescription($rule->operationType);
-
-        $qtyLeft = $procurement['product_qty'];
-
-        if (! $partner && ! $procurement['values']['move_destinations']?->isNotEmpty()) {
-            $moveDestinations = $procurement['values']['move_destinations'];
-
-            $transitLocation = Location::where('type', LocationType::TRANSIT)->whereNotNull('company_id')->first();
-
-            if ($procurement['location']->id === $transitLocation->is) {
-                $partners = $moveDestinations->pluck('destinationLocation.warehouse.partner')->filter()->unique('id');
-
-                if ($partners->count() === 1) {
-                    $partner = $partners->first();
-                }
-
-                $moveDestinations->each->update([
-                    'partner_id' => $rule->sourceLocation->warehouse?->partner_id ?? $rule->company->partner_id,
-                ]);
-            }
-        }
-
-        if (float_compare($procurement['product_qty'], 0.0, precisionRounding: $procurement['product_uom']->rounding) < 0) {
-            $isRefund = true;
-        }
-
-        $moveValues = [
-            'name'                 => substr($procurement['name'], 0, 2000),
-            'company_id'           => $rule->company_id ?? $procurement['location']->company_id ?? $rule->destinationLocation?->company_id ?? $procurement['company']?->id,
-            'product_id'           => $procurement['product']->id,
-            'uom_id'               => $procurement['product_uom']?->id,
-            'product_uom_qty'      => $qtyLeft,
-            'product_qty'          => $procurement['product_uom']->computeQuantity($qtyLeft, $procurement['product']->uom, roundingMethod: 'HALF-UP'),
-            'partner_id'           => $partner?->id,
-            'source_location_id'   => $rule->source_location_id,
-            'final_location_id'    => $rule->destination_location_id,
-            'move_destinations'    => $procurement['values']['move_destinations'] ?? collect(),
-            'rule_id'              => $rule->id,
-            'procure_method'       => $rule->procure_method,
-            'origin'               => $procurement['origin'] ?? null,
-            'operation_type_id'    => $rule->operation_type_id,
-            'procurement_group_id' => $procurementGroupId,
-            'routes'               => $procurement['values']['routes'] ?? collect(),
-            'warehouse_id'         => $rule->warehouse_id,
-            'scheduled_at'         => $dateScheduled,
-            'deadline'             => $rule->group_propagation_option === GroupPropagation::FIXED ? null : $dateDeadline,
-            'propagate_cancel'     => $rule->propagate_cancel,
-            'description_picking'  => $pickingDescription,
-            'priority'             => $procurement['values']['priority'] ?? '0',
-            'order_point_id'       => $procurement['values']['order_point']?->is ?? null,
-            'product_packaging_id' => $procurement['values']['product_packaging']?->id ?? null,
-        ];
-
-        if (isset($procurement['values']['sale_order_line_id'])) {
-            $moveValues['sale_order_line_id'] = $procurement['values']['sale_order_line_id'];
-        }
-
-        if (isset($procurement['values']['purchase_order_line_id'])) {
-            $moveValues['purchase_order_line_id'] = $procurement['values']['purchase_order_line_id'];
-        }
-
-        if (isset($procurement['values']['work_order_id'])) {
-            $moveValues['work_order_id'] = $procurement['values']['work_order_id'];
-        }
-
-        if (isset($procurement['values']['bom_line_id'])) {
-            $moveValues['bom_line_id'] = $procurement['values']['bom_line_id'];
-        }
-
-        if ($rule->location_dest_from_rule) {
-            $moveValues['destination_location_id'] = $rule->destination_location_id;
-        }
-
-        return $moveValues;
-    }
-
-    public function prepareReturnOperationValues(Operation $operation): array
-    {
-        $sourceLocation = $operation->destinationLocation;
-
-        $returnType = $operation->operationType->returnOperationType;
-
-        if ($returnType?->type === OperationType::INCOMING) {
-            $destinationLocation = $returnType->destinationLocation;
-        } else {
-            $destinationLocation = $operation->sourceLocation;
-        }
-
-        return [
-            'state'                   => OperationState::DRAFT,
-            'origin'                  => __('Return of :operation_name', ['operation_name' => $operation->name]),
-            'operation_type_id'       => $returnType?->id ?? $operation->operation_type_id,
-            'source_location_id'      => $sourceLocation->id,
-            'location_destination_id' => $destinationLocation->id,
-            'return_id'               => $operation->id,
-            'user_id'                 => null,
-        ];
-    }
-
-    public function prepareReturnMoveValues(Operation $operation, Move $move, mixed $quantity): array
-    {
-        $values = [
-            'name'                    => $operation->name,
-            'product_id'              => $move->product_id,
-            'product_uom_qty'         => $quantity,
-            'product_qty'             => $move->uom->computeQuantity($quantity, $move->product->uom, roundingMethod: 'HALF-UP'),
-            // 'quantity'                => $quantity,
-            'quantity'                => 0,
-            'is_picked'               => 0,
-            'uom_id'                  => $move->product->uom_id,
-            'operation_id'            => $operation->id,
-            'state'                   => MoveState::DRAFT,
-            'date'                    => now(),
-            'source_location_id'      => $operation->source_location_id ?? $move->destination_location_id,
-            'destination_location_id' => $operation->destination_location_id ?? $move->source_location_id,
-            'final_location_id'       => null,
-            'operation_type_id'       => $operation->operation_type_id,
-            'warehouse_id'            => $operation->operationType->warehouse_id,
-            'origin_returned_move_id' => $move->id,
-            'procure_method'          => ProcureMethod::MAKE_TO_STOCK,
-            'procurement_group_id'    => $operation->procurement_group_id,
-        ];
-
-        if ($operation->operationType->type === OperationType::OUTGOING) {
-            $values['partner_id'] = $operation->partner_id;
-        }
-
-        return $values;
-    }
-
-    public function assignOperation($moves, $mergeInto = null)
-    {
-        if ($moves->isEmpty()) {
-            return;
-        }
-
-        $groupedMoves = $moves->groupBy(fn ($move) => implode('_', $move->keyAssignOperation()));
-
-        foreach ($groupedMoves as $moves) {
-            $operation = $this->searchOperationForAssignation($moves[0]);
-
-            if ($operation) {
-                $vals = [];
-
-                if ($moves->some(fn ($move) => $operation->partner_id !== $move->partner_id)) {
-                    $vals['partner_id'] = null;
-                }
-
-                if ($moves->some(fn ($move) => $operation->origin !== $move->origin)) {
-                    $vals['origin'] = null;
-                }
-
-                if (! empty($vals)) {
-                    $operation->update($vals);
-                }
-            } else {
-                $moves->each(fn ($move) => $move->load('uom'));
-
-                $moves = $moves->filter(fn ($move) => float_compare($move->product_uom_qty, 0.0, precisionRounding: $move->uom->rounding) >= 0);
-
-                if ($moves->isEmpty()) {
-                    continue;
-                }
-
-                $operation = Operation::create($this->getNewOperationValues($moves));
-            }
-
-            foreach ($moves as $move) {
-                $move->update([
-                    'operation_id' => $operation->id,
-                ]);
-            }
-
-            $operation->refresh();
-
-            $operation->computeState();
-
-            $operation->save();
-        }
-    }
-
-    public function getNewOperationValues($moves): array
-    {
-        $origins = $moves->filter(fn ($move) => $move->origin)
-            ->pluck('origin')
-            ->unique()
-            ->values();
-
-        if ($origins->isEmpty()) {
-            $origin = null;
-        } else {
-            $origin = $origins->take(5)->implode(',');
-
-            if ($origins->count() > 5) {
-                $origin .= '...';
-            }
-        }
-
-        $partners = $moves->pluck('partner_id')->unique();
-
-        $partner = $partners->count() === 1 ? $partners->first() : null;
-
-        $values = [
-            'origin'               => $origin,
-            'company_id'           => $moves->pluck('company_id')->first(),
-            'user_id'              => null,
-            'procurement_group_id' => $moves->pluck('procurement_group_id')->first(),
-            'partner_id'           => $partner,
-            'operation_type_id'    => $moves->pluck('operation_type_id')->first(),
-            'source_location_id'   => $moves->pluck('source_location_id')->first(),
-        ];
-
-        $destinationLocationIds = $moves->pluck('destination_location_id')->filter()->unique();
-
-        if ($destinationLocationIds->isNotEmpty()) {
-            $values['destination_location_id'] = $destinationLocationIds->first();
-        }
-
-        if ($saleOrderId = $moves->first()?->procurementGroup?->sale_order_id) {
-            $values['sale_order_id'] = $saleOrderId;
-        }
-
-        return $values;
-    }
-
-    public function searchOperationForAssignation(Move $move)
-    {
-        $query = Operation::where('procurement_group_id', $move->procurement_group_id)
-            ->where('source_location_id', $move->source_location_id)
-            ->where('destination_location_id', $move->destination_location_id ?? $move->operationType->destination_location_id)
-            ->where('operation_type_id', $move->operation_type_id)
-            // ->where('printed', false)
-            ->whereIn('state', [OperationState::DRAFT, OperationState::CONFIRMED, OperationState::ASSIGNED]);
-
-        if ($move->partner_id && ! $move->procurement_group_id) {
-            $query->where('partner_id', $move->partner_id);
-        }
-
-        return $query->first();
     }
 
     public function mergeMoves($moves, $mergeInto = null)
@@ -1943,6 +1178,295 @@ class InventoryManager
         return $moves->merge($mergedMoves)->reject(fn ($move) => $movesToDelete->contains('id', $move->id));
     }
 
+    public function assignOperation($moves, $mergeInto = null)
+    {
+        if ($moves->isEmpty()) {
+            return;
+        }
+
+        $groupedMoves = $moves->groupBy(fn ($move) => implode('_', $move->keyAssignOperation()));
+
+        foreach ($groupedMoves as $moves) {
+            $operation = $this->searchOperationForAssignation($moves[0]);
+
+            if ($operation) {
+                $vals = [];
+
+                if ($moves->some(fn ($move) => $operation->partner_id !== $move->partner_id)) {
+                    $vals['partner_id'] = null;
+                }
+
+                if ($moves->some(fn ($move) => $operation->origin !== $move->origin)) {
+                    $vals['origin'] = null;
+                }
+
+                if (! empty($vals)) {
+                    $operation->update($vals);
+                }
+            } else {
+                $moves->each(fn ($move) => $move->load('uom'));
+
+                $moves = $moves->filter(fn ($move) => float_compare($move->product_uom_qty, 0.0, precisionRounding: $move->uom->rounding) >= 0);
+
+                if ($moves->isEmpty()) {
+                    continue;
+                }
+
+                $operation = Operation::create($this->getNewOperationValues($moves));
+            }
+
+            foreach ($moves as $move) {
+                $move->update([
+                    'operation_id' => $operation->id,
+                ]);
+            }
+
+            $operation->refresh();
+
+            $operation->computeState();
+
+            $operation->save();
+        }
+    }
+
+    public function createMovesBackOrder($moves)
+    {
+        $backOrderMovesValues = collect();
+
+        foreach ($moves as $move) {
+            if (float_compare($move->quantity, $move->product_uom_qty, precisionRounding: 2) < 0) {
+                $qtySplit = $move->uom->computeQuantity(
+                    $move->product_uom_qty - $move->quantity,
+                    $move->product->uom,
+                    roundingMethod: 'HALF-UP'
+                );
+
+                $backOrderMovesValues->push($move->split($qtySplit));
+            }
+        }
+
+        $backOrderMoves = collect();
+
+        foreach ($backOrderMovesValues as $moveValues) {
+            $originIds = $moveValues['move_origin_ids'] ?? [];
+
+            $destinationIds = $moveValues['move_destination_ids'] ?? [];
+
+            unset($moveValues['move_origin_ids'], $moveValues['move_destination_ids']);
+
+            $move = Move::create($moveValues);
+
+            if (! empty($originIds)) {
+                $move->moveOrigins()->attach($originIds);
+            }
+
+            if (! empty($destinationIds)) {
+                $move->moveDestinations()->attach($destinationIds);
+            }
+
+            $backOrderMoves->push($move);
+        }
+
+        $this->confirmMoves($backOrderMoves, merge: false);
+
+        return $backOrderMoves;
+    }
+
+    public function checkForErrors($operation): void
+    {
+        $noQuantitiesDoneIds = collect();
+
+        $productsWithoutLots = collect();
+
+        $hasLotsIssue = false;
+
+        $hasNoMoves = $operation->moves->isEmpty() && $operation->moveLines->isEmpty();
+
+        $hasNoQuantities = $operation->moves
+            ->filter(fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
+            ->every(fn ($move) => float_is_zero($move->quantity, precisionDigits: 2));
+
+        if ($operation->operationType->use_create_lots || $operation->operationType->use_existing_lots) {
+            $linesToCheck = $this->getLotMoveLinesForErrorsCheck($operation, $noQuantitiesDoneIds);
+
+            foreach ($linesToCheck as $line) {
+                if (! $line->lot_name && ! $line->lot_id) {
+                    $hasLotsIssue = true;
+
+                    $productsWithoutLots->push($line->product);
+                }
+            }
+        }
+
+        if ($hasNoMoves) {
+            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.lines-missing.body'));
+        }
+
+        if ($hasNoQuantities) {
+            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.no-quantities-reserved.body'));
+        }
+
+        if ($hasLotsIssue) {
+            throw new \Exception(__('inventories::filament/clusters/operations/actions/validate.notification.warning.lot-missing.body', [
+                'products' => $productsWithoutLots->pluck('name')->implode(', '),
+            ]));
+        }
+    }
+
+    public function getLotMoveLinesForErrorsCheck(Operation $operation, $noQuantitiesDoneIds)
+    {
+        $getLineWithDoneQty = fn ($moveLines) => $moveLines->filter(
+            fn ($moveLine) => $moveLine->product
+                && $moveLine->product->tracking !== ProductTracking::QTY
+                && $moveLine->is_picked
+                && float_compare($moveLine->qty, 0, precisionRounding: $moveLine->uom->rounding) > 0
+        );
+
+        if ($noQuantitiesDoneIds->contains($operation->id)) {
+            $linesToCheck = $operation->moveLines->filter(
+                fn ($moveLine) => $moveLine->product && $moveLine->product->tracking !== ProductTracking::QTY
+            );
+        } else {
+            $linesToCheck = $getLineWithDoneQty($operation->moveLines);
+        }
+
+        return $linesToCheck;
+    }
+
+    public function createBackOrder(Operation $record, $backOrderMoves = null)
+    {
+        if ($backOrderMoves) {
+            $movesToBackOrder = $backOrderMoves->filter(fn ($move) => $move->operation_id === $record->id);
+        } else {
+            $movesToBackOrder = $record->moves()->get()->filter(
+                fn ($move) => ! in_array($move->state, [MoveState::DONE, MoveState::CANCELED])
+            );
+        }
+
+        $movesToBackOrder->each(function ($move) {
+            $move->computeState();
+
+            $move->save();
+        });
+
+        if ($movesToBackOrder->isEmpty()) {
+            return;
+        }
+
+        $backOrderOperation = $record->replicate(['name', 'moves', 'moveLines']);
+
+        $backOrderOperation->fill([
+            'name'          => '/',
+            'back_order_id' => $record->id,
+            'user_id'       => null,
+        ]);
+
+        $backOrderOperation->save();
+
+        $movesToBackOrder->each->update([
+            'operation_id' => $backOrderOperation->id,
+            'is_picked'    => false,
+        ]);
+
+        $movesToBackOrder
+            ->flatMap->lines
+            ->flatMap->packageLevel
+            ->filter()
+            ->each->update(['operation_id' => $backOrderOperation->id]);
+
+        $movesToBackOrder
+            ->flatMap->lines
+            ->each->update(['operation_id' => $backOrderOperation->id]);
+
+        if ($backOrderOperation->operationType->reservation_method === ReservationMethod::AT_CONFIRM) {
+            $this->assignTransfer($backOrderOperation);
+        }
+
+        if (Package::isPluginInstalled('purchases')) {
+            $backOrderOperation->purchaseOrders()->attach($record->purchaseOrders->pluck('id'));
+
+            foreach ($record->purchaseOrders as $purchaseOrder) {
+                PurchaseOrderFacade::computePurchaseOrder($purchaseOrder);
+            }
+        }
+
+        $url = OperationResource::getUrl('view', ['record' => $record]);
+
+        $backOrderOperation->addMessage([
+            'body' => "This transfer has been created from <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$record->name}</a>.",
+            'type' => 'comment',
+        ]);
+
+        $url = OperationResource::getUrl('view', ['record' => $backOrderOperation]);
+
+        $record->addMessage([
+            'body' => "The back order <a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 dark:text-primary-400\">{$backOrderOperation->name}</a> has been created.",
+            'type' => 'comment',
+        ]);
+
+        return $backOrderOperation;
+    }
+
+    public function getNewOperationValues($moves): array
+    {
+        $origins = $moves->filter(fn ($move) => $move->origin)
+            ->pluck('origin')
+            ->unique()
+            ->values();
+
+        if ($origins->isEmpty()) {
+            $origin = null;
+        } else {
+            $origin = $origins->take(5)->implode(',');
+
+            if ($origins->count() > 5) {
+                $origin .= '...';
+            }
+        }
+
+        $partners = $moves->pluck('partner_id')->unique();
+
+        $partner = $partners->count() === 1 ? $partners->first() : null;
+
+        $values = [
+            'origin'               => $origin,
+            'company_id'           => $moves->pluck('company_id')->first(),
+            'user_id'              => null,
+            'procurement_group_id' => $moves->pluck('procurement_group_id')->first(),
+            'partner_id'           => $partner,
+            'operation_type_id'    => $moves->pluck('operation_type_id')->first(),
+            'source_location_id'   => $moves->pluck('source_location_id')->first(),
+        ];
+
+        $destinationLocationIds = $moves->pluck('destination_location_id')->filter()->unique();
+
+        if ($destinationLocationIds->isNotEmpty()) {
+            $values['destination_location_id'] = $destinationLocationIds->first();
+        }
+
+        if ($saleOrderId = $moves->first()?->procurementGroup?->sale_order_id) {
+            $values['sale_order_id'] = $saleOrderId;
+        }
+
+        return $values;
+    }
+
+    public function searchOperationForAssignation(Move $move)
+    {
+        $query = Operation::where('procurement_group_id', $move->procurement_group_id)
+            ->where('source_location_id', $move->source_location_id)
+            ->where('destination_location_id', $move->destination_location_id ?? $move->operationType->destination_location_id)
+            ->where('operation_type_id', $move->operation_type_id)
+            // ->where('printed', false)
+            ->whereIn('state', [OperationState::DRAFT, OperationState::CONFIRMED, OperationState::ASSIGNED]);
+
+        if ($move->partner_id && ! $move->procurement_group_id) {
+            $query->where('partner_id', $move->partner_id);
+        }
+
+        return $query->first();
+    }
+
     public function mergeMoveValues($moves, $mergeExtra = false)
     {
         $state = $this->getRelevantStateAmongMoves($moves);
@@ -1971,169 +1495,216 @@ class InventoryManager
         ];
     }
 
-    public function cancelMoves($moves)
+    public function applyPushRules($moves)
     {
-        if ($moves->some(fn ($move) => $move->state === MoveState::DONE && ! $move->is_scraped)) {
-            throw new \Exception(__('You cannot cancel a stock move that has been set to \'Done\'. Create a return in order to reverse the moves which took place.'));
-        }
+        $newMoves = collect();
 
-        $movesToCancel = $moves->filter(
-            fn ($move) => $move->state !== MoveState::CANCELED
-                && ! ($move->state === MoveState::DONE && $move->is_scraped)
-        );
+        foreach ($moves as $move) {
+            $newMove = null;
 
-        $movesToCancel->each->update(['is_picked' => false]);
+            $warehouse = $move->warehouse ?? $move->operation?->operationType->warehouse;
 
-        $this->doUnreserve($movesToCancel);
+            $rule = $this->getPushRule($move->product, $move->destinationLocation, [
+                'routes'    => $move->routes,
+                'packaging' => $move->productPackaging,
+                'warehouse' => $warehouse,
+            ]);
 
-        $cancelMovesOrigin = false;
-
-        $movesToCancel->each->update(['state' => MoveState::CANCELED]);
-
-        foreach ($movesToCancel as $move) {
-            $siblingsStates = $move->moveDestinations
-                ->flatMap
-                ->moveOrigins
-                ->diff(collect([$move]))
-                ->pluck('state');
-
-            if ($move->propagate_cancel) {
-                if ($siblingsStates->every(fn ($state) => $state === MoveState::CANCELED)) {
-                    $this->cancelMoves(
-                        $move->moveDestinations->filter(
-                            fn ($move) => $move->state !== MoveState::DONE &&
-                                $move->destination_location_id === $move->moveDestinations->first()?->source_location_id
-                        )
-                    );
-
-                    if ($cancelMovesOrigin) {
-                        $this->cancelMoves($move->moveOrigins->filter(fn ($move) => $move->state !== MoveState::DONE));
-                    }
-                }
-            } else {
-                if ($siblingsStates->every(fn ($state) => in_array($state, [MoveState::DONE, MoveState::CANCELED]))) {
-                    $move->moveDestinations->each(function ($destMove) use ($move) {
-                        $destMove->update(['procure_method' => ProcureMethod::MAKE_TO_STOCK]);
-
-                        $destMove->moveOrigins()->detach($move->id);
-                    });
-                }
-            }
-        }
-
-        $movesToCancel->each(function ($move) {
-            $move->update(['procure_method' => ProcureMethod::MAKE_TO_STOCK]);
-
-            $move->moveOrigins()->detach();
-        });
-
-        return true;
-    }
-
-    public function doUnreserve($moves)
-    {
-        $movesToUnreserve = $moves->filter(function ($move) {
             if (
-                $move->state === MoveState::CANCELED
-                || ($move->state === MoveState::DONE && $move->is_scraped)
-                || $move->is_picked
+                $rule
+                && (
+                    ! $move->origin_returned_move_id
+                    || $move->originReturnedMove->destination_location_id !== $rule->destination_location_id
+                )
             ) {
-                return false;
+                $newMove = $this->runPushRule($rule, $move);
+
+                if ($newMove) {
+                    $newMoves->push($newMove);
+                }
             }
 
-            if ($move->state === MoveState::DONE) {
-                throw new \Exception(__("You can not unreserve a stock move that has been set to 'Done'."));
+            $movesToPropagate = collect();
+
+            $movesToMts = collect();
+
+            foreach ($move->moveDestinations->diff($newMove ? collect([$newMove]) : collect()) as $m) {
+                if ($newMove && $move->final_location_id && $m->source_location_id === $move->final_location_id) {
+                    $movesToPropagate->push($m);
+                } elseif (! $m->sourceLocation->isChildOf($move->destinationLocation)) {
+                    $movesToMts->push($m);
+                }
             }
 
-            return true;
+            foreach ($movesToMts as $m) {
+                $m->moveOrigins()->detach($move->id);
+
+                $m->procure_method = ProcureMethod::MAKE_TO_STOCK;
+
+                $m->computeState();
+
+                $m->save();
+            }
+
+            $move->moveDestinations()->detach($movesToPropagate->pluck('id')->all());
+
+            $newMove?->moveDestinations()->syncWithoutDetaching($movesToPropagate->pluck('id')->all());
+        }
+
+        $this->confirmMoves($newMoves);
+
+        return $newMoves;
+    }
+
+    public function runProcurements($procurements)
+    {
+        if ($procurements->isEmpty()) {
+            return;
+        }
+
+        $actionsToRun = [];
+
+        $procurementErrors = [];
+
+        foreach ($procurements as $procurement) {
+            $procurement['values']['company'] = $procurement['values']['company'] ?? $procurement['location']->company;
+            $procurement['values']['priority'] = $procurement['values']['priority'] ?? '0';
+            $procurement['values']['planned'] = $procurement['values']['planned'] ?? now();
+
+            $rule = $this->getRule($procurement['product'], $procurement['location'], $procurement['values']);
+
+            if (! $rule) {
+                $error = __('No rule has been found to replenish ":product" in ":location".\nVerify the routes configuration on the product.', [
+                    'product'  => $procurement['product']->name,
+                    'location' => $procurement['location']->full_name,
+                ]);
+
+                $procurementErrors[] = ['procurement' => $procurement, 'error' => $error];
+            } else {
+                $action = $rule->action === RuleAction::PULL_PUSH ? RuleAction::PULL : $rule->action;
+
+                if (! isset($actionsToRun[$action->value])) {
+                    $actionsToRun[$action->value] = [];
+                }
+
+                $actionsToRun[$action->value][] = [$procurement, $rule];
+            }
+        }
+
+        foreach ($actionsToRun as $action => $procurements) {
+            $method = 'run'.ucfirst($action).'Rule';
+
+            try {
+                $this->$method($procurements);
+            } catch (\Exception $e) {
+                $procurementErrors[] = $e->getMessage();
+            }
+        }
+
+        if (! empty($procurementErrors)) {
+            $errorMessage = collect($procurementErrors)->map(function ($error) {
+                if (isset($error['error'])) {
+                    return $error['error'];
+                }
+
+                return $error;
+            })->implode("\n");
+
+            throw new \Exception($errorMessage);
+        }
+    }
+
+    public function runPullRule($procurements)
+    {
+        foreach ($procurements as [$procurement, $rule]) {
+            if (! $rule->source_location_id) {
+                throw new \Exception(__('No source location defined on stock rule: :name!', [
+                    'name' => $rule->name,
+                ]));
+            }
+        }
+
+        usort($procurements, function ($procurement) {
+            return float_compare($procurement[0]['product_qty'], 0.0, precisionRounding: $procurement[0]['product_uom']->rounding) > 0 ? 1 : 0;
         });
 
-        $moveLineToUnlink = collect();
+        $movesValuesByCompany = [];
 
-        $movesNotToRecompute = collect();
+        foreach ($procurements as [$procurement, $rule]) {
+            $procureMethod = $rule->procure_method;
 
-        foreach ($movesToUnreserve->flatMap->lines as $moveLine) {
-            if ($moveLine->is_picked) {
-                $movesNotToRecompute->push($moveLine->move_id);
-
-                continue;
+            if ($rule->procure_method === ProcureMethod::MTS_ELSE_MTO) {
+                $procureMethod = ProcureMethod::MAKE_TO_STOCK;
             }
 
-            $moveLineToUnlink->push($moveLine->id);
+            $moveValues = $this->prepareMoveValues($rule, $procurement);
+
+            $moveValues['procure_method'] = $procureMethod;
+
+            $movesValuesByCompany[$procurement['company']->id][] = $moveValues;
         }
 
-        MoveLine::whereIn('id', $moveLineToUnlink)->get()->each->delete();
+        foreach ($movesValuesByCompany as $companyId => $moveValues) {
+            $moves = collect();
 
-        $movesToUnreserve
-            ->filter(fn ($move) => ! $movesNotToRecompute->contains('id', $move->id))
-            ->each(function ($move) {
-                $move->computeQuantity();
+            foreach ($moveValues as $moveValue) {
+                $move = Move::create($moveValue);
 
-                $move->computeState();
+                $moves->push($move);
 
-                $move->saveQuietly();
-            });
+                if ($moveValue['move_destinations']->isNotEmpty()) {
+                    $move->moveDestinations()->attach($moveValue['move_destinations']->pluck('id')->all());
+                }
+            }
 
-        return true;
+            $this->confirmMoves($moves);
+        }
     }
 
-    public function getRelevantStateAmongMoves($moves): \BackedEnum
+    public function runPushRule(Rule $rule, Move $move)
     {
-        $sortMap = [
-            MoveState::ASSIGNED->value           => 4,
-            MoveState::WAITING->value            => 3,
-            MoveState::PARTIALLY_ASSIGNED->value => 2,
-            MoveState::CONFIRMED->value          => 1,
-        ];
+        $newScheduledAt = $move->scheduled_at->addDays($rule->delay);
 
-        $movesTodo = $moves->filter(fn ($move) => ! in_array($move->state, [MoveState::CANCELED, MoveState::DONE]) &&
-                ! ($move->state === MoveState::ASSIGNED && ! $move->product_uom_qty)
-        )
-            ->sortBy([
-                fn ($a, $b) => ($sortMap[$a->state->value] ?? 0) <=> ($sortMap[$b->state->value] ?? 0),
-                fn ($a, $b) => $a->product_uom_qty <=> $b->product_uom_qty,
-            ])
-            ->values();
+        if ($rule->auto == RuleAuto::TRANSPARENT) {
+            $move->update([
+                'scheduled_at'            => $newScheduledAt,
+                'destination_location_id' => $rule->destination_location_id,
+            ]);
 
-        if ($movesTodo->isEmpty()) {
-            return MoveState::ASSIGNED;
-        }
+            if ($move->lines->isNotEmpty()) {
+                $putAwayLocation = $move->destinationLocation->getPutAwayStrategy($move->product);
 
-        $firstMove = $movesTodo->first();
-
-        if ($firstMove->operation && $firstMove->operation->move_type === MoveType::ONE) {
-            if ($movesTodo->every(fn ($move) => ! $move->product_uom_qty)) {
-                return MoveState::ASSIGNED;
+                foreach ($move->lines as $moveLine) {
+                    $moveLine->update([
+                        'destination_location_id' => $putAwayLocation?->id ?? $move->destination_location_id,
+                    ]);
+                }
             }
 
-            $mostImportantMove = $movesTodo->first();
-
-            if ($mostImportantMove->state === MoveState::CONFIRMED) {
-                return MoveState::CONFIRMED;
-            } elseif ($mostImportantMove->state === MoveState::PARTIALLY_ASSIGNED) {
-                return MoveState::CONFIRMED;
-            } else {
-                return $mostImportantMove->state ?? MoveState::DRAFT;
+            if ($rule->destination_location_id !== $move->destination_location_id) {
+                return $this->applyPushRules(collect([$move]))->first();
             }
-        } elseif (
-            $firstMove->state !== MoveState::ASSIGNED
-            && $movesTodo->some(fn ($move) => in_array($move->state, [MoveState::ASSIGNED, MoveState::PARTIALLY_ASSIGNED]))
-        ) {
-            return MoveState::PARTIALLY_ASSIGNED;
         } else {
-            $leastImportantMove = $movesTodo->last();
+            $newMoveValues = $this->preparePushMoveCopyValues($rule, $move, $newScheduledAt);
 
-            if ($leastImportantMove->state === MoveState::CONFIRMED && $leastImportantMove->product_uom_qty == 0) {
-                return MoveState::ASSIGNED;
+            $newMove = $move->replicate(['order_id', 'work_order_id'])->fill($newMoveValues);
+
+            $newMove->save();
+
+            if ($newMove->shouldBypassReservation()) {
+                $newMove->update([
+                    'procure_method' => ProcureMethod::MAKE_TO_STOCK,
+                ]);
             }
 
-            return $leastImportantMove->state ?? MoveState::DRAFT;
+            if (! $newMove->sourceLocation->shouldBypassReservation()) {
+                $move->moveDestinations()->attach($newMove->id);
+            }
         }
+
+        return $newMove->refresh();
     }
 
-    /**
-     * Run a buy rule on a line.
-     */
     public function runBuyRule($procurements)
     {
         return;
@@ -2306,6 +1877,373 @@ class InventoryManager
         }
     }
 
+    public function runManufactureRule($procurements) {}
+
+    public function getPushRule(Product $product, Location $destinationLocation, array $values = [])
+    {
+        $foundRule = null;
+
+        $location = $destinationLocation;
+
+        $filters['action'] = [RuleAction::PUSH, RuleAction::PULL_PUSH];
+
+        while (! $foundRule && $location) {
+            $filters['source_location_id'] = $location->id;
+
+            $foundRule = $this->searchRule(
+                $values['routes'] ?? collect(),
+                $values['packaging'] ?? null,
+                $product,
+                $values['warehouse'] ?? null,
+                $filters
+            );
+
+            $location = $location->parent;
+        }
+
+        return $foundRule;
+    }
+
+    public function getRule(Product $product, Location $location, array $values = [])
+    {
+        $foundRule = null;
+
+        $filters['action'] = ['!=', RuleAction::PUSH];
+
+        while (! $foundRule && $location) {
+            $filters['destination_location_id'] = $location->id;
+
+            $foundRule = $this->searchRule(
+                $values['routes'] ?? collect(),
+                $values['packaging'] ?? null,
+                $product,
+                $values['warehouse'] ?? null,
+                $filters
+            );
+
+            $location = $location->parent;
+        }
+
+        return $foundRule;
+    }
+
+    public function searchRule($routes, $productPackaging, $product, $warehouse, array $filters)
+    {
+        if ($warehouse) {
+            $filters['warehouse_id'] = $warehouse->id;
+        }
+
+        $routeIds = collect();
+
+        if ($routes?->isNotEmpty()) {
+            $routeIds = $routeIds->merge($routes->pluck('id'));
+        }
+
+        $routeSources = [
+            [$productPackaging, 'routes'],
+            [$product, 'routes'],
+            [$product?->category, 'routes'],
+            [$warehouse, 'routes'],
+        ];
+
+        foreach ($routeSources as [$source, $relationName]) {
+            if (! $source || ! $source->{$relationName}) {
+                continue;
+            }
+
+            $routeIds = $routeIds->merge($source->{$relationName}->pluck('id'))
+                ->unique();
+
+            if ($routeIds->isEmpty()) {
+                continue;
+            }
+
+            $foundRule = Rule::whereIn('route_id', $routeIds)
+                ->where(function ($query) use ($filters) {
+                    foreach ($filters as $column => $value) {
+                        if (is_array($value)) {
+                            if (count($value) === 2 && $value[0] === '!=') {
+                                [, $val] = $value;
+
+                                $query->where($column, '!=', $val);
+                            } else {
+                                $query->whereIn($column, $value);
+                            }
+                        } else {
+                            $query->where($column, $value);
+                        }
+                    }
+                })
+                ->orderBy('route_sort', 'asc')
+                ->orderBy('sort', 'asc')
+                ->first();
+
+            if ($foundRule) {
+                return $foundRule;
+            }
+        }
+
+        return null;
+    }
+
+    public function prepareProcurementQty($moves)
+    {
+        $quantities = [];
+
+        $mtsoProductsByLocations = [];
+
+        $mtsoMoveIds = [];
+
+        foreach ($moves as $move) {
+            if ($move->rule?->procure_method === ProcureMethod::MTS_ELSE_MTO) {
+                $mtsoMoveIds[$move->id] = true;
+
+                $mtsoProductsByLocations[$move->source_location_id][] = $move->product_id;
+            }
+        }
+
+        $forecastedQuantitiesByLocation = [];
+
+        foreach ($mtsoProductsByLocations as $locationId => $productIds) {
+            $location = Location::find($locationId);
+
+            if (! $location || $location->shouldBypassReservation()) {
+                continue;
+            }
+
+            $forecastedQuantitiesByLocation[$locationId] = Product::whereIn('id', array_unique($productIds))
+                ->get()
+                ->mapWithKeys(function ($product) use ($locationId) {
+                    $product->context = ['location_id' => $locationId];
+
+                    return [$product->id => $product->free_qty];
+                })
+                ->all();
+        }
+
+        foreach ($moves as $move) {
+            $rounding = $move->product->uom->rounding ?? 0.01;
+
+            if (
+                ! isset($mtsoMoveIds[$move->id])
+                || float_compare($move->product_qty, 0, precisionRounding: $rounding) <= 0
+            ) {
+                $quantities[] = $move->product_uom_qty;
+
+                continue;
+            }
+
+            if ($move->shouldBypassReservation()) {
+                $quantities[] = $move->product_uom_qty;
+
+                continue;
+            }
+
+            $freeQty = max($forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] ?? 0, 0);
+
+            $quantity = max($move->product_qty - $freeQty, 0);
+
+            $productUomQty = $move->product->uom->computeQuantity(
+                $quantity,
+                $move->uom,
+                roundingMethod: 'HALF-UP'
+            );
+
+            $quantities[] = $productUomQty;
+
+            $forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] =
+                ($forecastedQuantitiesByLocation[$move->source_location_id][$move->product_id] ?? 0)
+                - min($move->product_qty, $freeQty);
+        }
+
+        return $quantities;
+    }
+
+    public function preparePushMoveCopyValues(Rule $rule, Move $moveToCopy, $newScheduledAt)
+    {
+        $companyId = $rule->company_id;
+
+        $copiedQuantity = $moveToCopy->quantity;
+
+        if (float_compare($moveToCopy->product_uom_qty, 0, precisionRounding: $moveToCopy->uom->rounding) < 0) {
+            $copiedQuantity = $moveToCopy->product_uom_qty;
+        }
+
+        if (! $companyId) {
+            $companyId = $rule->warehouse?->company_id
+                ?? $rule->operationType?->warehouse?->company_id;
+        }
+
+        return [
+            'state'                   => MoveState::DRAFT,
+            'reference'               => null,
+            'product_uom_qty'         => $copiedQuantity,
+            'product_qty'             => $moveToCopy->uom->computeQuantity($copiedQuantity, $moveToCopy->product->uom, true, 'HALF-UP'),
+            'quantity'                => 0,
+            'is_picked'               => false,
+            'origin'                  => $moveToCopy->origin ?? $moveToCopy->operation->name ?? '/',
+            'operation_id'            => null,
+            'source_location_id'      => $moveToCopy->destination_location_id,
+            'destination_location_id' => $rule->destination_location_id,
+            'final_location_id'       => $moveToCopy->final_location_id,
+            'rule_id'                 => $rule->id,
+            'scheduled_at'            => $newScheduledAt,
+            'company_id'              => $companyId,
+            'operation_type_id'       => $rule->operation_type_id,
+            'propagate_cancel'        => $rule->propagate_cancel,
+            'warehouse_id'            => $rule->warehouse_id,
+            'procure_method'          => ProcureMethod::MAKE_TO_ORDER,
+        ];
+    }
+
+    public function prepareMoveValues($rule, $procurement)
+    {
+        $procurementGroupId = null;
+
+        if ($rule->group_propagation_option === GroupPropagation::PROPAGATE) {
+            $procurementGroupId = $procurement['values']['procurement_group']?->id;
+        } elseif ($rule->group_propagation_option === GroupPropagation::FIXED) {
+            $procurementGroupId = $rule->procurement_group_id;
+        }
+
+        $dateScheduled = $procurement['values']['planned']->copy()->subDays($rule->delay ?? 0);
+
+        $dateDeadline = isset($procurement['values']['deadline'])
+            ? $procurement['values']['deadline']->copy()->subDays($rule->delay ?? 0)
+            : null;
+
+        $partner = $rule->partnerAddress ?? $procurement['values']['procurement_group']?->partner;
+
+        $pickingDescription = $procurement['product']->getDescription($rule->operationType);
+
+        $qtyLeft = $procurement['product_qty'];
+
+        if (! $partner && ! $procurement['values']['move_destinations']?->isNotEmpty()) {
+            $moveDestinations = $procurement['values']['move_destinations'];
+
+            $transitLocation = Location::where('type', LocationType::TRANSIT)->whereNotNull('company_id')->first();
+
+            if ($procurement['location']->id === $transitLocation->is) {
+                $partners = $moveDestinations->pluck('destinationLocation.warehouse.partner')->filter()->unique('id');
+
+                if ($partners->count() === 1) {
+                    $partner = $partners->first();
+                }
+
+                $moveDestinations->each->update([
+                    'partner_id' => $rule->sourceLocation->warehouse?->partner_id ?? $rule->company->partner_id,
+                ]);
+            }
+        }
+
+        if (float_compare($procurement['product_qty'], 0.0, precisionRounding: $procurement['product_uom']->rounding) < 0) {
+            $isRefund = true;
+        }
+
+        $moveValues = [
+            'name'                 => substr($procurement['name'], 0, 2000),
+            'company_id'           => $rule->company_id ?? $procurement['location']->company_id ?? $rule->destinationLocation?->company_id ?? $procurement['company']?->id,
+            'product_id'           => $procurement['product']->id,
+            'uom_id'               => $procurement['product_uom']?->id,
+            'product_uom_qty'      => $qtyLeft,
+            'product_qty'          => $procurement['product_uom']->computeQuantity($qtyLeft, $procurement['product']->uom, roundingMethod: 'HALF-UP'),
+            'partner_id'           => $partner?->id,
+            'source_location_id'   => $rule->source_location_id,
+            'final_location_id'    => $rule->destination_location_id,
+            'move_destinations'    => $procurement['values']['move_destinations'] ?? collect(),
+            'rule_id'              => $rule->id,
+            'procure_method'       => $rule->procure_method,
+            'origin'               => $procurement['origin'] ?? null,
+            'operation_type_id'    => $rule->operation_type_id,
+            'procurement_group_id' => $procurementGroupId,
+            'routes'               => $procurement['values']['routes'] ?? collect(),
+            'warehouse_id'         => $rule->warehouse_id,
+            'scheduled_at'         => $dateScheduled,
+            'deadline'             => $rule->group_propagation_option === GroupPropagation::FIXED ? null : $dateDeadline,
+            'propagate_cancel'     => $rule->propagate_cancel,
+            'description_picking'  => $pickingDescription,
+            'priority'             => $procurement['values']['priority'] ?? '0',
+            'order_point_id'       => $procurement['values']['order_point']?->is ?? null,
+            'product_packaging_id' => $procurement['values']['product_packaging']?->id ?? null,
+        ];
+
+        if (isset($procurement['values']['sale_order_line_id'])) {
+            $moveValues['sale_order_line_id'] = $procurement['values']['sale_order_line_id'];
+        }
+
+        if (isset($procurement['values']['purchase_order_line_id'])) {
+            $moveValues['purchase_order_line_id'] = $procurement['values']['purchase_order_line_id'];
+        }
+
+        if (isset($procurement['values']['work_order_id'])) {
+            $moveValues['work_order_id'] = $procurement['values']['work_order_id'];
+        }
+
+        if (isset($procurement['values']['bom_line_id'])) {
+            $moveValues['bom_line_id'] = $procurement['values']['bom_line_id'];
+        }
+
+        if ($rule->location_dest_from_rule) {
+            $moveValues['destination_location_id'] = $rule->destination_location_id;
+        }
+
+        return $moveValues;
+    }
+
+    public function prepareReturnOperationValues(Operation $operation): array
+    {
+        $sourceLocation = $operation->destinationLocation;
+
+        $returnType = $operation->operationType->returnOperationType;
+
+        if ($returnType?->type === OperationType::INCOMING) {
+            $destinationLocation = $returnType->destinationLocation;
+        } else {
+            $destinationLocation = $operation->sourceLocation;
+        }
+
+        return [
+            'state'                   => OperationState::DRAFT,
+            'origin'                  => __('Return of :operation_name', ['operation_name' => $operation->name]),
+            'operation_type_id'       => $returnType?->id ?? $operation->operation_type_id,
+            'source_location_id'      => $sourceLocation->id,
+            'location_destination_id' => $destinationLocation->id,
+            'return_id'               => $operation->id,
+            'user_id'                 => null,
+        ];
+    }
+
+    public function prepareReturnMoveValues(Operation $operation, Move $move, mixed $quantity): array
+    {
+        $values = [
+            'name'                    => $operation->name,
+            'product_id'              => $move->product_id,
+            'product_uom_qty'         => $quantity,
+            'product_qty'             => $move->uom->computeQuantity($quantity, $move->product->uom, roundingMethod: 'HALF-UP'),
+            // 'quantity'                => $quantity,
+            'quantity'                => 0,
+            'is_picked'               => 0,
+            'uom_id'                  => $move->product->uom_id,
+            'operation_id'            => $operation->id,
+            'state'                   => MoveState::DRAFT,
+            'date'                    => now(),
+            'source_location_id'      => $operation->source_location_id ?? $move->destination_location_id,
+            'destination_location_id' => $operation->destination_location_id ?? $move->source_location_id,
+            'final_location_id'       => null,
+            'operation_type_id'       => $operation->operation_type_id,
+            'warehouse_id'            => $operation->operationType->warehouse_id,
+            'origin_returned_move_id' => $move->id,
+            'procure_method'          => ProcureMethod::MAKE_TO_STOCK,
+            'procurement_group_id'    => $operation->procurement_group_id,
+        ];
+
+        if ($operation->operationType->type === OperationType::OUTGOING) {
+            $values['partner_id'] = $operation->partner_id;
+        }
+
+        return $values;
+    }
+
     public function preparePurchaseOrderValues($rule, $company, $origins, $values)
     {
         $purchaseDate = collect($values)
@@ -2342,6 +2280,60 @@ class InventoryManager
             // 'fiscal_position_id'     => $fiscalPosition?->id,
             'procurement_group_id'   => $procurementGroupId,
         ];
+    }
+
+    public function getRelevantStateAmongMoves($moves): \BackedEnum
+    {
+        $sortMap = [
+            MoveState::ASSIGNED->value           => 4,
+            MoveState::WAITING->value            => 3,
+            MoveState::PARTIALLY_ASSIGNED->value => 2,
+            MoveState::CONFIRMED->value          => 1,
+        ];
+
+        $movesTodo = $moves->filter(fn ($move) => ! in_array($move->state, [MoveState::CANCELED, MoveState::DONE]) &&
+                ! ($move->state === MoveState::ASSIGNED && ! $move->product_uom_qty)
+        )
+            ->sortBy([
+                fn ($a, $b) => ($sortMap[$a->state->value] ?? 0) <=> ($sortMap[$b->state->value] ?? 0),
+                fn ($a, $b) => $a->product_uom_qty <=> $b->product_uom_qty,
+            ])
+            ->values();
+
+        if ($movesTodo->isEmpty()) {
+            return MoveState::ASSIGNED;
+        }
+
+        $firstMove = $movesTodo->first();
+
+        if ($firstMove->operation && $firstMove->operation->move_type === MoveType::ONE) {
+            if ($movesTodo->every(fn ($move) => ! $move->product_uom_qty)) {
+                return MoveState::ASSIGNED;
+            }
+
+            $mostImportantMove = $movesTodo->first();
+
+            if ($mostImportantMove->state === MoveState::CONFIRMED) {
+                return MoveState::CONFIRMED;
+            } elseif ($mostImportantMove->state === MoveState::PARTIALLY_ASSIGNED) {
+                return MoveState::CONFIRMED;
+            } else {
+                return $mostImportantMove->state ?? MoveState::DRAFT;
+            }
+        } elseif (
+            $firstMove->state !== MoveState::ASSIGNED
+            && $movesTodo->some(fn ($move) => in_array($move->state, [MoveState::ASSIGNED, MoveState::PARTIALLY_ASSIGNED]))
+        ) {
+            return MoveState::PARTIALLY_ASSIGNED;
+        } else {
+            $leastImportantMove = $movesTodo->last();
+
+            if ($leastImportantMove->state === MoveState::CONFIRMED && $leastImportantMove->product_uom_qty == 0) {
+                return MoveState::ASSIGNED;
+            }
+
+            return $leastImportantMove->state ?? MoveState::DRAFT;
+        }
     }
 
     public function getPurchaseOrderFilters($rule, $company, $values, $partner)
@@ -2480,11 +2472,6 @@ class InventoryManager
 
         return $result;
     }
-
-    /**
-     * Run a manufacture rule on a line.
-     */
-    public function runManufactureRule($procurements) {}
 
     public function checkQuantity($moves) {}
 }

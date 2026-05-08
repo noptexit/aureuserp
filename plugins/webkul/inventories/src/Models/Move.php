@@ -344,7 +344,7 @@ class Move extends Model
                         && float_compare($move->quantity, $move->product_uom_qty ?? null, precisionRounding: $move->uom->rounding) === 1;
 
                     if ($shouldUnreserve) {
-                        InventoryFacade::doUnreserve(collect([$move]));
+                        InventoryFacade::unreserveMoves(collect([$move]));
 
                         if ($move->sourceLocation->type === LocationType::SUPPLIER) {
                             $receiptMovesToReassign->push($move->refresh());

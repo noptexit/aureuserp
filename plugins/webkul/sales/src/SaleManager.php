@@ -12,10 +12,7 @@ use Webkul\Account\Models\Move as AccountMove;
 use Webkul\Inventory\Enums as InventoryEnums;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\Location;
-use Webkul\Inventory\Models\Move;
-use Webkul\Inventory\Models\MoveLine;
 use Webkul\Inventory\Models\Product as InventoryProduct;
-use Webkul\Inventory\Models\Warehouse;
 use Webkul\Partner\Models\Partner;
 use Webkul\Product\Enums as ProductEnums;
 use Webkul\PluginManager\Package;
@@ -24,6 +21,9 @@ use Webkul\Sale\Enums\InvoiceStatus;
 use Webkul\Sale\Enums\OrderDeliveryStatus;
 use Webkul\Sale\Enums\OrderState;
 use Webkul\Sale\Enums\QtyDeliveredMethod;
+use Webkul\Sale\Events\OrderCanceled;
+use Webkul\Sale\Events\OrderConfirmed;
+use Webkul\Sale\Events\OrderDrafted;
 use Webkul\Sale\Mail\SaleOrderCancelQuotation;
 use Webkul\Sale\Mail\SaleOrderQuotation;
 use Webkul\Sale\Models\AdvancedPaymentInvoice;
@@ -72,6 +72,8 @@ class SaleManager
 
         $record = $this->computeSaleOrder($record);
 
+        OrderConfirmed::dispatch($record);
+
         return $record;
     }
 
@@ -83,6 +85,8 @@ class SaleManager
         ]);
 
         $record = $this->computeSaleOrder($record);
+
+        OrderDrafted::dispatch($record);
 
         return $record;
     }
@@ -101,6 +105,8 @@ class SaleManager
         $record = $this->computeSaleOrder($record);
 
         $this->cancelInventoryOperation($record);
+
+        OrderCanceled::dispatch($record);
 
         return $record;
     }
