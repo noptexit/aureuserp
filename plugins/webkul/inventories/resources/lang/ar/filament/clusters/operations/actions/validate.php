@@ -12,6 +12,10 @@ return [
     ],
 
     'notification' => [
+        'error' => [
+            'title' => 'فشل التحقق',
+        ],
+
         'warning' => [
             'lines-missing' => [
                 'title' => 'لا توجد كميات محجوزة',
