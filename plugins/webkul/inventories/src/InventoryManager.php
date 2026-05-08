@@ -16,6 +16,7 @@ use Webkul\Inventory\Enums\ReservationMethod;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\RuleAuto;
 use Webkul\Inventory\Events\OperationAssigned;
+use Webkul\Inventory\Events\OperationBackOrdered;
 use Webkul\Inventory\Events\OperationCanceled;
 use Webkul\Inventory\Events\OperationConfirmed;
 use Webkul\Inventory\Events\OperationDone;
@@ -1389,6 +1390,8 @@ class InventoryManager
                 PurchaseOrderFacade::computePurchaseOrder($purchaseOrder);
             }
         }
+
+        OperationBackOrdered::dispatch($record);
 
         $url = OperationResource::getUrl('view', ['record' => $record]);
 
