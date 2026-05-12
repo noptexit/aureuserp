@@ -12,7 +12,6 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
-use Illuminate\Support\Arr;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Placeholder;
@@ -43,20 +42,22 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Manufacturing\Enums\WorkCenterWorkingState;
 use Webkul\Manufacturing\Filament\Clusters\Configurations;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\CreateWorkCenter;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\EditWorkCenter;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ListWorkCenters;
+use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ManageOperations;
 use Webkul\Manufacturing\Filament\Clusters\Configurations\Resources\WorkCenterResource\Pages\ViewWorkCenter;
 use Webkul\Manufacturing\Models\WorkCenter;
 use Webkul\Manufacturing\Models\WorkCenterTag;
+use Webkul\Manufacturing\Settings\OperationSettings;
 use Webkul\Product\Models\Product;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn;
 use Webkul\Support\Models\Calendar;
-use Webkul\Manufacturing\Settings\OperationSettings;
 
 class WorkCenterResource extends Resource
 {
@@ -208,7 +209,7 @@ class WorkCenterResource extends Resource
                                             ->preload()
                                             ->wrapOptionLabels(false)
                                             ->getOptionLabelFromRecordUsing(function ($record): string {
-                                                return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                                                return $record->name.($record->trashed() ? ' (Deleted)' : '');
                                             })
                                             ->wrapOptionLabels(false)
                                             ->disableOptionWhen(function ($label, $value, $state, $component) {
@@ -227,7 +228,7 @@ class WorkCenterResource extends Resource
                                                         )
                                                         ->flatten()
                                                         ->diff(Arr::wrap($state))
-                                                        ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                                        ->filter(fn (mixed $siblingItemState): bool => filled($siblingItemState))
                                                         ->contains($value);
                                                 }
 
@@ -659,10 +660,11 @@ class WorkCenterResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => ListWorkCenters::route('/'),
-            'create' => CreateWorkCenter::route('/create'),
-            'view'   => ViewWorkCenter::route('/{record}'),
-            'edit'   => EditWorkCenter::route('/{record}/edit'),
+            'index'      => ListWorkCenters::route('/'),
+            'create'     => CreateWorkCenter::route('/create'),
+            'view'       => ViewWorkCenter::route('/{record}'),
+            'edit'       => EditWorkCenter::route('/{record}/edit'),
+            'operations' => ManageOperations::route('/{record}/operations'),
         ];
     }
 
@@ -671,6 +673,7 @@ class WorkCenterResource extends Resource
         return $page->generateNavigationItems([
             ViewWorkCenter::class,
             EditWorkCenter::class,
+            ManageOperations::class,
         ]);
     }
 }

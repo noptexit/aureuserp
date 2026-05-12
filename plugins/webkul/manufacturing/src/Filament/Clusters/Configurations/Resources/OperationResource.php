@@ -7,7 +7,6 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
-use Filament\Support\Enums\Width;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -33,6 +32,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\TextSize;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -54,8 +54,8 @@ use Webkul\Manufacturing\Filament\Clusters\Products\Resources\BillsOfMaterialRes
 use Webkul\Manufacturing\Filament\Clusters\Products\Resources\ProductResource\Pages\ManageBillsOfMaterials;
 use Webkul\Manufacturing\Models\BillOfMaterial;
 use Webkul\Manufacturing\Models\Operation;
-use Webkul\Product\Models\ProductAttributeValue;
 use Webkul\Manufacturing\Settings\OperationSettings;
+use Webkul\Product\Models\ProductAttributeValue;
 
 class OperationResource extends Resource
 {
@@ -333,7 +333,8 @@ class OperationResource extends Resource
                 ViewAction::make()
                     ->hidden(fn (Operation $record): bool => $record->trashed()),
                 EditAction::make()
-                    ->hidden(fn (Operation $record): bool => $record->trashed()),
+                    ->hidden(fn (Operation $record): bool => $record->trashed())
+                    ->modalWidth(Width::SevenExtraLarge),
                 RestoreAction::make()
                     ->successNotification(
                         Notification::make()
