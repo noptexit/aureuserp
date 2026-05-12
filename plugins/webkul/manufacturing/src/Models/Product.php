@@ -17,6 +17,11 @@ class Product extends BaseProduct
         return $this->hasMany(BillOfMaterial::class, 'product_id');
     }
 
+    public function billOfMaterialLines(): HasMany
+    {
+        return $this->hasMany(BillOfMaterialLine::class, 'product_id');
+    }
+
     public function moves(): HasMany
     {
         if ($this->is_configurable) {

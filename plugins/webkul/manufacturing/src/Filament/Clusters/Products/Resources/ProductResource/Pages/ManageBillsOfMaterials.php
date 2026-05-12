@@ -28,7 +28,7 @@ class ManageBillsOfMaterials extends ManageRelatedRecords
 
     public static function getNavigationLabel(): string
     {
-        return __('manufacturing::filament/clusters/products/resources/bill-of-material.navigation.title');
+        return __('manufacturing::filament/clusters/products/resources/product/pages/bill-of-materials.navigation.title');
     }
 
     public function form(Schema $schema): Schema
@@ -43,7 +43,7 @@ class ManageBillsOfMaterials extends ManageRelatedRecords
         return $table
             ->headerActions([
                 CreateAction::make()
-                    ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material/pages/list-bills-of-material.header-actions.create.label'))
+                    ->label(__('manufacturing::filament/clusters/products/resources/product/pages/bill-of-materials.header-actions.create.label'))
                     ->icon('heroicon-o-plus-circle')
                     ->fillForm(function (): array {
                         return [
@@ -69,8 +69,8 @@ class ManageBillsOfMaterials extends ManageRelatedRecords
                     ->successNotification(
                         Notification::make()
                             ->success()
-                            ->title(__('manufacturing::filament/clusters/products/resources/bill-of-material/pages/list-bills-of-material.header-actions.create.notification.title'))
-                            ->body(__('manufacturing::filament/clusters/products/resources/bill-of-material/pages/list-bills-of-material.header-actions.create.notification.body')),
+                            ->title(__('manufacturing::filament/clusters/products/resources/product/pages/bill-of-materials.header-actions.create.notification.success.title'))
+                            ->body(__('manufacturing::filament/clusters/products/resources/product/pages/bill-of-materials.header-actions.create.notification.success.body')),
                     ),
             ]);
     }

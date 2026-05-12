@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Field\Traits\HasCustomFields;
 use Webkul\Inventory\Database\Factories\ProductFactory;
-use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\MoveState;
