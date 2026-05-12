@@ -14,10 +14,10 @@ class ListProducts extends BaseListProducts
     public function getPresetTableViews(): array
     {
         return array_merge(parent::getPresetTableViews(), [
-            'storable_products' => PresetView::make(__('inventories::filament/clusters/products/resources/product/pages/list-products.tabs.inventory-management'))
-                ->icon('heroicon-s-clipboard-document-list')
+            'components' => PresetView::make(__('manufacturing::filament/clusters/products/resources/product/pages/list-products.tabs.components'))
+                ->icon('heroicon-s-puzzle-piece')
                 ->favorite()
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('is_storable', true)),
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('billOfMaterialLines')),
         ]);
     }
 }
