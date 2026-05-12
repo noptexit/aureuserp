@@ -10,14 +10,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Field\Traits\HasCustomFields;
 use Webkul\Inventory\Database\Factories\ProductFactory;
-use Webkul\Inventory\Enums\ProcureMethod;
-use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\OperationType as OperationTypeEnum;
+use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
+use Webkul\Inventory\Enums\RuleAction;
+use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Product\Models\Product as BaseProduct;
 use Webkul\Security\Models\User;
-use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 
 class Product extends BaseProduct
 {
@@ -47,6 +47,15 @@ class Product extends BaseProduct
         ]);
 
         parent::__construct($attributes);
+    }
+
+    protected array $context = [];
+
+    public function setContext(array $context)
+    {
+        $this->context = array_merge($this->context, $context);
+
+        return $this;
     }
 
     public function category(): BelongsTo
@@ -171,7 +180,7 @@ class Product extends BaseProduct
         }
 
         $rule = InventoryFacade::getRule($this, $location, [
-            'routes' => $routes,
+            'routes'    => $routes,
             'warehouse' => $warehouse,
         ]);
 
@@ -206,7 +215,7 @@ class Product extends BaseProduct
     {
         $rules = $this->getRulesFromLocation($location, $routeIds);
 
-        [$delays, ] = $rules->getLeadDays($this);
+        [$delays] = $rules->getLeadDays($this);
 
         return [
             'date_planned' => Carbon::parse($date)->subDays($delays['security_lead_days']),

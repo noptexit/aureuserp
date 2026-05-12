@@ -2,19 +2,21 @@
 
 namespace Webkul\Inventory\Models;
 
-use Illuminate\Support\Collection;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Database\Factories\MoveFactory;
-use Webkul\Inventory\Enums\LocationType;
-use Webkul\Inventory\Enums\ProductTracking;
-use Webkul\Inventory\Enums\MoveState;
-use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\GroupPropagation;
+use Webkul\Inventory\Enums\LocationType;
+use Webkul\Inventory\Enums\MoveState;
+use Webkul\Inventory\Enums\OperationType as OperationTypeEnum;
+use Webkul\Inventory\Enums\ProcureMethod;
+use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Partner\Models\Partner;
@@ -286,6 +288,20 @@ class Move extends Model
         return ! $this->operation_id and $this->operation_type_id;
     }
 
+    public function getForecastAvailabilityAttribute()
+    {
+        [$forecastAvailability] = $this->getForecastInformation();
+
+        return $forecastAvailability;
+    }
+
+    public function getForecastExpectedDateAttribute()
+    {
+        [, $forecastExpectedDate] = $this->getForecastInformation();
+
+        return $forecastExpectedDate;
+    }
+
     protected static function newFactory(): MoveFactory
     {
         return MoveFactory::new();
@@ -325,7 +341,7 @@ class Move extends Model
             $move->computeSourceLocationId();
 
             $move->computeDestinationLocationId();
-            
+
             $move->computeScheduledAt();
         });
 
@@ -467,9 +483,9 @@ class Move extends Model
     public function adjustProcureMethod($operationTypeCode = false)
     {
         $filters = [
-            'source_location_id' => $this->source_location_id,
+            'source_location_id'      => $this->source_location_id,
             'destination_location_id' => $this->destination_location_id,
-            'action' => ['!=', RuleAction::PUSH],
+            'action'                  => ['!=', RuleAction::PUSH],
         ];
 
         if ($operationTypeCode) {
@@ -649,7 +665,7 @@ class Move extends Model
 
         foreach ($data as $row) {
             $uom = $this->uom;
-            
+
             $sumQty[$row->move_id] = ($sumQty[$row->move_id] ?? 0.0) + $row->uom->computeQuantity($row->qty_sum, $uom, round: false);
         }
 
@@ -739,7 +755,7 @@ class Move extends Model
             'origin_returned_move_id' => $this->origin_returned_move_id,
             'move_origin_ids'         => $this->moveOrigins->pluck('id')->all(),
             'move_destination_ids'    => $this->moveDestinations
-                ->filter(fn($x) => ! in_array($x->state, [MoveState::DONE, MoveState::CANCELED]))
+                ->filter(fn ($x) => ! in_array($x->state, [MoveState::DONE, MoveState::CANCELED]))
                 ->pluck('id')
                 ->all(),
         ];
@@ -769,7 +785,7 @@ class Move extends Model
             || (
                 $this->moveOrigins->isNotEmpty()
                 && $this->moveOrigins->some(
-                    fn($orig) => float_compare($orig->product_uom_qty, 0, precisionRounding: $orig->uom->rounding) > 0
+                    fn ($orig) => float_compare($orig->product_uom_qty, 0, precisionRounding: $orig->uom->rounding) > 0
                     && ! in_array($orig->state, [MoveState::DONE, MoveState::CANCELED])
                 )
             )
@@ -950,7 +966,7 @@ class Move extends Model
             ->filter(fn (Move $m) => $m->state === MoveState::DONE)
             ->flatMap->lines;
 
-        $grouped = $moveLines->groupBy(fn($ml) => implode('_', [
+        $grouped = $moveLines->groupBy(fn ($ml) => implode('_', [
             $ml->destination_location_id,
             $ml->lot_id,
             $ml->result_package_id,
@@ -1014,8 +1030,7 @@ class Move extends Model
         ?Package $package = null,
         ?Partner $partner = null,
         bool $strict = true
-    ): float
-    {
+    ): float {
         $rounding = $this->product->uom->rounding;
 
         $quants = ProductQuantity::getReserveQuantity(
@@ -1122,5 +1137,175 @@ class Move extends Model
     public static function getRelevantStateAmongMoves($moves): \BackedEnum
     {
         return InventoryFacade::getRelevantStateAmongMoves($moves);
+    }
+
+    public function isConsuming()
+    {
+        $fromWarehouse = $this->sourceLocation->warehouse ?? null;
+
+        $toWarehouse = $this->destinationLocation->warehouse ?? null;
+
+        return $this->operationType?->type === OperationTypeEnum::OUTGOING
+            || (
+                $fromWarehouse
+                &&
+                $toWarehouse
+                && $fromWarehouse->id !== $toWarehouse->id
+            );
+    }
+
+    public function getForecastAvailabilityOutgoing(Collection $moves, Warehouse $warehouse, Location $location): array
+    {
+        $viewLocationParentPath = $warehouse->viewLocation->parent_path;
+
+        $warehouseLocationIds = Location::query()
+            ->where('parent_path', 'like', $viewLocationParentPath.'%')
+            ->pluck('id');
+
+        $productId = $this->product_id;
+
+        $stockLocationId = $location->id;
+
+        $incomingMoves = self::query()
+            ->where('product_id', $productId)
+            ->whereIn('destination_location_id', $warehouseLocationIds)
+            ->whereHas('operationType', fn ($q) => $q->where('type', OperationTypeEnum::INCOMING))
+            ->whereIn('state', [MoveState::CONFIRMED, MoveState::ASSIGNED, MoveState::PARTIALLY_ASSIGNED, MoveState::WAITING])
+            ->orderBy('scheduled_at')
+            ->get();
+
+        $outgoingMoveIds = $moves->pluck('id')->all();
+
+        $outgoingMoves = self::query()
+            ->where('product_id', $productId)
+            ->where('source_location_id', $stockLocationId)
+            ->whereHas('operationType', fn ($q) => $q->where('type', OperationTypeEnum::OUTGOING))
+            ->whereIn('state', [MoveState::CONFIRMED, MoveState::ASSIGNED, MoveState::PARTIALLY_ASSIGNED, MoveState::WAITING])
+            ->orderBy('scheduled_at')
+            ->get()
+            ->keyBy('id');
+
+        $result = [];
+
+        foreach ($outgoingMoveIds as $moveId) {
+            $result[$moveId] = [false, false];
+        }
+
+        $cumulative = 0.0;
+
+        $timeline = $incomingMoves
+            ->map(fn (self $m) => ['type' => OperationTypeEnum::INCOMING, 'move' => $m, 'date' => $m->scheduled_at])
+            ->concat(
+                $outgoingMoves->values()->map(fn (self $m) => ['type' => OperationTypeEnum::OUTGOING, 'move' => $m, 'date' => $m->scheduled_at])
+            )
+            ->sortBy('date')
+            ->values();
+
+        foreach ($timeline as $entry) {
+            $move = $entry['move'];
+
+            if ($entry['type'] === OperationTypeEnum::INCOMING) {
+                $cumulative += $move->product_qty;
+            } else {
+                $cumulative -= $move->product_qty;
+
+                if (! in_array($move->id, $outgoingMoveIds)) {
+                    continue;
+                }
+
+                $replenishmentFilled = $cumulative >= 0;
+
+                $qtyExpected = $replenishmentFilled
+                    ? $cumulative
+                    : -$move->product_qty;
+
+                $dateExpected = false;
+
+                if ($replenishmentFilled) {
+                    $coveringIncoming = $incomingMoves
+                        ->filter(fn (self $in) => $in->scheduled_at <= $move->scheduled_at)
+                        ->sortByDesc('scheduled_at')
+                        ->first();
+
+                    if ($coveringIncoming) {
+                        $dateExpected = $coveringIncoming->scheduled_at;
+                    }
+                }
+
+                $result[$move->id] = [$qtyExpected, $dateExpected];
+            }
+        }
+
+        return $result;
+    }
+
+    public function getForecastInformation(): array
+    {
+        $forecastAvailability = false;
+
+        $forecastExpectedDate = false;
+
+        if (! $this->product->is_storable) {
+            return [
+                'forecast_availability'  => $this->product_qty,
+                'forecast_expected_date' => false,
+            ];
+        }
+
+        $now = now();
+
+        $keyVirtualAvailable = fn (bool $incoming = false) => [
+            $incoming ? $this->destinationLocation->warehouse_id : $this->sourceLocation->warehouse_id,
+            max(Carbon::parse($this->scheduled_at ?? $now), $now),
+        ];
+
+        if ($this->isConsuming()) {
+            if ($this->state === MoveState::ASSIGNED) {
+                $forecastAvailability = $this->uom->computeQuantity(
+                    $this->quantity,
+                    $this->product->uom,
+                    roundingMethod: 'HALF-UP'
+                );
+            } elseif ($this->state === MoveState::DRAFT) {
+                $key = $keyVirtualAvailable();
+
+                $product = Product::find($this->product_id);
+
+                $product->setContext(['to_date' => Carbon::parse($key[1])]);
+
+                $virtualAvailable = $product->computeQuantities()['virtual_available_qty'] ?? 0;
+
+                $forecastAvailability = $virtualAvailable - $this->product_qty;
+            } elseif (in_array($this->state, [MoveState::WAITING, MoveState::CONFIRMED, MoveState::PARTIALLY_ASSIGNED])) {
+                $warehouseId = $this->sourceLocation->warehouse_id;
+
+                if ($warehouseId) {
+                    $warehouse = Warehouse::find($warehouseId);
+
+                    $location = $this->sourceLocation;
+
+                    $forecastInfo = $this->getForecastAvailabilityOutgoing(collect([$this]), $warehouse, $location);
+
+                    [$forecastAvailability, $forecastExpectedDate] = $forecastInfo[$this->id];
+                }
+            }
+        } elseif ($this->operationType?->type === OperationTypeEnum::INCOMING) {
+            $key = $keyVirtualAvailable(incoming: true);
+
+            $product = Product::find($this->product_id);
+
+            $product->setContext(['to_date' => Carbon::parse($key[1])]);
+
+            $forecastAvailability = $product->computeQuantities()['virtual_available_qty'] ?? 0;
+
+            if ($this->state === MoveState::DRAFT) {
+                $forecastAvailability += $this->product_qty;
+            }
+        }
+
+        return [
+            $forecastAvailability,
+            $forecastExpectedDate,
+        ];
     }
 }

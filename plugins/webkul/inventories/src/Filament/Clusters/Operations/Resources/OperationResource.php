@@ -838,6 +838,20 @@ class OperationResource extends Resource
                     ->required()
                     ->visible(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT)
                     ->disabled(fn (?Move $record): bool => in_array($record?->state, [MoveState::DONE, MoveState::CANCELED]))
+                    ->suffixIcon(function (?Move $record, Get $get): ?string {
+                        if (
+                            ! $get('product_id')
+                            || (float) ($get('product_uom_qty') ?? 0) <= 0
+                            || (float) ($get('quantity') ?? 0) > 0
+                            || ($record?->forecast_availability ?? 1) > 0
+                            || ($record?->operationType?->type === Enums\OperationType::OUTGOING && $record?->state !== MoveState::DRAFT)
+                        ) {
+                            return null;
+                        }
+
+                        return 'heroicon-o-exclamation-triangle';
+                    })
+                    ->suffixIconColor('danger')
                     ->suffixAction(fn (Move $record) => static::getMoveLinesAction($record)),
                 Select::make('uom_id')
                     ->label(__('inventories::filament/clusters/operations/resources/operation.form.tabs.operations.fields.unit'))
