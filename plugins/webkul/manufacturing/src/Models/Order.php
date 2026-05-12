@@ -404,7 +404,7 @@ class Order extends Model
 
     public function computeProductUOMQty()
     {
-        $this->product_uom_qty = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom);
+        $this->product_uom_qty = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom ?? $this->product->uom);
     }
 
     public function computeSourceLocationId()
@@ -506,7 +506,7 @@ class Order extends Model
         if ($relevantMoveState === MoveState::PARTIALLY_ASSIGNED) {
             if (
                 $this->workOrders->pluck('operation_id')->filter()->isNotEmpty()
-                && $this->billOfMaterial->ready_to_produce === BillOfMaterialReadyToProduce::ASAP
+                && $this->billOfMaterial?->ready_to_produce === BillOfMaterialReadyToProduce::ASAP
             ) {
                 $this->reservation_state = $this->getReadyToProduceState();
             } else {
@@ -543,7 +543,7 @@ class Order extends Model
             return;
         }
 
-        $daysDelay = $this->billOfMaterial->produce_delay ?? 0;
+        $daysDelay = $this->billOfMaterial?->produce_delay ?? 0;
 
         $finishedAt = Carbon::parse($this->started_at)->addDays($daysDelay);
 
@@ -678,7 +678,7 @@ class Order extends Model
     {
         $moves = [];
 
-        $byproductProductIds = $this->billOfMaterial->byproducts->pluck('product_id')->all();
+        $byproductProductIds = $this->billOfMaterial?->byproducts->pluck('product_id')->all() ?? [];
 
         if (in_array($this->product_id, $byproductProductIds)) {
             throw new \Exception(__('You cannot have :product as the finished product and in the Byproducts', [
@@ -692,14 +692,14 @@ class Order extends Model
 
         $moves[] = $finishedMoveValues;
 
-        foreach ($this->billOfMaterial->byproducts as $byproduct) {
+        foreach ($this->billOfMaterial?->byproducts ?? [] as $byproduct) {
             if ($byproduct->skipByproductLine($this->product)) {
                 continue;
             }
 
-            $productUomFactor = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom);
+            $productUomFactor = $this->uom->computeQuantity($this->quantity, $this->billOfMaterial->uom ?? $this->product->uom);
 
-            $qty = $byproduct->quantity * ($productUomFactor / $this->billOfMaterial->quantity);
+            $qty = $byproduct->quantity * ($productUomFactor / ($this->billOfMaterial->quantity ?? 1));
 
             $moves[] = $this->getMoveFinishedValues(
                 $byproduct->product_id,
@@ -815,7 +815,7 @@ class Order extends Model
 
         $lastWorkOrderPerBom = [];
 
-        $allowWorkOrderDependencies = $this->billOfMaterial->allow_operation_dependencies;
+        $allowWorkOrderDependencies = $this->billOfMaterial?->allow_operation_dependencies;
 
         $workOrderOrder = fn ($wo) => [$wo->sort, $wo->id];
 
@@ -1138,7 +1138,7 @@ class Order extends Model
         if (
             $this->consumption === BillOfMaterialConsumption::FLEXIBLE
             || ! $this->bill_of_material_id
-            || $this->billOfMaterial->lines->isEmpty()
+            || $this->billOfMaterial?->lines->isEmpty()
         ) {
             return $issues;
         }
