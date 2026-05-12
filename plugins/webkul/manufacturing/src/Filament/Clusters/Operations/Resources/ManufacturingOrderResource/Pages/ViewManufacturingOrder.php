@@ -3,12 +3,12 @@
 namespace Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource\Pages;
 
 use Filament\Resources\Pages\ViewRecord;
-use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
-use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\ConfirmAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\CancelAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\ConfirmAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\PlanAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\StartAction;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Actions\UnplanAction;
+use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
 class ViewManufacturingOrder extends ViewRecord
@@ -32,4 +32,6 @@ class ViewManufacturingOrder extends ViewRecord
             CancelAction::make('cancel'),
         ];
     }
+
+    public function updateForm(): void {}
 }

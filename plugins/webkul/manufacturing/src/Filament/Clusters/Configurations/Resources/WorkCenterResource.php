@@ -12,6 +12,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
+use Illuminate\Support\Arr;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Placeholder;
@@ -206,6 +207,32 @@ class WorkCenterResource extends Resource
                                             ->searchable()
                                             ->preload()
                                             ->wrapOptionLabels(false)
+                                            ->getOptionLabelFromRecordUsing(function ($record): string {
+                                                return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                                            })
+                                            ->wrapOptionLabels(false)
+                                            ->disableOptionWhen(function ($label, $value, $state, $component) {
+                                                $isDeleted = str_contains($label, ' (Deleted)');
+
+                                                $isDuplicate = false;
+
+                                                if ($component?->getParentRepeater()) {
+                                                    $repeater = $component->getParentRepeater();
+
+                                                    $isDuplicate = collect($repeater->getState())
+                                                        ->pluck(
+                                                            (string) str($component->getStatePath())
+                                                                ->after("{$repeater->getStatePath()}.")
+                                                                ->after('.'),
+                                                        )
+                                                        ->flatten()
+                                                        ->diff(Arr::wrap($state))
+                                                        ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                                        ->contains($value);
+                                                }
+
+                                                return $isDeleted || $isDuplicate;
+                                            })
                                             ->live()
                                             ->required(),
                                         Placeholder::make('product_uom')

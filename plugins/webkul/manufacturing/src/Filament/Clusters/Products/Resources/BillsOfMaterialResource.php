@@ -17,6 +17,7 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
+use Illuminate\Support\Arr;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -109,7 +110,32 @@ class BillsOfMaterialResource extends Resource
                                 Select::make('product_id')
                                     ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.general.fields.product'))
                                     ->relationship('product', 'name', fn (Builder $query) => $query->withTrashed()->whereNull('parent_id'))
-                                    ->getOptionLabelFromRecordUsing(fn ($record): string => $record->name)
+                                    ->getOptionLabelFromRecordUsing(function ($record): string {
+                                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                                    })
+                                    ->wrapOptionLabels(false)
+                                    ->disableOptionWhen(function ($label, $value, $state, $component) {
+                                        $isDeleted = str_contains($label, ' (Deleted)');
+
+                                        $isDuplicate = false;
+
+                                        if ($component?->getParentRepeater()) {
+                                            $repeater = $component->getParentRepeater();
+
+                                            $isDuplicate = collect($repeater->getState())
+                                                ->pluck(
+                                                    (string) str($component->getStatePath())
+                                                        ->after("{$repeater->getStatePath()}.")
+                                                        ->after('.'),
+                                                )
+                                                ->flatten()
+                                                ->diff(Arr::wrap($state))
+                                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                                ->contains($value);
+                                        }
+
+                                        return $isDeleted || $isDuplicate;
+                                    })
                                     ->searchable()
                                     ->preload()
                                     ->live()
@@ -744,7 +770,32 @@ class BillsOfMaterialResource extends Resource
                     ->createOptionForm(fn (Schema $schema): Schema => ProductResource::form($schema))
                     ->createOptionAction(fn (Action $action) => $action->modalWidth(Width::SevenExtraLarge))
                     ->live()
+                    ->getOptionLabelFromRecordUsing(function ($record): string {
+                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                    })
                     ->wrapOptionLabels(false)
+                    ->disableOptionWhen(function ($label, $value, $state, $component) {
+                        $isDeleted = str_contains($label, ' (Deleted)');
+
+                        $isDuplicate = false;
+
+                        if ($component?->getParentRepeater()) {
+                            $repeater = $component->getParentRepeater();
+
+                            $isDuplicate = collect($repeater->getState())
+                                ->pluck(
+                                    (string) str($component->getStatePath())
+                                        ->after("{$repeater->getStatePath()}.")
+                                        ->after('.'),
+                                )
+                                ->flatten()
+                                ->diff(Arr::wrap($state))
+                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                ->contains($value);
+                        }
+
+                        return $isDeleted || $isDuplicate;
+                    })
                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                         $product = Product::query()->find($state);
 
@@ -1071,6 +1122,32 @@ class BillsOfMaterialResource extends Resource
                     ->preload()
                     ->required()
                     ->live()
+                    ->getOptionLabelFromRecordUsing(function ($record): string {
+                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                    })
+                    ->wrapOptionLabels(false)
+                    ->disableOptionWhen(function ($label, $value, $state, $component) {
+                        $isDeleted = str_contains($label, ' (Deleted)');
+
+                        $isDuplicate = false;
+
+                        if ($component?->getParentRepeater()) {
+                            $repeater = $component->getParentRepeater();
+
+                            $isDuplicate = collect($repeater->getState())
+                                ->pluck(
+                                    (string) str($component->getStatePath())
+                                        ->after("{$repeater->getStatePath()}.")
+                                        ->after('.'),
+                                )
+                                ->flatten()
+                                ->diff(Arr::wrap($state))
+                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                ->contains($value);
+                        }
+
+                        return $isDeleted || $isDuplicate;
+                    })
                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                         $product = Product::query()->find($state);
 

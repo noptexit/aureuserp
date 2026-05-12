@@ -33,6 +33,7 @@ use Filament\Support\Enums\TextSize;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group as TableGroup;
 use Filament\Tables\Table;
+use Illuminate\Support\Arr;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Field\Filament\Forms\Components\ProgressStepper as FormProgressStepper;
@@ -58,13 +59,13 @@ use Webkul\Manufacturing\Models\Operation;
 use Webkul\Manufacturing\Models\Order;
 use Webkul\Manufacturing\Models\Product;
 use Webkul\Manufacturing\Models\WorkOrder;
+use Webkul\Manufacturing\Settings\OperationSettings;
 use Webkul\Product\Enums\ProductType;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTableColumn;
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\UOM;
-use Webkul\Manufacturing\Settings\OperationSettings;
 
 class ManufacturingOrderResource extends Resource
 {
@@ -142,7 +143,7 @@ class ManufacturingOrderResource extends Resource
 
                 Section::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.title'))
                     ->columns(2)
-                    ->schema([
+                    ->schema(fn($record) => [
                         Group::make()
                             ->columns(1)
                             ->schema([
@@ -163,6 +164,32 @@ class ManufacturingOrderResource extends Resource
                                     ->wrapOptionLabels(false)
                                     ->live()
                                     ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
+                                    ->getOptionLabelFromRecordUsing(function ($record): string {
+                                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                                    })
+                                    ->wrapOptionLabels(false)
+                                    ->disableOptionWhen(function ($label, $value, $state, $component) use ($record) {
+                                        $isDeleted = str_contains($label, ' (Deleted)');
+
+                                        $isDuplicate = false;
+
+                                        if ($component?->getParentRepeater()) {
+                                            $repeater = $component->getParentRepeater();
+
+                                            $isDuplicate = collect($repeater->getState())
+                                                ->pluck(
+                                                    (string) str($component->getStatePath())
+                                                        ->after("{$repeater->getStatePath()}.")
+                                                        ->after('.'),
+                                                )
+                                                ->flatten()
+                                                ->diff(Arr::wrap($state))
+                                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                                ->contains($value);
+                                        }
+
+                                        return $isDeleted || $isDuplicate;
+                                    })
                                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                                         $product = Product::query()->withTrashed()->find($state);
 
@@ -307,11 +334,21 @@ class ManufacturingOrderResource extends Resource
                                             ->live()
                                             ->required()
                                             ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
-                                            ->afterStateUpdated(function (Set $set, ?string $state): void {
+                                            ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                                                 $operationType = OperationType::query()->withTrashed()->find($state);
 
-                                                $set('source_location_id', $operationType?->source_location_id);
+                                                $sourceLocationId = $operationType?->source_location_id;
+                                                $set('source_location_id', $sourceLocationId);
                                                 $set('destination_location_id', $operationType?->destination_location_id);
+
+                                                $sourceLocation = $sourceLocationId ? Location::query()->withTrashed()->find($sourceLocationId) : null;
+                                                $displayFrom = $sourceLocation?->full_name ?? '—';
+
+                                                foreach (array_keys($get('rawMaterialMoves') ?? []) as $key) {
+                                                    $set("rawMaterialMoves.{$key}.operation_type_id", $operationType?->id);
+                                                    $set("rawMaterialMoves.{$key}.source_location_id", $sourceLocationId);
+                                                    $set("rawMaterialMoves.{$key}.display_from", $displayFrom);
+                                                }
                                             }),
                                         Select::make('source_location_id')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.miscellaneous.fields.source'))
@@ -322,7 +359,17 @@ class ManufacturingOrderResource extends Resource
                                             ->native(false)
                                             ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                             ->visible(static::getWarehouseSettings()->enable_locations)
-                                            ->wrapOptionLabels(false),
+                                            ->wrapOptionLabels(false)
+                                            ->live()
+                                            ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
+                                                $sourceLocation = $state ? Location::query()->withTrashed()->find($state) : null;
+                                                $displayFrom = $sourceLocation?->full_name ?? '—';
+
+                                                foreach (array_keys($get('rawMaterialMoves') ?? []) as $key) {
+                                                    $set("rawMaterialMoves.{$key}.source_location_id", $state);
+                                                    $set("rawMaterialMoves.{$key}.display_from", $displayFrom);
+                                                }
+                                            }),
                                         Select::make('destination_location_id')
                                             ->label(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.miscellaneous.fields.finished-products-location'))
                                             ->relationship('destinationLocation', 'full_name', fn (Builder $query) => $query->withTrashed())
@@ -680,6 +727,7 @@ class ManufacturingOrderResource extends Resource
     ): void {
         if (! $billOfMaterial) {
             $set('rawMaterialMoves', []);
+
             $set('workOrders', []);
 
             return;
@@ -938,6 +986,32 @@ class ManufacturingOrderResource extends Resource
                     ->native(false)
                     ->wrapOptionLabels(false)
                     ->live()
+                    ->getOptionLabelFromRecordUsing(function ($record): string {
+                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                    })
+                    ->wrapOptionLabels(false)
+                    ->disableOptionWhen(function ($label, $value, $state, $component) {
+                        $isDeleted = str_contains($label, ' (Deleted)');
+
+                        $isDuplicate = false;
+
+                        if ($component?->getParentRepeater()) {
+                            $repeater = $component->getParentRepeater();
+
+                            $isDuplicate = collect($repeater->getState())
+                                ->pluck(
+                                    (string) str($component->getStatePath())
+                                        ->after("{$repeater->getStatePath()}.")
+                                        ->after('.'),
+                                )
+                                ->flatten()
+                                ->diff(Arr::wrap($state))
+                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                ->contains($value);
+                        }
+
+                        return $isDeleted || $isDuplicate;
+                    })
                     ->afterStateUpdated(function (Set $set, Get $get, ?string $state): void {
                         $product = Product::query()->withTrashed()->find($state);
 
