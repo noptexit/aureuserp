@@ -40,16 +40,16 @@ class BankAccountController extends Controller
         Gate::authorize('view', $partnerModel);
 
         $bankAccounts = QueryBuilder::for(BankAccount::where('partner_id', $partner))
-            ->allowedFilters([
+            ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('bank_id'),
                 AllowedFilter::trashed(),
-            ])
-            ->allowedSorts(['id', 'created_at'])
-            ->allowedIncludes([
+            )
+            ->allowedSorts('id', 'created_at')
+            ->allowedIncludes(
                 'bank',
                 'creator',
-            ])
+            )
             ->paginate();
 
         return BankAccountResource::collection($bankAccounts);
@@ -91,10 +91,10 @@ class BankAccountController extends Controller
         Gate::authorize('view', $partnerModel);
 
         $bankAccountModel = QueryBuilder::for(BankAccount::where('id', $bankAccount)->where('partner_id', $partner))
-            ->allowedIncludes([
+            ->allowedIncludes(
                 'bank',
                 'creator',
-            ])
+            )
             ->firstOrFail();
 
         return new BankAccountResource($bankAccountModel);

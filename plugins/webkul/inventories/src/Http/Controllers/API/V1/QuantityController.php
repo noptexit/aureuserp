@@ -58,7 +58,7 @@ class QuantityController extends Controller
         Gate::authorize('viewAny', ProductQuantity::class);
 
         $quantities = QueryBuilder::for(ProductQuantity::class)
-            ->allowedFilters([
+            ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('product_id'),
                 AllowedFilter::exact('location_id'),
@@ -69,8 +69,8 @@ class QuantityController extends Controller
                 AllowedFilter::exact('user_id'),
                 AllowedFilter::exact('company_id'),
                 AllowedFilter::exact('inventory_quantity_set'),
-            ])
-            ->allowedSorts([
+            )
+            ->allowedSorts(
                 'id',
                 'quantity',
                 'reserved_quantity',
@@ -81,8 +81,8 @@ class QuantityController extends Controller
                 'scheduled_at',
                 'created_at',
                 'updated_at',
-            ])
-            ->allowedIncludes($this->allowedIncludes)
+            )
+            ->allowedIncludes(...$this->allowedIncludes)
             ->paginate();
 
         return ProductQuantityResource::collection($quantities);
@@ -130,7 +130,7 @@ class QuantityController extends Controller
         Gate::authorize('viewAny', ProductQuantity::class);
 
         $quantity = QueryBuilder::for(ProductQuantity::query()->where('id', $id))
-            ->allowedIncludes($this->allowedIncludes)
+            ->allowedIncludes(...$this->allowedIncludes)
             ->firstOrFail();
 
         return new ProductQuantityResource($quantity);
