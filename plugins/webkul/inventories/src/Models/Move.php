@@ -910,7 +910,7 @@ class Move extends Model
             $package = $reservedQuantity->package;
 
             $values = array_merge($values, [
-                'source_location_id' => $reservedQuantity->source_location_id,
+                'source_location_id' => $reservedQuantity->location_id,
                 'lot_id'             => $reservedQuantity->lot_id,
                 'package_id'         => $package?->id,
             ]);
