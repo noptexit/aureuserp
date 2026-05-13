@@ -448,10 +448,10 @@ class MoveLine extends Model
                     break;
                 }
             } else {
-                $candidate->decrement(
-                    'qty',
-                    $candidate->product->uom->computeQuantity($quantity, $candidate->uom, roundingMethod: 'HALF-UP')
-                );
+                $candidate->update([
+                    'qty' => $candidate->qty - $candidate->product->uom->computeQuantity($quantity, $candidate->uom, roundingMethod: 'HALF-UP')
+                ]);
+
                 break;
             }
         }
