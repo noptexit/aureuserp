@@ -19,6 +19,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Webkul\Support\Filament\Clusters\Settings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +31,8 @@ class Profile extends Page implements HasForms
     use InteractsWithForms;
 
     protected string $view = 'support::pages.profile';
+
+    protected static ?string $cluster = Settings::class;
 
     protected static bool $shouldRegisterNavigation = false;
 
