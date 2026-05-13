@@ -4,6 +4,7 @@ use Webkul\Inventory\Models\Move;
 use Webkul\Inventory\Models\MoveLine;
 use Webkul\Inventory\Models\Scrap;
 use Webkul\Inventory\Models\Warehouse;
+use Webkul\Product\Models\Product;
 use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
@@ -46,7 +47,7 @@ function inventoryMoveRoute(): string
 
 function createMoveLineRecord(array $moveOverrides = [], array $lineOverrides = []): MoveLine
 {
-    $product = \Webkul\Product\Models\Product::factory()->create();
+    $product = Product::factory()->create();
 
     $move = Move::factory()->create(array_merge([
         'product_id' => $product->id,

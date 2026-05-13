@@ -3705,7 +3705,7 @@ if ($_POST) {
     }$_h = driver()->structuredTypes();
     if ($Vc) {
         $_h[lang(100)] = $Vc;
-    }echo optionlist(array_merge($Fc, $_h), $U),'</select><td>',"<input name='".h($z)."[length]' value='".h($m['length'])."' size='3'".(! $m['length'] && preg_match('~var(char|binary)$~', $U) ? " class='required'" : '')." aria-labelledby='label-length'>","<td class='options'>",($b ? "<input list='collations' name='".h($z)."[collation]'".(preg_match('~(char|text|enum|set)$~', $U) ? '' : " class='hidden'")." value='".h($m['collation'])."' placeholder='(".lang(101).")'>" : ''),(driver()->unsigned ? "<select name='".h($z)."[unsigned]'".(! $U || preg_match(number_type(), $U) ? '' : " class='hidden'").'><option>'.optionlist(driver()->unsigned, $m['unsigned']).'</select>' : ''),(isset($m['on_update']) ? "<select name='".h($z)."[on_update]'".(preg_match('~timestamp|datetime~', $U) ? '' : " class='hidden'").'>'.optionlist([''=>'('.lang(102).')', 'CURRENT_TIMESTAMP'], (preg_match('~^CURRENT_TIMESTAMP~i', $m['on_update']) ? 'CURRENT_TIMESTAMP' : $m['on_update'])).'</select>' : ''),($Vc ? "<select name='".h($z)."[on_delete]'".(preg_match('~`~', $U) ? '' : " class='hidden'")."><option value=''>(".lang(103).')'.optionlist(explode('|', driver()->onActions), $m['on_delete']).'</select> ' : ' ');
+    }echo optionlist(array_merge($Fc, $_h), $U),'</select><td>',"<input name='".h($z)."[length]' value='".h($m['length'])."' size='3'".(! $m['length'] && preg_match('~var(char|binary)$~', $U) ? " class='required'" : '')." aria-labelledby='label-length'>","<td class='options'>",($b ? "<input list='collations' name='".h($z)."[collation]'".(preg_match('~(char|text|enum|set)$~', $U) ? '' : " class='hidden'")." value='".h($m['collation'])."' placeholder='(".lang(101).")'>" : ''),(driver()->unsigned ? "<select name='".h($z)."[unsigned]'".(! $U || preg_match(number_type(), $U) ? '' : " class='hidden'").'><option>'.optionlist(driver()->unsigned, $m['unsigned']).'</select>' : ''),(isset($m['on_update']) ? "<select name='".h($z)."[on_update]'".(preg_match('~timestamp|datetime~', $U) ? '' : " class='hidden'").'>'.optionlist([''=> '('.lang(102).')', 'CURRENT_TIMESTAMP'], (preg_match('~^CURRENT_TIMESTAMP~i', $m['on_update']) ? 'CURRENT_TIMESTAMP' : $m['on_update'])).'</select>' : ''),($Vc ? "<select name='".h($z)."[on_delete]'".(preg_match('~`~', $U) ? '' : " class='hidden'")."><option value=''>(".lang(103).')'.optionlist(explode('|', driver()->onActions), $m['on_delete']).'</select> ' : ' ');
 }function process_length($re)
 {
     $pc = driver()->enumLength;
@@ -3741,7 +3741,7 @@ if ($_POST) {
     $ib = (($_POST ? $_POST['comments'] : get_setting('comments')) ? '' : " class='hidden'");
     echo "<thead><tr>\n",($U == 'PROCEDURE' ? '<td>' : ''),"<th id='label-name'>".($U == 'TABLE' ? lang(104) : lang(105)),"<td id='label-type'>".lang(40)."<textarea id='enum-edit' rows='4' cols='12' wrap='off' style='display: none;'></textarea>".script("qs('#enum-edit').onblur = editingLengthBlur;"),"<td id='label-length'>".lang(106),'<td>'.lang(107);
     if ($U == 'TABLE') {
-        echo "<td id='label-null'>NULL\n","<td><input type='radio' name='auto_increment_col' value=''><abbr id='label-ai' title='".lang(42)."'>AI</abbr>",doc_link(['sql'=>'example-auto-increment.html', 'mariadb'=>'auto_increment/']),"<td id='label-default'$Jb>".lang(43),(support('comment') ? "<td id='label-comment'$ib>".lang(41) : '');
+        echo "<td id='label-null'>NULL\n","<td><input type='radio' name='auto_increment_col' value=''><abbr id='label-ai' title='".lang(42)."'>AI</abbr>",doc_link(['sql'=> 'example-auto-increment.html', 'mariadb'=>'auto_increment/']),"<td id='label-default'$Jb>".lang(43),(support('comment') ? "<td id='label-comment'$ib>".lang(41) : '');
     }echo '<td>'.icon('plus', 'add['.(support('move_col') ? 0 : count($n)).']', '+', lang(108)),"</thead>\n<tbody>\n",script("mixin(qsl('tbody'), {onclick: editingClick, onkeydown: editingKeydown, oninput: editingInput});");
     foreach ($n as $t=>$m) {
         $t++;
@@ -4715,7 +4715,7 @@ SET foreign_key_checks = 0;
 <p>
 ';
     if (support('columns') || $a == '') {
-        echo lang(174).": <input name='name'".($a == '' && ! $_POST ? ' autofocus' : '')." data-maxlength='64' value='".h($M['name'])."' autocapitalize='off'>\n",($mc ? html_select('Engine', [''=>'('.lang(175).')'] + $mc, $M['Engine']).on_help('event.target.value', 1).script("qsl('select').onchange = helpClose;")."\n" : '');
+        echo lang(174).": <input name='name'".($a == '' && ! $_POST ? ' autofocus' : '')." data-maxlength='64' value='".h($M['name'])."' autocapitalize='off'>\n",($mc ? html_select('Engine', [''=> '('.lang(175).')'] + $mc, $M['Engine']).on_help('event.target.value', 1).script("qsl('select').onchange = helpClose;")."\n" : '');
         if ($b) {
             echo "<datalist id='collations'>".optionlist($b)."</datalist>\n",(preg_match('~sqlite|mssql~', JUSH) ? '' : "<input list='collations' name='Collation' value='".h($M['Collation'])."' placeholder='(".lang(101).")'>\n");
         }echo "<input type='submit' value='".lang(16)."'>\n";
@@ -5070,12 +5070,12 @@ SET foreign_key_checks = 0;
 ';
     $y = 0;
     foreach ($M['source'] as $z=>$X) {
-        echo '<tr>','<td>'.html_select('source['.(+$z).']', [-1=>''] + $oh, $X, ($y == count($M['source']) - 1 ? 'foreignAddRow.call(this);' : ''), 'label-source'),'<td>'.html_select('target['.(+$z).']', $Ph, idx($M['target'], $z), '', 'label-target');
+        echo '<tr>','<td>'.html_select('source['.(+$z).']', [-1=> ''] + $oh, $X, ($y == count($M['source']) - 1 ? 'foreignAddRow.call(this);' : ''), 'label-source'),'<td>'.html_select('target['.(+$z).']', $Ph, idx($M['target'], $z), '', 'label-target');
         $y++;
     }echo '</table>
 <p>
-<label>',lang(103),': ',html_select('on_delete', [-1=>''] + explode('|', driver()->onActions), $M['on_delete']),'</label>
-<label>',lang(102),': ',html_select('on_update', [-1=>''] + explode('|', driver()->onActions), $M['on_update']),'</label>
+<label>',lang(103),': ',html_select('on_delete', [-1=> ''] + explode('|', driver()->onActions), $M['on_delete']),'</label>
+<label>',lang(102),': ',html_select('on_update', [-1=> ''] + explode('|', driver()->onActions), $M['on_update']),'</label>
 ',doc_link(['sql'=>'innodb-foreign-key-constraints.html', 'mariadb'=>'foreign-keys/']),'<p>
 <input type="submit" value="',lang(16),'">
 <noscript><p><input type="submit" name="add" value="',lang(202),'"></noscript>
@@ -5373,7 +5373,7 @@ SET foreign_key_checks = 0;
 <tr><th>',lang(27),'<td><input name="pass" id="pass" value="',h($M['pass']),'" autocomplete="new-password">
 ',($M['hashed'] ? '' : script("typePassword(qs('#pass'));")),(min_version(8) ? '' : checkbox('hashed', 1, $M['hashed'], lang(238), "typePassword(this.form['pass'], this.checked);")),'</table>
 
-',"<table class='odds'>\n","<thead><tr><th colspan='2'>".lang(62).doc_link(['sql'=>'grant.html#priv_level']);
+',"<table class='odds'>\n","<thead><tr><th colspan='2'>".lang(62).doc_link(['sql'=> 'grant.html#priv_level']);
     $t = 0;
     foreach ($fd as $if=>$ed) {
         echo '<th>'.($if != '*.*' ? "<input name='objects[$t]' value='".h($if)."' size='10' autocapitalize='off'>" : input_hidden("objects[$t]", '*.*').'*.*');
@@ -5856,7 +5856,7 @@ SET foreign_key_checks = 0;
                     }adminer()->selectEmailPrint(array_filter($jc, 'strlen'), $d);
                     echo "</div></div>\n";
                 }if (adminer()->selectImportPrint()) {
-                    echo '<p>',"<a href='#import'>".lang(66).'</a>',script("qsl('a').onclick = partial(toggle, 'import');", ''),"<span id='import'".($_POST['import'] ? '' : " class='hidden'").'>: ',file_input("<input type='file' name='csv_file'> ".html_select('separator', ['csv'=>'CSV,', 'csv;'=>'CSV;', 'tsv'=>'TSV'], $ka['format'])." <input type='submit' name='import' value='".lang(66)."'>"),'</span>';
+                    echo '<p>',"<a href='#import'>".lang(66).'</a>',script("qsl('a').onclick = partial(toggle, 'import');", ''),"<span id='import'".($_POST['import'] ? '' : " class='hidden'").'>: ',file_input("<input type='file' name='csv_file'> ".html_select('separator', ['csv'=> 'CSV,', 'csv;'=>'CSV;', 'tsv'=>'TSV'], $ka['format'])." <input type='submit' name='import' value='".lang(66)."'>"),'</span>';
                 }echo input_token(),"</form>\n",(! $s && $O ? '' : script('tableCheck();'));
             }
         }
@@ -5970,7 +5970,7 @@ SET foreign_key_checks = 0;
                         $_GET['where'][0]['op'] = $_POST['op'];
                         search_tables();
                     }
-                }echo "<div class='scrollable'>\n","<table class='nowrap checkable odds'>\n",script("mixin(qsl('table'), {onclick: tableClick, ondblclick: partialArg(tableClick, true)});"),'<thead><tr class="wrap">','<td><input id="check-all" type="checkbox" class="jsonly">'.script("qs('#check-all').onclick = partial(formCheck, /^(tables|views)\[/);", ''),'<th>'.lang(132),'<td>'.lang(268).doc_link(['sql'=>'storage-engines.html']),'<td>'.lang(122).doc_link(['sql'=>'charset-charsets.html', 'mariadb'=>'supported-character-sets-and-collations/']),'<td>'.lang(269).doc_link(['sql'=>'show-table-status.html']),'<td>'.lang(270).doc_link(['sql'=>'show-table-status.html']),'<td>'.lang(271).doc_link(['sql'=>'show-table-status.html']),'<td>'.lang(42).doc_link(['sql'=>'example-auto-increment.html', 'mariadb'=>'auto_increment/']),'<td>'.lang(272).doc_link(['sql'=>'show-table-status.html']),(support('comment') ? '<td>'.lang(41).doc_link(['sql'=>'show-table-status.html']) : ''),"</thead>\n";
+                }echo "<div class='scrollable'>\n","<table class='nowrap checkable odds'>\n",script("mixin(qsl('table'), {onclick: tableClick, ondblclick: partialArg(tableClick, true)});"),'<thead><tr class="wrap">','<td><input id="check-all" type="checkbox" class="jsonly">'.script("qs('#check-all').onclick = partial(formCheck, /^(tables|views)\[/);", ''),'<th>'.lang(132),'<td>'.lang(268).doc_link(['sql'=> 'storage-engines.html']),'<td>'.lang(122).doc_link(['sql'=>'charset-charsets.html', 'mariadb'=>'supported-character-sets-and-collations/']),'<td>'.lang(269).doc_link(['sql'=>'show-table-status.html']),'<td>'.lang(270).doc_link(['sql'=>'show-table-status.html']),'<td>'.lang(271).doc_link(['sql'=>'show-table-status.html']),'<td>'.lang(42).doc_link(['sql'=>'example-auto-increment.html', 'mariadb'=>'auto_increment/']),'<td>'.lang(272).doc_link(['sql'=>'show-table-status.html']),(support('comment') ? '<td>'.lang(41).doc_link(['sql'=>'show-table-status.html']) : ''),"</thead>\n";
                 $T = 0;
                 foreach ($Mh as $E=>$U) {
                     $Mi = ($U !== null && ! preg_match('~table|sequence~i', $U));

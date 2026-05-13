@@ -12,12 +12,12 @@ use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
 use Webkul\Account\Models\MoveLine;
 use Webkul\Account\Models\Tax;
+use Webkul\Inventory\Enums as InventoryEnums;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move as InventoryMove;
 use Webkul\Inventory\Models\Route;
 use Webkul\Inventory\Models\Rule;
 use Webkul\Inventory\Models\Warehouse;
-use Webkul\Inventory\Enums as InventoryEnums;
 use Webkul\Partner\Models\Partner;
 use Webkul\PluginManager\Package;
 use Webkul\Product\Models\Packaging;
@@ -25,7 +25,6 @@ use Webkul\Product\Models\Product;
 use Webkul\Sale\Database\Factories\OrderLineFactory;
 use Webkul\Sale\Enums\OrderState;
 use Webkul\Sale\Enums\QtyDeliveredMethod;
-use Webkul\Sale\Facades\SaleOrder as SaleOrderFacade;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 use Webkul\Support\Models\Currency;
@@ -210,10 +209,10 @@ class OrderLine extends Model implements Sortable
         $customerLocation = Location::where('type', InventoryEnums\LocationType::CUSTOMER)->first();
 
         $rules = Rule::where([
-                ['destination_location_id', $customerLocation->id],
-                ['action', '!=', 'push'],
-                ['route_id', $this->route_id],
-            ])
+            ['destination_location_id', $customerLocation->id],
+            ['action', '!=', 'push'],
+            ['route_id', $this->route_id],
+        ])
             ->orderBy('route_sort')
             ->orderBy('sort')
             ->get()

@@ -173,7 +173,7 @@ class BankAccountController extends Controller
     public function forceDestroy(string $partner, string $bankAccount)
     {
         $partnerModel = Partner::findOrFail($partner);
-        
+
         Gate::authorize('update', $partnerModel);
 
         $bankAccountModel = BankAccount::withTrashed()

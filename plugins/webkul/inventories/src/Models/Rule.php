@@ -114,7 +114,7 @@ class Rule extends Model implements Sortable
     {
         return $this->belongsTo(User::class);
     }
-    
+
     public function getLeadDays($product, array $values = []): array
     {
         $delays = ['total_delay' => 0.0];

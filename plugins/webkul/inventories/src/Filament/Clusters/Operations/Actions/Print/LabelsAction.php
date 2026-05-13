@@ -114,7 +114,7 @@ class LabelsAction extends Action
                 ]),
             ])
             ->action(function (array $data, $record) {
-                $pdf = PDF::loadView('inventories::filament.clusters.operations.actions.labels', [
+                $pdf = Pdf::loadView('inventories::filament.clusters.operations.actions.labels', [
                     'type'         => $data['type'] ?? 'product',
                     'quantityType' => $data['quantity_type'] ?? 1,
                     'quantity'     => $data['quantity'] ?? 1,

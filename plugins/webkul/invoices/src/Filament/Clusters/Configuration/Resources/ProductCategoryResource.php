@@ -2,7 +2,6 @@
 
 namespace Webkul\Invoice\Filament\Clusters\Configuration\Resources;
 
-use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\Page;
 use Webkul\Account\Filament\Resources\ProductCategoryResource as BaseProductCategoryResource;
 use Webkul\Invoice\Filament\Clusters\Configuration;

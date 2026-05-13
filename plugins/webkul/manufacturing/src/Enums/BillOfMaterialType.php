@@ -8,7 +8,7 @@ use Filament\Support\Contracts\HasLabel;
 enum BillOfMaterialType: string implements HasColor, HasLabel
 {
     case NORMAL = 'normal';
-    
+
     case PHANTOM = 'phantom';
 
     public static function options(): array

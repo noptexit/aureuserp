@@ -10,12 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use Spatie\EloquentSortable\Sortable;
 use Spatie\EloquentSortable\SortableTrait;
-use Webkul\Account\Models\Tax;
 use Webkul\Account\Facades\Tax as TaxFacade;
+use Webkul\Account\Models\Tax;
+use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move as InventoryMove;
 use Webkul\Inventory\Models\OrderPoint;
-use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Partner\Models\Partner;
 use Webkul\Product\Models\Packaging;
@@ -188,15 +188,15 @@ class OrderLine extends Model implements Sortable
 
             if ($orderLine->wasChanged('product_packaging_id')) {
                 $orderLine->inventoryMoves
-                ->filter(fn($move) => ! in_array($move->state, [MoveState::CANCELED, MoveState::DONE]))
-                ->each->update(['product_packaging_id' => $orderLine->product_packaging_id]);
+                    ->filter(fn ($move) => ! in_array($move->state, [MoveState::CANCELED, MoveState::DONE]))
+                    ->each->update(['product_packaging_id' => $orderLine->product_packaging_id]);
             }
 
             $previousProductQty = $orderLine->getOriginal('product_qty');
 
             if ($orderLine->wasChanged('price_unit')) {
                 $orderLine->inventoryMoves
-                    ->filter(fn($move) => ! in_array($move->state, [MoveState::CANCELED, MoveState::DONE])
+                    ->filter(fn ($move) => ! in_array($move->state, [MoveState::CANCELED, MoveState::DONE])
                         && $move->product_id === $orderLine->product_id
                     )
                     ->each->update(['price_unit' => $orderLine->getInventoryMovePriceUnit()]);
@@ -217,7 +217,7 @@ class OrderLine extends Model implements Sortable
 
         if ($this->taxes->isNotEmpty()) {
             $qty = $this->product_qty ?: 1;
-            
+
             $priceUnit = TaxFacade::computeAll(
                 $this->taxes,
                 $priceUnit,

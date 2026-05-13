@@ -4,12 +4,12 @@ namespace Webkul\Website;
 
 use Filament\Actions\Action;
 use Filament\Contracts\Plugin;
+use Filament\Facades\Filament;
 use Filament\Navigation\NavigationItem;
 use Filament\Panel;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Collection;
 use Webkul\PluginManager\Package;
-use Filament\Facades\Filament;
 use Webkul\Website\Filament\Admin\Clusters\Settings\Pages\ManageContacts;
 use Webkul\Website\Filament\Customer\Auth\Login;
 use Webkul\Website\Filament\Customer\Auth\PasswordReset\RequestPasswordReset;
@@ -193,14 +193,14 @@ class WebsitePlugin implements Plugin
      */
     protected function getTranslatedPageTitle(Page $page): string
     {
-        $translationKey = 'website::filament/app.page_titles.' . $page->slug;
+        $translationKey = 'website::filament/app.page_titles.'.$page->slug;
         $translated = __($translationKey);
-        
+
         // If translation key is returned (no translation found), use database title
         if ($translated === $translationKey) {
             return $page->title;
         }
-        
+
         return $translated;
     }
 

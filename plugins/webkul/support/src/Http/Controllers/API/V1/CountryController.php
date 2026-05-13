@@ -35,7 +35,7 @@ class CountryController extends Controller
     public function index()
     {
         Gate::authorize('viewAny', Country::class);
-        
+
         $countries = QueryBuilder::for(Country::class)
             ->allowedFilters(
                 AllowedFilter::exact('id'),

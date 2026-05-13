@@ -130,7 +130,7 @@ class OrderResource extends Resource
                                         ->icon('heroicon-o-printer')
                                         ->action(function (Order $record) {
                                             if ($record->state == OrderState::SENT) {
-                                                $pdf = PDF::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-quotation', [
+                                                $pdf = Pdf::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-quotation', [
                                                     'records'  => [$record],
                                                 ]);
 
@@ -141,7 +141,7 @@ class OrderResource extends Resource
                                                 }, 'Quotation-'.str_replace('/', '_', $record->name).'.pdf');
                                             }
 
-                                            $pdf = PDF::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-purchase-order', [
+                                            $pdf = Pdf::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-purchase-order', [
                                                 'records'  => [$record],
                                             ]);
 

@@ -260,16 +260,16 @@ class BillOfMaterial extends Model
     public static function bomFindFilters($products, $operationType = null, $companyId = null, $bomType = false)
     {
         $productIds = $products->pluck('id')->all();
-        
+
         $productTmplIds = $products->pluck('product_tmpl_id')->unique()->all();
 
         $query = static::query()
-            ->where(function ($q) use ($productIds, $productTmplIds) {
+            ->where(function ($q) use ($productIds) {
                 $q->whereIn('product_id', $productIds);
-                    // ->orWhere(function ($q2) use ($productTmplIds) {
-                    //     $q2->whereNull('product_id')
-                    //         ->whereIn('product_tmpl_id', $productTmplIds);
-                    // });
+                // ->orWhere(function ($q2) use ($productTmplIds) {
+                //     $q2->whereNull('product_id')
+                //         ->whereIn('product_tmpl_id', $productTmplIds);
+                // });
             });
 
         $resolvedCompanyId = $companyId ?? (static::$context['company_id'] ?? null);
@@ -294,7 +294,6 @@ class BillOfMaterial extends Model
 
         return $query;
     }
-    
 
     public static function bomFind($products, $operationType = null, $companyId = false, $bomType = false): array
     {
@@ -328,7 +327,7 @@ class BillOfMaterial extends Model
         foreach ($billOfMaterials as $bom) {
             $productsImplies = $bom->product ?: $bom->productTemplate->productVariants;
 
-            if (! $productsImplies instanceof \Illuminate\Support\Collection) {
+            if (! $productsImplies instanceof Collection) {
                 $productsImplies = collect([$productsImplies]);
             }
 

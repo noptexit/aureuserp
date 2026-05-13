@@ -4,8 +4,8 @@ namespace Webkul\Inventory\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Webkul\Inventory\Models\ProcurementGroup;
-use Webkul\Security\Models\User;
 use Webkul\Partner\Models\Partner;
+use Webkul\Security\Models\User;
 
 /**
  * @extends Factory<ProcurementGroup>

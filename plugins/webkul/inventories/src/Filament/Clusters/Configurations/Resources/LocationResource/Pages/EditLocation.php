@@ -33,7 +33,7 @@ class EditLocation extends EditRecord
                 ->icon('heroicon-o-printer')
                 ->color('gray')
                 ->action(function (Location $record) {
-                    $pdf = PDF::loadView('inventories::filament.clusters.configurations.locations.actions.print', [
+                    $pdf = Pdf::loadView('inventories::filament.clusters.configurations.locations.actions.print', [
                         'records' => collect([$record]),
                     ]);
 

@@ -16,7 +16,6 @@ use Knuckles\Scribe\Attributes\UrlParam;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 use Webkul\Inventory\Enums\LocationType;
-use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource as ProductFilamentResource;
 use Webkul\Inventory\Http\Requests\ProductQuantityCountRequest;
 use Webkul\Inventory\Http\Requests\ProductQuantityRequest;
 use Webkul\Inventory\Http\Resources\V1\ProductQuantityResource;

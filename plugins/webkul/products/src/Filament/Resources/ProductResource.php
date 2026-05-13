@@ -489,7 +489,7 @@ class ProductResource extends Resource
                                 ->required(),
                         ])
                         ->action(function (array $data, $records) {
-                            $pdf = PDF::loadView('products::filament.resources.products.actions.print', [
+                            $pdf = Pdf::loadView('products::filament.resources.products.actions.print', [
                                 'records'  => $records,
                                 'quantity' => $data['quantity'],
                                 'format'   => $data['format'],

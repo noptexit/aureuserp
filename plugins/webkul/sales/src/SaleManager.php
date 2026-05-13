@@ -14,8 +14,8 @@ use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Product as InventoryProduct;
 use Webkul\Partner\Models\Partner;
-use Webkul\Product\Enums as ProductEnums;
 use Webkul\PluginManager\Package;
+use Webkul\Product\Enums as ProductEnums;
 use Webkul\Sale\Enums\AdvancedPayment;
 use Webkul\Sale\Enums\InvoiceStatus;
 use Webkul\Sale\Enums\OrderDeliveryStatus;
@@ -585,7 +585,7 @@ class SaleManager
 
         $accountMoveLine->taxes()->sync($orderLine->taxes->pluck('id'));
     }
-    
+
     public function applyInventoryRules($lines, $previousProductUOMQty = false): void
     {
         if (! Package::isPluginInstalled('inventories')) {
@@ -596,7 +596,7 @@ class SaleManager
 
         foreach ($lines as $line) {
             $line->refresh();
-            
+
             if (
                 $line->state !== OrderState::SALE
                 || $line->order->locked
@@ -641,8 +641,8 @@ class SaleManager
 
             $productQty = $line->product_qty - $qty;
 
-            $origin = $line->order->client_order_ref 
-                ? "{$line->order->name} - {$line->order->client_order_ref}" 
+            $origin = $line->order->client_order_ref
+                ? "{$line->order->name} - {$line->order->client_order_ref}"
                 : $line->order->name;
 
             [$productQty, $procurementUom] = $line->uom->adjustUomQuantities($productQty, $line->product->uom);
@@ -736,7 +736,7 @@ class SaleManager
 
         $deadline = $line->order->commitment_date ?? $line->expected_date;
 
-        //TODO: This value will be set in the configuration
+        // TODO: This value will be set in the configuration
         $datePlanned = $deadline->subDays(0);
 
         return [

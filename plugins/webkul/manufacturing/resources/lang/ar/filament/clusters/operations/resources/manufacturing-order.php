@@ -34,8 +34,8 @@ return [
                     'to-consume'         => 'للاستهلاك',
                     'to-consume-tooltip' => 'الكمية المتاحة غير كافية',
                     'quantity'           => 'الكمية',
-                    'uom'        => 'وحدة القياس',
-                    'forecast'   => 'التوقع',
+                    'uom'                => 'وحدة القياس',
+                    'forecast'           => 'التوقع',
                 ],
             ],
             'work-orders' => [

@@ -303,7 +303,7 @@ class Product extends Model implements Sortable
                 ),
             ];
 
-            return array_map(fn($key) => $vals[$key] ?? $record[$key], $sortKey);
+            return array_map(fn ($key) => $vals[$key] ?? $record[$key], $sortKey);
         };
 
         $sellers = $this->getFilteredSellers(
@@ -397,15 +397,15 @@ class Product extends Model implements Sortable
     {
         $sellers = $this->sellers
             ->filter(
-                fn($supplier) => (! $supplier->company_id || $supplier->company_id === $company->id)
-                    && (!$supplier->product_id || $supplier->product_id === $this->id)
+                fn ($supplier) => (! $supplier->company_id || $supplier->company_id === $company->id)
+                    && (! $supplier->product_id || $supplier->product_id === $this->id)
             );
 
         return $sellers->sortBy([
-            fn($a, $b) => $a->sort <=> $b->sort,
-            fn($a, $b) => $b->min_qty <=> $a->min_qty,
-            fn($a, $b) => $a->price <=> $b->price,
-            fn($a, $b) => $a->id <=> $b->id,
+            fn ($a, $b) => $a->sort <=> $b->sort,
+            fn ($a, $b) => $b->min_qty <=> $a->min_qty,
+            fn ($a, $b) => $a->price <=> $b->price,
+            fn ($a, $b) => $a->id <=> $b->id,
         ]);
     }
 

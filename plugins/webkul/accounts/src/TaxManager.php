@@ -3,12 +3,12 @@
 namespace Webkul\Account;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Webkul\Account\Enums\AmountType;
 use Webkul\Account\Enums\TaxIncludeOverride;
 use Webkul\Account\Models\Account;
 use Webkul\Account\Models\Product;
 use Webkul\Account\Models\Tax;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Account\Models\TaxPartition;
 use Webkul\Account\Settings\TaxesSettings;
 use Webkul\Partner\Models\Partner;
@@ -1217,8 +1217,7 @@ class TaxManager
         bool $forcePriceInclude = false,
         $roundingMethod = null,
         bool $roundBase = false
-    )
-    {
+    ) {
         if ($taxes->isEmpty()) {
             $company = Auth::user()->defaultCompany;
         } else {
@@ -1268,18 +1267,18 @@ class TaxManager
                 $repLine = $taxRepData['tax_rep'];
 
                 $calculatedTaxes[] = [
-                    'id' => $tax->id,
-                    'name' => $tax->name,
-                    'amount' => $taxRepData['tax_amount_currency'],
-                    'base' => $taxData['raw_base_amount_currency'],
-                    'sort' => $tax->sort,
-                    'account_id' => $taxRepData['account']->id,
-                    'analytic' => $tax->analytic,
-                    'price_include' => $tax->price_include,
-                    'tax_exigibility' => $tax->tax_exigibility,
+                    'id'                      => $tax->id,
+                    'name'                    => $tax->name,
+                    'amount'                  => $taxRepData['tax_amount_currency'],
+                    'base'                    => $taxData['raw_base_amount_currency'],
+                    'sort'                    => $tax->sort,
+                    'account_id'              => $taxRepData['account']->id,
+                    'analytic'                => $tax->analytic,
+                    'price_include'           => $tax->price_include,
+                    'tax_exigibility'         => $tax->tax_exigibility,
                     'tax_repartition_line_id' => $repLine->id,
-                    'group' => $taxData['group'],
-                    'tax_ids' => $taxRepData['taxes']->pluck('id')->toArray(),
+                    'group'                   => $taxData['group'],
+                    'tax_ids'                 => $taxRepData['taxes']->pluck('id')->toArray(),
                 ];
 
                 if (! $repLine->account_id) {
@@ -1295,16 +1294,16 @@ class TaxManager
         }
 
         return [
-            'taxes' => $calculatedTaxes,
+            'taxes'          => $calculatedTaxes,
             'total_excluded' => $totalExcluded,
             'total_included' => $totalIncluded,
-            'total_void' => $totalVoid,
+            'total_void'     => $totalVoid,
         ];
     }
 
     public function fixTaxIncludedPrice(float $price, $prodTaxes, $lineTaxes): float
     {
-        $inclTaxes = $prodTaxes->filter(fn($tax) => ! $lineTaxes->contains($tax) && $tax->price_include);
+        $inclTaxes = $prodTaxes->filter(fn ($tax) => ! $lineTaxes->contains($tax) && $tax->price_include);
 
         if ($inclTaxes->isNotEmpty()) {
             return $this->computeAll($inclTaxes, $price)['total_excluded'];
@@ -1315,9 +1314,9 @@ class TaxManager
 
     public function fixTaxIncludedPriceCompany(float $price, $prodTaxes, $lineTaxes, $company): float
     {
-        $prodTaxes = $prodTaxes->filter(fn($tax) => $tax->company_id === $company->id);
+        $prodTaxes = $prodTaxes->filter(fn ($tax) => $tax->company_id === $company->id);
 
-        $lineTaxes = $lineTaxes->filter(fn($tax) => $tax->company_id === $company->id);
+        $lineTaxes = $lineTaxes->filter(fn ($tax) => $tax->company_id === $company->id);
 
         return $this->fixTaxIncludedPrice($price, $prodTaxes, $lineTaxes);
     }

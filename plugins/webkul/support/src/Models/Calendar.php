@@ -206,7 +206,6 @@ class Calendar extends Model
             ->map(fn ($group) => $group->pluck('id')->all())
             ->all();
 
-
         $attendances = CalendarAttendance::query()
             ->where(fn ($q) => $this->applyFilters($q, $filters ?? []))
             ->where('calendar_id', $this->id)
