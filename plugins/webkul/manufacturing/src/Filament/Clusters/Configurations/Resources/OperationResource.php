@@ -15,7 +15,6 @@ use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -176,9 +175,9 @@ class OperationResource extends Resource
                                     ->preload()
                                     ->multiple(),
 
-                                Placeholder::make('company')
+                                TextEntry::make('company')
                                     ->label(__('manufacturing::filament/clusters/configurations/resources/operation.form.sections.general.fields.company'))
-                                    ->content(function (Get $get): string {
+                                    ->state(function (Get $get): string {
                                         $billOfMaterial = BillOfMaterial::query()
                                             ->with('company')
                                             ->find($get('bill_of_material_id'));

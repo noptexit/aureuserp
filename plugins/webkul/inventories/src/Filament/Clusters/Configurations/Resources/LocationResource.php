@@ -15,7 +15,6 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -23,7 +22,6 @@ use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
-use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\Page;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Fieldset;
@@ -173,14 +171,14 @@ class LocationResource extends Resource
                                             ->label(__('inventories::filament/clusters/configurations/resources/location.form.sections.settings.fields.inventory-frequency'))
                                             ->integer()
                                             ->default(0),
-                                        Placeholder::make('last_inventory_date')
+                                        TextEntry::make('last_inventory_date')
                                             ->label(__('inventories::filament/clusters/configurations/resources/location.form.sections.settings.fields.last-inventory'))
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: __('inventories::filament/clusters/configurations/resources/location.form.sections.settings.fields.last-inventory-hint-tooltip'))
-                                            ->content(fn ($record) => $record?->last_inventory_date?->toFormattedDateString() ?? '—'),
-                                        Placeholder::make('next_inventory_date')
+                                            ->state(fn ($record) => $record?->last_inventory_date?->toFormattedDateString() ?? '—'),
+                                        TextEntry::make('next_inventory_date')
                                             ->label(__('inventories::filament/clusters/configurations/resources/location.form.sections.settings.fields.next-expected'))
                                             ->hintIcon('heroicon-m-question-mark-circle', tooltip: __('inventories::filament/clusters/configurations/resources/location.form.sections.settings.fields.next-expected-hint-tooltip'))
-                                            ->content(fn ($record) => $record?->next_inventory_date?->toFormattedDateString() ?? '—'),
+                                            ->state(fn ($record) => $record?->next_inventory_date?->toFormattedDateString() ?? '—'),
                                     ])
                                     ->visible(fn (Get $get): bool => in_array($get('type'), [LocationType::INTERNAL->value, LocationType::TRANSIT->value]))
                                     ->columns(1),
@@ -311,7 +309,7 @@ class LocationResource extends Resource
                         ->label(__('inventories::filament/clusters/configurations/resources/location.table.bulk-actions.print.label'))
                         ->icon('heroicon-o-printer')
                         ->action(function ($records) {
-                            $pdf = PDF::loadView('inventories::filament.clusters.configurations.locations.actions.print', [
+                            $pdf = Pdf::loadView('inventories::filament.clusters.configurations.locations.actions.print', [
                                 'records' => $records,
                             ]);
 

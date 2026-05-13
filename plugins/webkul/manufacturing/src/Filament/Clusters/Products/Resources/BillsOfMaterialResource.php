@@ -15,9 +15,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
-use Illuminate\Support\Arr;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -46,6 +44,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Webkul\Inventory\Enums\OperationType;
@@ -65,13 +64,13 @@ use Webkul\Manufacturing\Models\BillOfMaterial;
 use Webkul\Manufacturing\Models\Operation;
 use Webkul\Manufacturing\Models\Product;
 use Webkul\Manufacturing\Models\WorkCenter;
+use Webkul\Manufacturing\Settings\OperationSettings;
 use Webkul\Product\Models\ProductAttributeValue;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTableColumn;
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\Company;
-use Webkul\Manufacturing\Settings\OperationSettings;
 
 class BillsOfMaterialResource extends Resource
 {
@@ -112,7 +111,7 @@ class BillsOfMaterialResource extends Resource
                                     ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.general.fields.product'))
                                     ->relationship('product', 'name', fn (Builder $query) => $query->withTrashed()->whereNull('parent_id'))
                                     ->getOptionLabelFromRecordUsing(function ($record): string {
-                                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                                        return $record->name.($record->trashed() ? ' (Deleted)' : '');
                                     })
                                     ->wrapOptionLabels(false)
                                     ->disableOptionWhen(function ($label, $value, $state, $component) {
@@ -131,7 +130,7 @@ class BillsOfMaterialResource extends Resource
                                                 )
                                                 ->flatten()
                                                 ->diff(Arr::wrap($state))
-                                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                                ->filter(fn (mixed $siblingItemState): bool => filled($siblingItemState))
                                                 ->contains($value);
                                         }
 
@@ -261,9 +260,9 @@ class BillsOfMaterialResource extends Resource
                     ->schema([
                         Section::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.miscellaneous.title'))
                             ->schema([
-                                Placeholder::make('kit_information')
+                                TextEntry::make('kit_information')
                                     ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.miscellaneous.fields.kit-information'))
-                                    ->content(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.miscellaneous.fields.kit-information-content'))
+                                    ->state(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.sections.miscellaneous.fields.kit-information-content'))
                                     ->columnSpanFull()
                                     ->visible(fn (Get $get): bool => static::matchesEnumState($get('type'), BillOfMaterialType::PHANTOM)),
                                 Radio::make('ready_to_produce')
@@ -776,7 +775,7 @@ class BillsOfMaterialResource extends Resource
                     ->createOptionAction(fn (Action $action) => $action->modalWidth(Width::SevenExtraLarge))
                     ->live()
                     ->getOptionLabelFromRecordUsing(function ($record): string {
-                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                        return $record->name.($record->trashed() ? ' (Deleted)' : '');
                     })
                     ->wrapOptionLabels(false)
                     ->disableOptionWhen(function ($label, $value, $state, $component) {
@@ -795,7 +794,7 @@ class BillsOfMaterialResource extends Resource
                                 )
                                 ->flatten()
                                 ->diff(Arr::wrap($state))
-                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                ->filter(fn (mixed $siblingItemState): bool => filled($siblingItemState))
                                 ->contains($value);
                         }
 
@@ -989,17 +988,17 @@ class BillsOfMaterialResource extends Resource
                 Hidden::make('worksheet'),
                 Hidden::make('worksheet_google_slide_url'),
                 Hidden::make('note'),
-                Placeholder::make('display_name')
+                TextEntry::make('display_name')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => (string) ($get('name') ?? '—')),
-                Placeholder::make('display_work_center_id')
+                    ->state(fn (Get $get): string => (string) ($get('name') ?? '—')),
+                TextEntry::make('display_work_center_id')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         return WorkCenter::query()->find($get('work_center_id'))?->name ?? '—';
                     }),
-                Placeholder::make('display_time_mode')
+                TextEntry::make('display_time_mode')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         $state = $get('time_mode');
 
                         if ($state instanceof OperationTimeMode) {
@@ -1008,12 +1007,12 @@ class BillsOfMaterialResource extends Resource
 
                         return OperationTimeMode::tryFrom((string) $state)?->getLabel() ?? '—';
                     }),
-                Placeholder::make('display_time_mode_batch')
+                TextEntry::make('display_time_mode_batch')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => filled($get('time_mode_batch')) ? (string) $get('time_mode_batch') : '—'),
-                Placeholder::make('display_company')
+                    ->state(fn (Get $get): string => filled($get('time_mode_batch')) ? (string) $get('time_mode_batch') : '—'),
+                TextEntry::make('display_company')
                     ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.operations.columns.company'))
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         $companyId = $get('../../company_id');
 
                         return Company::query()->find($companyId)?->name ?? '—';
@@ -1042,9 +1041,9 @@ class BillsOfMaterialResource extends Resource
                     ->searchable()
                     ->preload()
                     ->multiple(),
-                Placeholder::make('display_attribute_values')
+                TextEntry::make('display_attribute_values')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         $attributeValueIds = $get('attributeValues') ?? [];
 
                         if (! is_array($attributeValueIds) || $attributeValueIds === []) {
@@ -1058,9 +1057,9 @@ class BillsOfMaterialResource extends Resource
                             ->map(fn ($record): string => $record->attribute?->name && $record->attributeOption?->name ? "{$record->attribute->name}: {$record->attributeOption->name}" : ($record->attributeOption?->name ?? (string) $record->id))
                             ->implode(', ');
                     }),
-                Placeholder::make('display_manual_cycle_time')
+                TextEntry::make('display_manual_cycle_time')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         return format_float_time($get('manual_cycle_time') ?? 60, 'minutes');
                     }),
             ])
@@ -1128,7 +1127,7 @@ class BillsOfMaterialResource extends Resource
                     ->required()
                     ->live()
                     ->getOptionLabelFromRecordUsing(function ($record): string {
-                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                        return $record->name.($record->trashed() ? ' (Deleted)' : '');
                     })
                     ->wrapOptionLabels(false)
                     ->disableOptionWhen(function ($label, $value, $state, $component) {
@@ -1147,7 +1146,7 @@ class BillsOfMaterialResource extends Resource
                                 )
                                 ->flatten()
                                 ->diff(Arr::wrap($state))
-                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                ->filter(fn (mixed $siblingItemState): bool => filled($siblingItemState))
                                 ->contains($value);
                         }
 

@@ -14,7 +14,6 @@ use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\ColorPicker;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -236,9 +235,9 @@ class WorkCenterResource extends Resource
                                             })
                                             ->live()
                                             ->required(),
-                                        Placeholder::make('product_uom')
+                                        TextEntry::make('product_uom')
                                             ->label(__('manufacturing::filament/clusters/configurations/resources/work-center.form.sections.specific-capacity.columns.product-uom'))
-                                            ->content(function (Get $get): string {
+                                            ->state(function (Get $get): string {
                                                 return Product::query()
                                                     ->with('uom')
                                                     ->find($get('product_id'))

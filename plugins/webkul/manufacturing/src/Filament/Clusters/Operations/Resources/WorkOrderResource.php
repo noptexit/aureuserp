@@ -9,7 +9,6 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
@@ -54,12 +53,12 @@ use Webkul\Manufacturing\Models\Product;
 use Webkul\Manufacturing\Models\WorkCenterProductivityLog;
 use Webkul\Manufacturing\Models\WorkCenterProductivityLoss;
 use Webkul\Manufacturing\Models\WorkOrder;
+use Webkul\Manufacturing\Settings\OperationSettings;
 use Webkul\Support\Filament\Forms\Components\Repeater;
 use Webkul\Support\Filament\Forms\Components\Repeater\TableColumn as RepeaterTableColumn;
 use Webkul\Support\Filament\Infolists\Components\RepeatableEntry;
 use Webkul\Support\Filament\Infolists\Components\Repeater\TableColumn as InfolistTableColumn;
 use Webkul\Support\Models\UOM;
-use Webkul\Manufacturing\Settings\OperationSettings;
 
 class WorkOrderResource extends Resource
 {
@@ -237,9 +236,9 @@ class WorkOrderResource extends Resource
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.form.tabs.time-tracking.title'))
                             ->schema([
                                 static::getTimeTrackingRepeater(),
-                                Placeholder::make('display_total_real_duration')
+                                TextEntry::make('display_total_real_duration')
                                     ->label(__('manufacturing::filament/clusters/operations/resources/work-order.form.tabs.time-tracking.footer.real-duration'))
-                                    ->content(fn (?WorkOrder $record): string => format_float_time((float) ($record?->duration ?: 0), 'minutes').' (minutes)'),
+                                    ->state(fn (?WorkOrder $record): string => format_float_time((float) ($record?->duration ?: 0), 'minutes').' (minutes)'),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/work-order.form.tabs.components.title'))
                             ->schema([
@@ -835,18 +834,18 @@ class WorkOrderResource extends Resource
                 Hidden::make('uom_id'),
                 Hidden::make('product_uom_qty'),
                 Hidden::make('quantity'),
-                Placeholder::make('rendered_display_product')
+                TextEntry::make('rendered_display_product')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => Product::query()->withTrashed()->find($get('product_id'))?->name ?? '—'),
-                Placeholder::make('rendered_to_consume')
+                    ->state(fn (Get $get): string => Product::query()->withTrashed()->find($get('product_id'))?->name ?? '—'),
+                TextEntry::make('rendered_to_consume')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => number_format((float) ($get('product_uom_qty') ?: 0), 2)),
-                Placeholder::make('rendered_quantity')
+                    ->state(fn (Get $get): string => number_format((float) ($get('product_uom_qty') ?: 0), 2)),
+                TextEntry::make('rendered_quantity')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => number_format((float) ($get('quantity') ?: 0), 2)),
-                Placeholder::make('rendered_uom')
+                    ->state(fn (Get $get): string => number_format((float) ($get('quantity') ?: 0), 2)),
+                TextEntry::make('rendered_uom')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => UOM::query()->find($get('uom_id'))?->name ?? '—'),
+                    ->state(fn (Get $get): string => UOM::query()->find($get('uom_id'))?->name ?? '—'),
             ]);
     }
 

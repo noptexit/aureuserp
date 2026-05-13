@@ -9,7 +9,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -147,9 +146,9 @@ class CandidateResource extends Resource
                                     ->label(__('Status'))
                                     ->inline(false)
                                     ->default(true),
-                                Placeholder::make('evaluation')
+                                TextEntry::make('evaluation')
                                     ->label(__('recruitments::filament/clusters/applications/resources/candidate.form.sections.status-and-evaluation.fields.evaluation'))
-                                    ->content(function ($record) {
+                                    ->state(function ($record) {
                                         $html = '<div class="flex gap-1" style="color: rgb(217 119 6);">';
 
                                         for ($i = 1; $i <= 3; $i++) {

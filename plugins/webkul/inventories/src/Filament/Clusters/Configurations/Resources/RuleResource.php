@@ -13,7 +13,6 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
@@ -144,10 +143,9 @@ class RuleResource extends Resource
 
                                         Group::make()
                                             ->schema([
-                                                Placeholder::make('placeholder')
+                                                TextEntry::make('placeholder')
                                                     ->hiddenLabel()
-                                                    ->content(new HtmlString('When products are needed in Destination Location, </br>Operation Type are created from Source Location to fulfill the need.'))
-                                                    ->content(function (Get $get): HtmlString {
+                                                    ->getStateUsing(function (Get $get): HtmlString {
                                                         $operation = OperationType::find($get('operation_type_id'));
 
                                                         $pullMessage = __('inventories::filament/clusters/configurations/resources/rule.form.sections.general.fields.action-information.pull', [
