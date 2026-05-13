@@ -30,12 +30,14 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Size;
 use Filament\Support\Enums\TextSize;
+use Filament\Support\View\Components\InputComponent\WrapperComponent\IconComponent;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group as TableGroup;
 use Filament\Tables\Table;
-use Illuminate\Support\Arr;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\ComponentAttributeBag;
 use Webkul\Field\Filament\Forms\Components\ProgressStepper as FormProgressStepper;
 use Webkul\Field\Filament\Infolists\Components\ProgressStepper as InfolistProgressStepper;
 use Webkul\Inventory\Enums\MoveState;
@@ -143,7 +145,7 @@ class ManufacturingOrderResource extends Resource
 
                 Section::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.sections.general.title'))
                     ->columns(2)
-                    ->schema(fn($record) => [
+                    ->schema(fn ($record) => [
                         Group::make()
                             ->columns(1)
                             ->schema([
@@ -165,10 +167,10 @@ class ManufacturingOrderResource extends Resource
                                     ->live()
                                     ->disabled(fn (?Order $record) => $record && $record->state !== ManufacturingOrderState::DRAFT)
                                     ->getOptionLabelFromRecordUsing(function ($record): string {
-                                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                                        return $record->name.($record->trashed() ? ' (Deleted)' : '');
                                     })
                                     ->wrapOptionLabels(false)
-                                    ->disableOptionWhen(function ($label, $value, $state, $component) use ($record) {
+                                    ->disableOptionWhen(function ($label, $value, $state, $component) {
                                         $isDeleted = str_contains($label, ' (Deleted)');
 
                                         $isDuplicate = false;
@@ -184,7 +186,7 @@ class ManufacturingOrderResource extends Resource
                                                 )
                                                 ->flatten()
                                                 ->diff(Arr::wrap($state))
-                                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                                ->filter(fn (mixed $siblingItemState): bool => filled($siblingItemState))
                                                 ->contains($value);
                                         }
 
@@ -987,7 +989,7 @@ class ManufacturingOrderResource extends Resource
                     ->wrapOptionLabels(false)
                     ->live()
                     ->getOptionLabelFromRecordUsing(function ($record): string {
-                        return $record->name . ($record->trashed() ? ' (Deleted)' : '');
+                        return $record->name.($record->trashed() ? ' (Deleted)' : '');
                     })
                     ->wrapOptionLabels(false)
                     ->disableOptionWhen(function ($label, $value, $state, $component) {
@@ -1006,7 +1008,7 @@ class ManufacturingOrderResource extends Resource
                                 )
                                 ->flatten()
                                 ->diff(Arr::wrap($state))
-                                ->filter(fn(mixed $siblingItemState): bool => filled($siblingItemState))
+                                ->filter(fn (mixed $siblingItemState): bool => filled($siblingItemState))
                                 ->contains($value);
                         }
 
@@ -1039,6 +1041,28 @@ class ManufacturingOrderResource extends Resource
                     ->default(0)
                     ->live(onBlur: true)
                     ->required()
+                    ->suffix(function (Get $get, $record): mixed {
+                        if (
+                            $get('../../state') !== ManufacturingOrderState::DRAFT->value
+                            || ! $get('product_id')
+                            || (float) ($get('product_uom_qty') ?? 0) <= 0
+                            || ($record?->forecast_availability ?? 1) > 0
+                        ) {
+                            return null;
+                        }
+
+                        return \Filament\Support\generate_icon_html(
+                            'heroicon-o-exclamation-triangle',
+                            null,
+                            (new ComponentAttributeBag)
+                                ->color(IconComponent::class, 'danger')
+                                ->class(['fi-text-color-600'])
+                                ->merge([
+                                    'style'         => 'color: var(--text)',
+                                    'x-tooltip.raw' => __('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.components.columns.to-consume-tooltip'),
+                                ], escape: false),
+                        );
+                    })
                     ->disabled(fn ($record): bool => $record instanceof Move && $record->id && $record->state !== MoveState::DRAFT),
                 TextInput::make('quantity')
                     ->hiddenLabel()

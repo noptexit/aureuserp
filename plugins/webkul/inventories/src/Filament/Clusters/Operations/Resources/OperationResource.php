@@ -20,6 +20,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\View\Components\InputComponent\WrapperComponent\IconComponent;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -35,6 +36,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\ComponentAttributeBag;
 use Webkul\Field\Filament\Forms\Components\ProgressStepper as FormProgressStepper;
 use Webkul\Field\Filament\Infolists\Components\ProgressStepper as InfolistProgressStepper;
 use Webkul\Field\Filament\Traits\HasCustomFields;
@@ -838,7 +840,7 @@ class OperationResource extends Resource
                     ->required()
                     ->visible(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT)
                     ->disabled(fn (?Move $record): bool => in_array($record?->state, [MoveState::DONE, MoveState::CANCELED]))
-                    ->suffixIcon(function (?Move $record, Get $get): ?string {
+                    ->suffix(function (?Move $record, Get $get): mixed {
                         if (
                             ! $get('product_id')
                             || (float) ($get('product_uom_qty') ?? 0) <= 0
@@ -849,9 +851,18 @@ class OperationResource extends Resource
                             return null;
                         }
 
-                        return 'heroicon-o-exclamation-triangle';
+                        return \Filament\Support\generate_icon_html(
+                            'heroicon-o-exclamation-triangle',
+                            null,
+                            (new ComponentAttributeBag)
+                                ->color(IconComponent::class, 'danger')
+                                ->class(['fi-text-color-600'])
+                                ->merge([
+                                    'style'         => 'color: var(--text)',
+                                    'x-tooltip.raw' => __('inventories::filament/clusters/operations/resources/operation.form.tabs.operations.columns.insufficient-stock-tooltip'),
+                                ], escape: false),
+                        );
                     })
-                    ->suffixIconColor('danger')
                     ->suffixAction(fn (Move $record) => static::getMoveLinesAction($record)),
                 Select::make('uom_id')
                     ->label(__('inventories::filament/clusters/operations/resources/operation.form.tabs.operations.fields.unit'))
