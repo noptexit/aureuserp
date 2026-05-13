@@ -61,7 +61,7 @@ class ScrapController extends Controller
         Gate::authorize('viewAny', Scrap::class);
 
         $scraps = QueryBuilder::for(Scrap::class)
-            ->allowedFilters([
+            ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::partial('name'),
                 AllowedFilter::exact('state'),
@@ -75,9 +75,9 @@ class ScrapController extends Controller
                 AllowedFilter::exact('destination_location_id'),
                 AllowedFilter::exact('company_id'),
                 AllowedFilter::exact('should_replenish'),
-            ])
-            ->allowedSorts(['id', 'name', 'state', 'qty', 'closed_at', 'created_at', 'updated_at'])
-            ->allowedIncludes($this->allowedIncludes)
+            )
+            ->allowedSorts('id', 'name', 'state', 'qty', 'closed_at', 'created_at', 'updated_at')
+            ->allowedIncludes(...$this->allowedIncludes)
             ->paginate();
 
         return ScrapResource::collection($scraps);
@@ -112,7 +112,7 @@ class ScrapController extends Controller
     public function show(string $id)
     {
         $scrap = QueryBuilder::for(Scrap::where('id', $id))
-            ->allowedIncludes($this->allowedIncludes)
+            ->allowedIncludes(...$this->allowedIncludes)
             ->firstOrFail();
 
         Gate::authorize('view', $scrap);

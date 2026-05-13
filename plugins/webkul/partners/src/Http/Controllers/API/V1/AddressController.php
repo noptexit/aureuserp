@@ -45,7 +45,7 @@ class AddressController extends Controller
         Gate::authorize('view', $partnerModel);
 
         $addresses = QueryBuilder::for(Partner::where('parent_id', $partner)->where('account_type', AccountType::ADDRESS))
-            ->allowedFilters([
+            ->allowedFilters(
                 AllowedFilter::exact('id'),
                 AllowedFilter::exact('sub_type'),
                 AllowedFilter::partial('name'),
@@ -53,11 +53,11 @@ class AddressController extends Controller
                 AllowedFilter::exact('country_id'),
                 AllowedFilter::exact('state_id'),
                 AllowedFilter::trashed(),
-            ])
-            ->allowedSorts(['id', 'name', 'city', 'created_at'])
-            ->allowedIncludes([
+            )
+            ->allowedSorts('id', 'name', 'city', 'created_at')
+            ->allowedIncludes(
                 'creator',
-            ])
+            )
             ->paginate();
 
         return AddressResource::collection($addresses);
@@ -104,9 +104,9 @@ class AddressController extends Controller
                 ->where('parent_id', $partner)
                 ->where('account_type', AccountType::ADDRESS)
         )
-            ->allowedIncludes([
+            ->allowedIncludes(
                 'creator',
-            ])
+            )
             ->firstOrFail();
 
         return new AddressResource($addressModel);
