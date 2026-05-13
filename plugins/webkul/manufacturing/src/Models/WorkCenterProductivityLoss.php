@@ -48,10 +48,8 @@ class WorkCenterProductivityLoss extends Model
     {
         $duration = 0;
 
-        // TODO: implement this
         if (
-            false
-            && ! in_array($this->loss_type, ['productive', 'performance'])
+            ! in_array($this->loss_type, ['productive', 'performance'])
             && $workCenter?->calendar_id
         ) {
             $data = $workCenter->getWorkDaysDataBatch($startDate, $endDate);

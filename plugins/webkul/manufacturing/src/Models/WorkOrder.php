@@ -299,7 +299,7 @@ class WorkOrder extends Model implements Sortable
 
         static::created(function ($workOrder) {
             $workOrder->updateQuietly([
-                'name' => $workOrder->name,
+                'name'    => $workOrder->name,
                 'barcode' => 'MO/'.$workOrder->manufacturingOrder->id.'/'.$workOrder->id,
             ]);
         });
@@ -391,7 +391,7 @@ class WorkOrder extends Model implements Sortable
             }
 
             $endDate = now();
-            
+
             $dateStart = $endDate->clone()->subSeconds($floatDurationToSecond($deltaDuration));
 
             if ($this->expected_duration >= $newOrderDuration || $oldOrderDuration >= $this->expected_duration) {
@@ -521,7 +521,7 @@ class WorkOrder extends Model implements Sortable
             $this->expected_duration / 60.0,
             $start,
             computeLeaves: true,
-            domain: [['time_type', 'in', ['leave', 'other']]]
+            filters: [['time_type', 'in', ['leave', 'other']]]
         );
     }
 
@@ -538,7 +538,7 @@ class WorkOrder extends Model implements Sortable
         $interval = $this->workCenter->calendar->getWorkDurationData(
             $start,
             $finished,
-            domain: [['time_type', 'in', ['leave', 'other']]]
+            filters: [['time_type', 'in', ['leave', 'other']]]
         );
 
         return $interval['hours'] * 60;
@@ -672,7 +672,7 @@ class WorkOrder extends Model implements Sortable
             $expectedDuration = $this->work_center_id === $workCenter->id
                 ? $this->expected_duration
                 : $this->getExpectedDuration(alternativeWorkCenter: $workCenter);
-            
+
             [$fromDate, $toDate] = $workCenter->getFirstAvailableSlot($dateStart, $expectedDuration);
 
             if (! $fromDate) {

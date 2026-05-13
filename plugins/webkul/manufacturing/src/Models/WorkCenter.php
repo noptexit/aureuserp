@@ -334,4 +334,28 @@ class WorkCenter extends Model implements Sortable
 
         $this->productivityLogs()->whereNull('finished_at')->update(['finished_at' => now()]);
     }
+
+    public function getWorkDaysDataBatch($startDate, $endDate, $computeLeaves = true, $calendar = null, $filters = [])
+    {
+        if (! $calendar) {
+            $calendar = $this->calendar;
+        }
+
+        if (! $calendar) {
+            return [
+                $this->id => [
+                    'hours' => 0,
+                    'days'  => 0,
+                ],
+            ];
+        }
+
+        if ($computeLeaves) {
+            $internals = $calendar->getWorkIntervalsBatch($startDate, $endDate, [$this], $filters)[$this->id];
+        } else {
+            $internals = $calendar->getAttendanceIntervalsBatch($startDate, $endDate, [$this])[$this->id];
+        }
+
+        return $calendar->getAttendanceIntervalsDaysData($internals);
+    }
 }
