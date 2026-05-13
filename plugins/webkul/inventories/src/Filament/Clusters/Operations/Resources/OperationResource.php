@@ -955,12 +955,16 @@ class OperationResource extends Resource
                                     ];
                                 }
 
+                                [$quantLocationScope] = $move->product->getLocationFilters();
+
                                 return ProductQuantity::with(['location', 'lot', 'package'])
                                     ->where('product_id', $move->product_id)
                                     ->whereHas('location', function (Builder $query) use ($move) {
                                         $query->where('id', $move->source_location_id)
                                             ->orWhere('parent_id', $move->source_location_id);
                                     })
+                                    ->where('quantity', '>', 0)
+                                    ->where(fn (Builder $query) => $quantLocationScope($query))
                                     ->get()
                                     ->mapWithKeys(function ($quantity) {
                                         $nameParts = array_filter([
@@ -1141,6 +1145,7 @@ class OperationResource extends Resource
                 fn ($action) => $action
                     ->visible(! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
             )
+            ->databaseTransaction()
             ->action(function (Set $set, Move $move, Schema $schema): void {
                 $schema->saveRelationships();
 

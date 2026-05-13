@@ -233,7 +233,7 @@ class MoveLine extends Model
             }
         });
 
-        static::deleting(function ($moveLine) {
+        static::deleted(function ($moveLine) {
             ProductQuantity::updateReservedQuantity(
                 product: $moveLine->product,
                 location: $moveLine->sourceLocation,

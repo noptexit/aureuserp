@@ -338,7 +338,7 @@ class Product extends BaseProduct
         ];
     }
 
-    protected function getLocationFilters(): array
+    public function getLocationFilters(): array
     {
         $locationId = $this->context['location_id'] ?? null;
         $warehouseId = $this->context['warehouse_id'] ?? null;
