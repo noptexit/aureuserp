@@ -228,7 +228,7 @@ class LotResource extends Resource
                         ->label(__('inventories::filament/clusters/products/resources/lot.table.bulk-actions.print.label'))
                         ->icon('heroicon-o-printer')
                         ->action(function ($records) {
-                            $pdf = PDF::loadView('inventories::filament.clusters.products.lots.actions.print', [
+                            $pdf = Pdf::loadView('inventories::filament.clusters.products.lots.actions.print', [
                                 'records' => $records,
                             ]);
 

@@ -4,7 +4,7 @@ namespace Webkul\Security\Filament\Clusters\Settings\Pages;
 
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Placeholder;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Pages\SettingsPage;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Schema;
@@ -52,9 +52,9 @@ class ManageActivity extends SettingsPage
     {
         return $schema
             ->components([
-                Placeholder::make('activity_description')
+                TextEntry::make('activity_description')
                     ->label(__('security::filament/clusters/manage-activity.form.activity-description.label'))
-                    ->content(__('security::filament/clusters/manage-activity.form.activity-description.content')),
+                    ->state(__('security::filament/clusters/manage-activity.form.activity-description.content')),
                 Actions::make([
                     Action::make('manageActivityTypes')
                         ->label(__('security::filament/clusters/manage-activity.form.actions.manage-activity-types.label'))

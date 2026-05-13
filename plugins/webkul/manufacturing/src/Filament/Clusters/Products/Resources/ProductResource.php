@@ -2,7 +2,6 @@
 
 namespace Webkul\Manufacturing\Filament\Clusters\Products\Resources;
 
-use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\Page;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource as BaseProductResource;
 use Webkul\Manufacturing\Filament\Clusters\Products;

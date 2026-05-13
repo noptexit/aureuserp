@@ -194,7 +194,7 @@ class AddressController extends Controller
     public function forceDestroy(string $partner, string $address)
     {
         $partnerModel = Partner::findOrFail($partner);
-        
+
         Gate::authorize('update', $partnerModel);
 
         $addressModel = Partner::withTrashed()

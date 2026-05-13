@@ -109,7 +109,7 @@ class AccountResource extends Resource
                                                     $record->id,
                                                     ...$record->getDescendantIds(),
                                                 ];
-                                                
+
                                                 $query->whereNotIn('id', $excludedIds);
                                             }
                                         },
@@ -328,7 +328,7 @@ class AccountResource extends Resource
                                     ->label(__('accounts::filament/resources/account.infolist.sections.entries.parent-account'))
                                     ->placeholder('-')
                                     ->icon('heroicon-o-arrow-up-circle')
-                                    ->formatStateUsing(function($record) {
+                                    ->formatStateUsing(function ($record) {
                                         return $record->parent
                                             ? ($record->parent->code ? "{$record->parent->code} - {$record->parent->name}" : $record->parent->name)
                                             : '-';

@@ -12,7 +12,7 @@ return [
         ],
 
         'close' => [
-            'label' => 'Close',
+            'label'        => 'Close',
             'notification' => [
                 'warning' => [
                     'title' => 'Unable to close purchase agreement',

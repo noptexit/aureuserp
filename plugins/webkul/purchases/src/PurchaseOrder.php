@@ -13,9 +13,9 @@ use Webkul\Account\Facades\Account as AccountFacade;
 use Webkul\Account\Facades\Tax as TaxFacade;
 use Webkul\Account\Models\Partner;
 use Webkul\Inventory\Enums as InventoryEnums;
+use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Move;
-use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Inventory\Models\OperationType;
 use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Inventory\Models\Receipt;
@@ -28,6 +28,7 @@ use Webkul\Purchase\Models\AccountMove;
 use Webkul\Purchase\Models\Order;
 use Webkul\Purchase\Models\OrderLine;
 use Webkul\Purchase\Settings\OrderSettings;
+use Webkul\Security\Enums\PermissionType;
 
 class PurchaseOrder
 {
@@ -116,7 +117,7 @@ class PurchaseOrder
             return false;
         }
 
-        if (in_array($user->resource_permission, [\Webkul\Security\Enums\PermissionType::GLOBAL, \Webkul\Security\Enums\PermissionType::GROUP])) {
+        if (in_array($user->resource_permission, [PermissionType::GLOBAL, PermissionType::GROUP])) {
             return true;
         }
 
@@ -422,7 +423,7 @@ class PurchaseOrder
         $pdfPath = 'Request for Quotation-'.str_replace('/', '_', $record->name).'.pdf';
 
         if (! Storage::exists($pdfPath)) {
-            $pdf = PDF::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-quotation', [
+            $pdf = Pdf::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-quotation', [
                 'records'  => [$record],
             ]);
 
@@ -437,7 +438,7 @@ class PurchaseOrder
         $pdfPath = 'Purchase Order-'.str_replace('/', '_', $record->name).'.pdf';
 
         if (! Storage::exists($pdfPath)) {
-            $pdf = PDF::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-purchase-order', [
+            $pdf = Pdf::loadView('purchases::filament.admin.clusters.orders.orders.actions.print-purchase-order', [
                 'records'  => [$record],
             ]);
 
@@ -470,7 +471,7 @@ class PurchaseOrder
                 ->pluck('operation')
                 ->filter()
                 ->unique('id')
-                ->filter(fn($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
+                ->filter(fn ($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
                     && in_array($operation->destinationLocation->type, [InventoryEnums\LocationType::INTERNAL, InventoryEnums\LocationType::TRANSIT, InventoryEnums\LocationType::CUSTOMER])
                 );
 
@@ -478,7 +479,7 @@ class PurchaseOrder
                 $operation = $lineOperations->first();
             } else {
                 $operation = $order->operations
-                    ->filter(fn($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
+                    ->filter(fn ($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
                         && in_array($operation->destinationLocation->type, [InventoryEnums\LocationType::INTERNAL, InventoryEnums\LocationType::TRANSIT, InventoryEnums\LocationType::CUSTOMER])
                     )
                     ->first();
@@ -515,7 +516,7 @@ class PurchaseOrder
         if (! Package::isPluginInstalled('inventories')) {
             return;
         }
-        
+
         if (! in_array($record->state, [PurchaseEnums\OrderState::PURCHASE, PurchaseEnums\OrderState::DONE])) {
             return;
         }
@@ -533,7 +534,7 @@ class PurchaseOrder
         $record->refresh();
 
         $operations = $record->operations->filter(
-            fn($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
+            fn ($operation) => ! in_array($operation->state, [InventoryEnums\OperationState::DONE, InventoryEnums\OperationState::CANCELED])
         );
 
         if ($operations->isEmpty()) {
@@ -584,12 +585,12 @@ class PurchaseOrder
     {
         $values = [];
 
-        foreach ($orderLines->filter(fn($line) => ! $line->display_type) as $line) {
+        foreach ($orderLines->filter(fn ($line) => ! $line->display_type) as $line) {
             foreach ($this->prepareInventoryMoves($line, $operation) as $val) {
                 $values[] = $val;
             }
 
-            $line->moveDestinations->each(fn($move) => $move->purchaseOrderLines()->detach());
+            $line->moveDestinations->each(fn ($move) => $move->purchaseOrderLines()->detach());
         }
 
         return collect(array_map(fn ($val) => Move::create($val), $values));
@@ -599,7 +600,7 @@ class PurchaseOrder
     {
         if (! $order->procurement_group_id) {
             $procurementGroup = ProcurementGroup::create([
-                'name' => $order->name,
+                'name'       => $order->name,
                 'partner_id' => $order->partner_id,
             ]);
 
@@ -646,7 +647,7 @@ class PurchaseOrder
             : $line->inventoryMoves->flatMap->moveDestinations;
 
         $moveDestinations = $moveDestinations->filter(
-            fn($move) => $move->state !== InventoryEnums\MoveState::CANCELED && ! $move->isPurchaseReturn()
+            fn ($move) => $move->state !== InventoryEnums\MoveState::CANCELED && ! $move->isPurchaseReturn()
         );
 
         if ($moveDestinations->isEmpty()) {
@@ -673,7 +674,7 @@ class PurchaseOrder
             $extraMoveVals = $this->prepareInventoryMoveValues($line, $operation, $priceUnit, $productUomQty, $productUom);
 
             $extraMoveVals['move_destination_ids'] = null;
-            
+
             $values[] = $extraMoveVals;
         }
 
@@ -684,7 +685,7 @@ class PurchaseOrder
     {
         $this->checkOrderPointOperationType($line);
 
-        $destinationLocation  = $this->getDestinationLocation($line->order);
+        $destinationLocation = $this->getDestinationLocation($line->order);
 
         $finalLocation = $line->final_location_id ? $line->finalLocation : $this->getFinalLocation($line->order);
 
@@ -806,7 +807,7 @@ class PurchaseOrder
         $incomingMoves = collect();
 
         $relevantMoves = $line->inventoryMoves->filter(
-            fn($move) => $move->state !== InventoryEnums\MoveState::CANCELED
+            fn ($move) => $move->state !== InventoryEnums\MoveState::CANCELED
                 && ! $move->is_scraped
                 && $line->product_id === $move->product_id
         );
@@ -827,7 +828,7 @@ class PurchaseOrder
     public function getMoveDestinationsInitialDemand(OrderLine $line, $moveDestinations): float
     {
         $totalQty = $moveDestinations
-            ->filter(fn($move) => $move->state !== InventoryEnums\MoveState::CANCELED
+            ->filter(fn ($move) => $move->state !== InventoryEnums\MoveState::CANCELED
                 && $move->destinationLocation->type !== InventoryEnums\LocationType::SUPPLIER
             )
             ->sum('product_qty');

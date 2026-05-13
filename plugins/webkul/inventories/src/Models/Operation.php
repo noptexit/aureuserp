@@ -13,13 +13,12 @@ use Webkul\Chatter\Traits\HasChatter;
 use Webkul\Chatter\Traits\HasLogActivity;
 use Webkul\Field\Traits\HasCustomFields;
 use Webkul\Inventory\Database\Factories\OperationFactory;
-use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\MoveState;
+use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\OperationState;
 use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Partner\Models\Partner;
-use Webkul\Inventory\Models\Package;
 use Webkul\Purchase\Models\Order as PurchaseOrder;
 use Webkul\Sale\Models\Order as SaleOrder;
 use Webkul\Security\Models\User;
@@ -248,7 +247,7 @@ class Operation extends Model
 
     public function autoConfirm()
     {
-        if (in_array($this->state,[OperationState::DONE, OperationState::CANCELED])) {
+        if (in_array($this->state, [OperationState::DONE, OperationState::CANCELED])) {
             return;
         }
 
@@ -317,23 +316,23 @@ class Operation extends Model
             return;
         }
 
-        if ($this->moves->isEmpty() || $this->moves->some(fn($move) => $move->state === MoveState::DRAFT)) {
+        if ($this->moves->isEmpty() || $this->moves->some(fn ($move) => $move->state === MoveState::DRAFT)) {
             $this->state = OperationState::DRAFT;
-        } elseif ($this->moves->every(fn($move) => $move->state === MoveState::CANCELED)) {
+        } elseif ($this->moves->every(fn ($move) => $move->state === MoveState::CANCELED)) {
             $this->state = OperationState::CANCELED;
-        } elseif ($this->moves->every(fn($move) => in_array($move->state, [MoveState::CANCELED, MoveState::DONE]))) {
-            $allDoneAreScraped = $this->moves->every(fn($move) => $move->state === MoveState::DONE ? $move->is_scraped : true);
+        } elseif ($this->moves->every(fn ($move) => in_array($move->state, [MoveState::CANCELED, MoveState::DONE]))) {
+            $allDoneAreScraped = $this->moves->every(fn ($move) => $move->state === MoveState::DONE ? $move->is_scraped : true);
 
-            $anyCancelNotScrapped = $this->moves->some(fn($move) => $move->state === MoveState::CANCELED && ! $move->is_scraped);
+            $anyCancelNotScrapped = $this->moves->some(fn ($move) => $move->state === MoveState::CANCELED && ! $move->is_scraped);
 
             $this->state = ($allDoneAreScraped && $anyCancelNotScrapped)
                 ? OperationState::CANCELED
                 : OperationState::DONE;
-        } elseif ($this->moves->every(fn($move) => $move->state === MoveState::CONFIRMED)) {
+        } elseif ($this->moves->every(fn ($move) => $move->state === MoveState::CONFIRMED)) {
             $this->state = OperationState::CONFIRMED;
         } elseif (
             $this->sourceLocation->shouldBypassReservation() &&
-            $this->moves->every(fn($move) => $move->procure_method === ProcureMethod::MAKE_TO_STOCK)
+            $this->moves->every(fn ($move) => $move->procure_method === ProcureMethod::MAKE_TO_STOCK)
         ) {
             $this->state = OperationState::ASSIGNED;
         } else {
@@ -364,7 +363,7 @@ class Operation extends Model
                 }
             }
 
-            $movesToExplore = $movesToExplore->filter(fn($move) => ! $exploredMoves->contains('id', $move->id));
+            $movesToExplore = $movesToExplore->filter(fn ($move) => ! $exploredMoves->contains('id', $move->id));
 
             if ($movesToExplore->isNotEmpty()) {
                 $explore($movesToExplore);

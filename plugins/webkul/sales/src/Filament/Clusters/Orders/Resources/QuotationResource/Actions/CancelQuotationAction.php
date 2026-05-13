@@ -65,7 +65,7 @@ class CancelQuotationAction extends Action
                         ->body(__('sales::filament/clusters/orders/resources/quotation/actions/cancel-quotation.footer-actions.send-and-cancel.notification.cancelled.body'))
                         ->send();
                 }
-                
+
                 $livewire->refreshFormData(['state']);
             })
             ->extraModalFooterActions(fn (Action $action): array => [

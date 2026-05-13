@@ -13,9 +13,9 @@ use Knuckles\Scribe\Attributes\Subgroup;
 use Knuckles\Scribe\Attributes\UrlParam;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
+use Webkul\Partner\Enums\AccountType;
 use Webkul\Partner\Http\Requests\PartnerRequest;
 use Webkul\Partner\Http\Resources\V1\PartnerResource;
-use Webkul\Partner\Enums\AccountType;
 use Webkul\Partner\Models\Partner;
 
 #[Group('Partner API Management')]

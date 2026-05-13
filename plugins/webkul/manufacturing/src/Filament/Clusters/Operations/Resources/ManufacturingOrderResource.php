@@ -12,7 +12,6 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
@@ -311,9 +310,9 @@ class ManufacturingOrderResource extends Resource
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.title'))
                             ->hidden(! static::getOperationSettings()->enable_byproducts)
                             ->schema([
-                                Placeholder::make('by_products_process_note')
+                                TextEntry::make('by_products_process_note')
                                     ->hiddenLabel()
-                                    ->content(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.process-note')),
+                                    ->state(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.process-note')),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.miscellaneous.title'))
                             ->schema([
@@ -1023,9 +1022,9 @@ class ManufacturingOrderResource extends Resource
                     })
                     ->required()
                     ->disabled(fn ($record): bool => $record instanceof Move && $record->id && $record->state !== MoveState::DRAFT),
-                Placeholder::make('rendered_display_from')
+                TextEntry::make('rendered_display_from')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         $sourceLocation = Location::query()->withTrashed()->find($get('source_location_id'));
 
                         if ($sourceLocation) {
@@ -1095,9 +1094,9 @@ class ManufacturingOrderResource extends Resource
                     ->wrapOptionLabels(false)
                     ->required()
                     ->disabled(fn ($record): bool => $record instanceof Move && $record->id && $record->state !== MoveState::DRAFT),
-                Placeholder::make('rendered_display_forecast')
+                TextEntry::make('rendered_display_forecast')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => (string) ($get('display_forecast') ?: '—')),
+                    ->state(fn (Get $get): string => (string) ($get('display_forecast') ?: '—')),
             ]);
     }
 
@@ -1184,9 +1183,9 @@ class ManufacturingOrderResource extends Resource
                     ->wrapOptionLabels(false)
                     ->required()
                     ->disabled(fn ($record): bool => $record && ! in_array($record->state, [WorkOrderState::PENDING, WorkOrderState::WAITING])),
-                Placeholder::make('rendered_display_product')
+                TextEntry::make('rendered_display_product')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         $workOrderId = $get('id');
 
                         if ($workOrderId) {
@@ -1205,9 +1204,9 @@ class ManufacturingOrderResource extends Resource
 
                         return (string) ($get('display_product') ?: '—');
                     }),
-                Placeholder::make('rendered_display_quantity_remaining')
+                TextEntry::make('rendered_display_quantity_remaining')
                     ->hiddenLabel()
-                    ->content(function (Get $get): string {
+                    ->state(function (Get $get): string {
                         $workOrderId = $get('id');
 
                         if ($workOrderId) {
@@ -1220,9 +1219,9 @@ class ManufacturingOrderResource extends Resource
 
                         return number_format((float) ($get('quantity_remaining') ?: 0), 4);
                     }),
-                Placeholder::make('rendered_display_quantity_produced')
+                TextEntry::make('rendered_display_quantity_produced')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => number_format((float) ($get('quantity_produced') ?: 0), 4)),
+                    ->state(fn (Get $get): string => number_format((float) ($get('quantity_produced') ?: 0), 4)),
                 DateTimePicker::make('started_at')
                     ->hiddenLabel()
                     ->live()
@@ -1257,10 +1256,10 @@ class ManufacturingOrderResource extends Resource
                     ->dehydrateStateUsing(fn (?string $state): float => parse_float_time($state, 'minutes'))
                     ->required()
                     ->disabled(fn ($record): bool => in_array($record?->state, [WorkOrderState::DONE, WorkOrderState::CANCEL])),
-                Placeholder::make('rendered_display_real_duration')
+                TextEntry::make('rendered_display_real_duration')
                     ->hiddenLabel()
-                    ->content(fn (Get $get): string => format_float_time((float) ($get('duration') ?: 0), 'minutes')),
-                Placeholder::make('state')
+                    ->state(fn (Get $get): string => format_float_time((float) ($get('duration') ?: 0), 'minutes')),
+                TextEntry::make('state')
                     ->hiddenLabel()
                     ->badge()
                     ->suffixActions([

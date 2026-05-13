@@ -334,7 +334,7 @@ class ScrapResource extends Resource
                 ])->filter(function ($group) {
                     return match ($group->getId()) {
                         'sourceLocation.full_name', 'destinationLocation.full_name' => static::getWarehouseSettings()->enable_locations,
-                        default => true
+                        default                                                     => true
                     };
                 })->all()
             )

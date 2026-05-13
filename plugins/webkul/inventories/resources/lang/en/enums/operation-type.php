@@ -1,9 +1,9 @@
 <?php
 
 return [
-    'incoming' => 'Receipt',
-    'outgoing' => 'Delivery',
-    'internal' => 'Internal',
-    'dropship' => 'Dropship',
+    'incoming'    => 'Receipt',
+    'outgoing'    => 'Delivery',
+    'internal'    => 'Internal',
+    'dropship'    => 'Dropship',
     'manufacture' => 'Manufacture',
 ];

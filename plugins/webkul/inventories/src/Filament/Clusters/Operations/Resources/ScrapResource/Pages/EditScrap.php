@@ -7,12 +7,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Chatter\Filament\Actions\ChatterAction;
 use Webkul\Inventory\Enums\ScrapState;
 use Webkul\Inventory\Filament\Clusters\Operations\Resources\ScrapResource;
-use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource;
-use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Scrap;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 

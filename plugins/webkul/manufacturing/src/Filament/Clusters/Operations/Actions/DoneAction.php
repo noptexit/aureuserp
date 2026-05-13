@@ -10,7 +10,6 @@ use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Livewire\Component;
 use Throwable;
-use Webkul\Manufacturing\Models\Move;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Facades\Manufacturing as ManufacturingFacade;
 use Webkul\Manufacturing\Models\Order;
@@ -240,7 +239,7 @@ class DoneAction extends Action
 
         foreach ($consumptionWarningLines as [, $product, $consumed, $toConsume]) {
             $rawMaterialMoves = $record->rawMaterialMoves->filter(fn ($move) => $move->product_id === $product->id);
-            
+
             foreach ($rawMaterialMoves as $move) {
                 $qtyExpected = $product->uom->computeQuantity($toConsume, $move->uom);
 

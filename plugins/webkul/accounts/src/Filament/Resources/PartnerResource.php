@@ -310,7 +310,7 @@ class PartnerResource extends BasePartnerResource
                             ->placeholder('-'),
                         TextEntry::make('propertyAccountPayable.name')
                             ->label(__('accounts::filament/resources/partner.infolist.tabs.invoicing.fieldsets.accounting-entries.entries.account-payable'))
-                            ->placeholder('-')
+                            ->placeholder('-'),
                     ]),
 
                 Fieldset::make(__('accounts::filament/resources/partner.infolist.tabs.invoicing.fieldsets.automation.title'))

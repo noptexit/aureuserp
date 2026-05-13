@@ -2,8 +2,8 @@
 
 namespace Webkul\Sale\Http\Controllers\API\V1;
 
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Gate;
 use Knuckles\Scribe\Attributes\Authenticated;
 use Knuckles\Scribe\Attributes\Endpoint;
 use Knuckles\Scribe\Attributes\Group;

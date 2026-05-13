@@ -96,7 +96,7 @@ class Location extends Model
             || ($this->parent_id && $this->parent->is_stock_location);
     }
 
-    //TODO: implement this
+    // TODO: implement this
     public function getPutAwayStrategy(Product $product): self
     {
         return $this;

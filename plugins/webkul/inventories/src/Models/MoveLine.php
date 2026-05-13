@@ -2,19 +2,18 @@
 
 namespace Webkul\Inventory\Models;
 
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Database\Factories\MoveLineFactory;
-use Webkul\Inventory\Enums\MoveState;
-use Webkul\Partner\Models\Partner;
-use Webkul\Inventory\Facades\Inventory as InventoryFacade;
-use Webkul\Security\Models\User;
 use Webkul\Inventory\Enums\LocationType;
+use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
+use Webkul\Inventory\Facades\Inventory as InventoryFacade;
+use Webkul\Partner\Models\Partner;
+use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 use Webkul\Support\Models\UOM;
 
@@ -215,7 +214,7 @@ class MoveLine extends Model
                         $moveLine->sourceLocation,
                         action: 'reserved',
                         values: [
-                            'lot' => $moveLine->lot,
+                            'lot'     => $moveLine->lot,
                             'package' => $moveLine->package,
                         ]
                     );
@@ -399,7 +398,7 @@ class MoveLine extends Model
         $moveLineIdsToIgnore = null
     ): void {
         $moveLineIdsToIgnore = $moveLineIdsToIgnore ?? collect();
-        
+
         $moveLineIdsToIgnore->push($this->id);
 
         if ($this->move->shouldBypassReservation($location)) {
@@ -449,7 +448,7 @@ class MoveLine extends Model
                 }
             } else {
                 $candidate->update([
-                    'qty' => $candidate->qty - $candidate->product->uom->computeQuantity($quantity, $candidate->uom, roundingMethod: 'HALF-UP')
+                    'qty' => $candidate->qty - $candidate->product->uom->computeQuantity($quantity, $candidate->uom, roundingMethod: 'HALF-UP'),
                 ]);
 
                 break;
@@ -466,7 +465,7 @@ class MoveLine extends Model
 
                 $move->moveOrigins()->detach();
             });
-        
+
         MoveLine::whereIn('id', $toDeleteCandidateIds)->get()->each(fn ($moveLine) => $moveLine->delete());
 
         InventoryFacade::assignMoves($moveToReassign->unique('id'));

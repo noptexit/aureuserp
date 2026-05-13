@@ -14,7 +14,7 @@ use Webkul\Inventory\Models\Operation;
 
 class CheckAvailabilityAction extends Action
 {
-    protected bool | Closure $hasDatabaseTransactions = true;
+    protected bool|Closure $hasDatabaseTransactions = true;
 
     public static function getDefaultName(): ?string
     {
@@ -50,7 +50,7 @@ class CheckAvailabilityAction extends Action
 
                 return ! $this->getRecord()->moves->contains(fn ($move) => in_array($move->state, [
                     MoveState::CONFIRMED,
-                    MoveState::PARTIALLY_ASSIGNED
+                    MoveState::PARTIALLY_ASSIGNED,
                 ]));
             });
     }

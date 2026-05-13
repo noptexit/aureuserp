@@ -3,6 +3,7 @@
 namespace Webkul\Inventory\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,13 +11,12 @@ use Illuminate\Support\Facades\Auth;
 use Webkul\Inventory\Database\Factories\ProductQuantityFactory;
 use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
-use Webkul\Inventory\Settings\OperationSettings;
 use Webkul\Inventory\Enums\ProductTracking;
-use Webkul\Inventory\Models\Packaging;
-use Webkul\Support\Models\UOM;
+use Webkul\Inventory\Settings\OperationSettings;
 use Webkul\Partner\Models\Partner;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
+use Webkul\Support\Models\UOM;
 
 class ProductQuantity extends Model
 {
@@ -207,7 +207,7 @@ class ProductQuantity extends Model
 
         $this->updateQuietly([
             'inventory_diff_quantity' => 0.0,
-            'inventory_quantity_set' => false,
+            'inventory_quantity_set'  => false,
         ]);
     }
 
@@ -217,8 +217,7 @@ class ProductQuantity extends Model
         Location $destinationLocation,
         ?Package $package = null,
         ?Package $destinationPackage = null
-    )
-    {
+    ) {
         if ($this->context['inventory_name'] ?? false) {
             $name = $this->context['inventory_name'];
         } elseif (float_is_zero($qty, precisionRounding: $this->product->uom->rounding)) {
@@ -228,32 +227,32 @@ class ProductQuantity extends Model
         }
 
         return [
-            'name' => $name,
-            'state' => MoveState::DONE,
-            'quantity' => $qty,
-            'product_uom_qty' => $qty,
-            'is_picked' => true,
-            'product_id' => $this->product_id,
-            'uom_id' => $this->uom->id,
-            'source_location_id' => $sourceLocation->id,
+            'name'                    => $name,
+            'state'                   => MoveState::DONE,
+            'quantity'                => $qty,
+            'product_uom_qty'         => $qty,
+            'is_picked'               => true,
+            'product_id'              => $this->product_id,
+            'uom_id'                  => $this->uom->id,
+            'source_location_id'      => $sourceLocation->id,
             'destination_location_id' => $destinationLocation->id,
-            'company_id' => $this->company->id ?? Auth::user()->default_company_id,
-            'lines' => [[
-                'reference' => $name,
-                'qty' => $qty,
-                'uom_qty' => $qty,
-                'product_id' => $this->product_id,
-                'uom_id' => $this->uom->id,
-                'source_location_id' => $sourceLocation->id,
+            'company_id'              => $this->company->id ?? Auth::user()->default_company_id,
+            'lines'                   => [[
+                'reference'               => $name,
+                'qty'                     => $qty,
+                'uom_qty'                 => $qty,
+                'product_id'              => $this->product_id,
+                'uom_id'                  => $this->uom->id,
+                'source_location_id'      => $sourceLocation->id,
                 'destination_location_id' => $destinationLocation->id,
-                'lot_id' => $this->lot_id,
-                'package_id' => $package?->id,
-                'result_package_id' => $destinationPackage?->id,
-                'company_id' => $this->company->id ?? Auth::user()->default_company_id,
+                'lot_id'                  => $this->lot_id,
+                'package_id'              => $package?->id,
+                'result_package_id'       => $destinationPackage?->id,
+                'company_id'              => $this->company->id ?? Auth::user()->default_company_id,
             ]],
         ];
     }
-    
+
     public static function updateReservedQuantity(
         Product $product,
         Location $location,
@@ -293,9 +292,9 @@ class ProductQuantity extends Model
             $incomingDates = [];
         } else {
             $incomingDates = $quants
-                ->filter(fn($q) => $q->incoming_date && float_compare($q->quantity, 0, precisionRounding: $q->product->uom->rounding) > 0)
+                ->filter(fn ($q) => $q->incoming_date && float_compare($q->quantity, 0, precisionRounding: $q->product->uom->rounding) > 0)
                 ->pluck('incoming_date')
-                ->map(fn($date) => Carbon::parse($date))
+                ->map(fn ($date) => Carbon::parse($date))
                 ->all();
         }
 
@@ -355,10 +354,10 @@ class ProductQuantity extends Model
     public static function deleteZeroQuantities(): void
     {
         static::where(function ($query) {
-                $query->whereRaw("ROUND(quantity, ?) = 0", [6])
-                    ->orWhereNull('quantity');
-            })
-            ->whereRaw("ROUND(reserved_quantity, ?) = 0", [6])
+            $query->whereRaw('ROUND(quantity, ?) = 0', [6])
+                ->orWhereNull('quantity');
+        })
+            ->whereRaw('ROUND(reserved_quantity, ?) = 0', [6])
             ->whereNull('user_id')
             ->delete();
     }
@@ -387,7 +386,7 @@ class ProductQuantity extends Model
         ?Partner $partner = null,
         bool $strict = false,
         float $qty = 0,
-    ): \Illuminate\Database\Eloquent\Collection {
+    ): Collection {
         $removalStrategy = static::getRemovalStrategy($product, $location);
 
         $domain = static::getGatherDomain($product, $location, $lot, $package, $partner, $strict);
@@ -458,7 +457,7 @@ class ProductQuantity extends Model
                     $query->where('partner_id', $partner->id);
                 }
 
-                $childIds = Location::where('parent_path', 'LIKE', $location->parent_path . '%')->pluck('id');
+                $childIds = Location::where('parent_path', 'LIKE', $location->parent_path.'%')->pluck('id');
 
                 $query->whereIn('location_id', $childIds);
             } else {
@@ -546,7 +545,7 @@ class ProductQuantity extends Model
         }
 
         if ($product->tracking === ProductTracking::SERIAL) {
-            if (float_compare($quantity, (float)(int)$quantity, precisionRounding: $rounding) !== 0) {
+            if (float_compare($quantity, (float) (int) $quantity, precisionRounding: $rounding) !== 0) {
                 $quantity = 0.0;
             }
         }
@@ -652,7 +651,7 @@ class ProductQuantity extends Model
         $neededQuants = static::where($domain)
             ->orderBy('lot_id')
             ->get()
-            ->groupBy(fn($quant) => implode('_', [
+            ->groupBy(fn ($quant) => implode('_', [
                 $quant->product_id,
                 $quant->location_id,
                 $quant->lot_id,

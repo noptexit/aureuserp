@@ -29,8 +29,6 @@ use Webkul\Inventory\Filament\Clusters\Operations;
 use Webkul\Inventory\Filament\Clusters\Operations\Resources\QuantityResource\Pages\ManageQuantities;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\LotResource;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\PackageResource;
-use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource;
-use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Models\ProductQuantity;
 use Webkul\Inventory\Models\Warehouse;
@@ -253,9 +251,9 @@ class QuantityResource extends Resource
                 ])->filter(function ($group) {
                     return match ($group->getId()) {
                         'location.full_name', 'storageCategory.name' => static::getWarehouseSettings()->enable_locations,
-                        'lot.name'     => static::getTraceabilitySettings()->enable_lots_serial_numbers,
-                        'package.name' => static::getOperationSettings()->enable_packages,
-                        default        => true
+                        'lot.name'                                   => static::getTraceabilitySettings()->enable_lots_serial_numbers,
+                        'package.name'                               => static::getOperationSettings()->enable_packages,
+                        default                                      => true
                     };
                 })->all()
             )

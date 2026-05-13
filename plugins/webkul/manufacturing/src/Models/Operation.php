@@ -145,7 +145,7 @@ class Operation extends Model implements Sortable
         $capacity = $workCenter->getCapacity($product);
 
         $cycleNumber = $normalizedQuantity > 0 ? (float) ceil($normalizedQuantity / $capacity) : 0.0;
-        
+
         $timeEfficiency = max((float) ($workCenter->time_efficiency ?? 100), 0.0001);
 
         return $workCenter->getExpectedDuration($product)

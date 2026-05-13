@@ -2,10 +2,10 @@
 
 namespace Webkul\Manufacturing\Observers;
 
-use Webkul\PluginManager\Package;
+use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 use Webkul\Inventory\Models\Warehouse as InventoryWarehouse;
 use Webkul\Manufacturing\Models\Warehouse as ManufacturingWarehouse;
-use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
+use Webkul\PluginManager\Package;
 
 class WarehouseObserver implements ShouldHandleEventsAfterCommit
 {
@@ -25,7 +25,7 @@ class WarehouseObserver implements ShouldHandleEventsAfterCommit
     public function updated(InventoryWarehouse $warehouse): void
     {
         $warehouse = ManufacturingWarehouse::find($warehouse->id);
-        
+
         $warehouse->syncManufacturingWarehouseConfiguration();
     }
 

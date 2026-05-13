@@ -148,7 +148,7 @@ class Move extends BaseMove
 
         static::creating(function ($move) {
             $mo = $move->rawMaterialOrder ?? $move->order ?? null;
-            
+
             $locationDestination = Location::find($move->destination_location_id ?? null);
 
             if (! $mo || ($move->is_scraped ?? false) || ($locationDestination?->is_scrap ?? false)) {
@@ -196,10 +196,7 @@ class Move extends BaseMove
         });
     }
 
-    public function runProcurement()
-    {
-
-    }
+    public function runProcurement() {}
 
     public function keyAssignOperation(): array
     {

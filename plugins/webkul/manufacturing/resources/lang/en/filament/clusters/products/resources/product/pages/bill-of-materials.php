@@ -11,7 +11,7 @@ return [
 
             'notifications' => [
                 'success' => [
-                    'title' => 'Bill of Material created',
+                    'title'   => 'Bill of Material created',
                     'message' => 'Bill of Material has been created successfully.',
                 ],
             ],

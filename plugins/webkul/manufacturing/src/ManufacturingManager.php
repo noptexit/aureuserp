@@ -3,8 +3,8 @@
 namespace Webkul\Manufacturing;
 
 use Webkul\Inventory\Enums\MoveState;
-use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Enums\OperationState;
+use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Facades\Inventory as InventoryFacade;
 use Webkul\Manufacturing\Enums\BillOfMaterialConsumption;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
@@ -98,11 +98,11 @@ class ManufacturingManager
 
     public function unplanManufacturingOrder(Order $order)
     {
-        if ($order->workOrders->some(fn($workOrder) => $workOrder->state === WorkOrderState::DONE)) {
+        if ($order->workOrders->some(fn ($workOrder) => $workOrder->state === WorkOrderState::DONE)) {
             throw new \Exception(__("Some work orders are already done, so you cannot un-plan this manufacturing order.\n\nIt'd be a shame to waste all that progress, right?"));
         }
 
-        if ($order->workOrders->some(fn($workOrder) => $workOrder->state === WorkOrderState::PROGRESS)) {
+        if ($order->workOrders->some(fn ($workOrder) => $workOrder->state === WorkOrderState::PROGRESS)) {
             throw new \Exception(__("Some work orders have already started, so you cannot un-plan this manufacturing order.\n\nIt'd be a shame to waste all that progress, right?"));
         }
 
@@ -116,7 +116,7 @@ class ManufacturingManager
         });
 
         $order->update(['is_planned' => false]);
-        
+
         return $order;
     }
 
@@ -147,7 +147,7 @@ class ManufacturingManager
             ->filter(fn ($workOrder) => ! in_array($workOrder->state, [WorkOrderState::DONE, WorkOrderState::CANCEL]))
             ->each(function ($workOrder) {
                 $workOrder->calendarLeave?->delete();
-                
+
                 $workOrder->endAll(collect([$workOrder]));
 
                 $workOrder->update(['state' => WorkOrderState::CANCEL]);
@@ -160,7 +160,7 @@ class ManufacturingManager
         InventoryFacade::cancelMoves($finishMoves->merge($rawMaterialMoves));
 
         $order->inventoryOperations
-            ->filter(fn($operation) => ! in_array($operation->state, [OperationState::DONE, OperationState::CANCELED]))
+            ->filter(fn ($operation) => ! in_array($operation->state, [OperationState::DONE, OperationState::CANCELED]))
             ->each(function ($operation) {
                 InventoryFacade::cancelTransfer($operation);
             });

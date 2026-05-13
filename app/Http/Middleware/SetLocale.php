@@ -10,6 +10,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class SetLocale
 {
+    /**
+     * Handle an incoming request.
+     *
+     * @param  Closure(Request): (Response)  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $supported = array_keys(config('app.supported_locales', []));

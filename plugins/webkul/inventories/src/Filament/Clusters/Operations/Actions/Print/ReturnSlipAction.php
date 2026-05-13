@@ -3,9 +3,7 @@
 namespace Webkul\Inventory\Filament\Clusters\Operations\Actions\Print;
 
 use Filament\Actions\Action;
-use Filament\Notifications\Notification;
 use Livewire\Component;
-use Webkul\Inventory\Facades\Inventory;
 use Webkul\Inventory\Models\Operation;
 
 class ReturnSlipAction extends Action
@@ -21,7 +19,6 @@ class ReturnSlipAction extends Action
 
         $this
             ->label(__('inventories::filament/clusters/operations/actions/todo.label'))
-            ->action(function (Operation $record, Component $livewire): void {
-            });
+            ->action(function (Operation $record, Component $livewire): void {});
     }
 }

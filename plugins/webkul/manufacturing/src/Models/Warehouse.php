@@ -4,15 +4,15 @@ namespace Webkul\Manufacturing\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Webkul\Inventory\Enums\ManufactureStep;
 use Webkul\Inventory\Enums\CreateBackorder;
-use Webkul\Inventory\Enums\MoveType;
-use Webkul\Inventory\Enums\ReservationMethod;
 use Webkul\Inventory\Enums\GroupPropagation;
+use Webkul\Inventory\Enums\LocationType;
+use Webkul\Inventory\Enums\ManufactureStep;
+use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\ProcureMethod;
+use Webkul\Inventory\Enums\ReservationMethod;
 use Webkul\Inventory\Enums\RuleAction;
 use Webkul\Inventory\Enums\RuleAuto;
-use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Models\Location;
 use Webkul\Inventory\Models\OperationType;
 use Webkul\Inventory\Models\Route;
@@ -173,7 +173,7 @@ class Warehouse extends BaseWarehouse
             'deleted_at' => $this->manufacture_steps === ManufactureStep::THREE_STEPS ? null : now(),
         ])->id;
     }
-    
+
     protected function createManufacturingOperationTypes(): void
     {
         $this->pbm_type_id = OperationType::create([
@@ -192,7 +192,7 @@ class Warehouse extends BaseWarehouse
             'use_existing_lots'       => true,
             'print_label'             => false,
             'show_operations'         => false,
-            'source_location_id' => match ($this->manufacture_steps) {
+            'source_location_id'      => match ($this->manufacture_steps) {
                 ManufactureStep::ONE_STEP    => $this->lot_stock_location_id,
                 ManufactureStep::TWO_STEPS   => $this->lot_stock_location_id,
                 ManufactureStep::THREE_STEPS => $this->lot_stock_location_id,
@@ -223,7 +223,7 @@ class Warehouse extends BaseWarehouse
             'use_existing_lots'       => true,
             'print_label'             => false,
             'show_operations'         => false,
-            'source_location_id' => match ($this->manufacture_steps) {
+            'source_location_id'      => match ($this->manufacture_steps) {
                 ManufactureStep::ONE_STEP    => $this->sam_loc_id,
                 ManufactureStep::TWO_STEPS   => $this->sam_loc_id,
                 ManufactureStep::THREE_STEPS => $this->sam_loc_id,
@@ -254,7 +254,7 @@ class Warehouse extends BaseWarehouse
             'use_existing_lots'       => true,
             'print_label'             => false,
             'show_operations'         => false,
-            'source_location_id' => match ($this->manufacture_steps) {
+            'source_location_id'      => match ($this->manufacture_steps) {
                 ManufactureStep::ONE_STEP    => $this->lot_stock_location_id,
                 ManufactureStep::TWO_STEPS   => $this->pbm_loc_id,
                 ManufactureStep::THREE_STEPS => $this->pbm_loc_id,
@@ -347,7 +347,7 @@ class Warehouse extends BaseWarehouse
             'deleted_at'               => $this->manufacture_steps === ManufactureStep::THREE_STEPS ? null : now(),
         ])->id;
     }
-    
+
     public function syncManufacturingWarehouseConfiguration(): void
     {
         $this->updateLocations(
@@ -424,7 +424,6 @@ class Warehouse extends BaseWarehouse
             },
             'deleted_at' => $this->manufacture_steps === ManufactureStep::ONE_STEP ? now() : null,
         ]);
-
 
         $productionLocation = Location::where('type', LocationType::PRODUCTION)->first();
 
