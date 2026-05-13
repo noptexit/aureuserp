@@ -318,7 +318,7 @@ class MoveLine extends Model
         float $quantity,
         Location $location,
         string $action = 'available',
-        ?Carbon $incomingDate = null,
+        $incomingDate = null,
         array $values = []
     ): array {
         $lot = $values['lot'] ?? $this->lot;
