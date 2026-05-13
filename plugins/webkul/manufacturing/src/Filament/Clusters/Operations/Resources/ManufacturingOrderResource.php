@@ -309,7 +309,7 @@ class ManufacturingOrderResource extends Resource
                                 static::getWorkOrdersRepeater(),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.form.tabs.by-products.title'))
-                            ->hidden(true)
+                            ->hidden(! static::getOperationSettings()->enable_byproducts)
                             ->schema([
                                 Placeholder::make('by_products_process_note')
                                     ->hiddenLabel()
@@ -632,7 +632,7 @@ class ManufacturingOrderResource extends Resource
                                     ]),
                             ]),
                         Tab::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order.infolist.tabs.by-products.title'))
-                            ->hidden(true)
+                            ->hidden(! static::getOperationSettings()->enable_byproducts)
                             ->schema([
                                 RepeatableEntry::make('moveByproducts')
                                     ->hiddenLabel()
