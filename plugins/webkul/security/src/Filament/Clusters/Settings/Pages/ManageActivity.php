@@ -60,7 +60,7 @@ class ManageActivity extends SettingsPage
                         ->label(__('security::filament/clusters/manage-activity.form.actions.manage-activity-types.label'))
                         ->icon('heroicon-o-arrow-top-right-on-square')
                         ->link()
-                        ->url(route('filament.admin.resources.settings.activity-types.index')),
+                        ->url(route('filament.admin.settings.resources.activity-types.index')),
                 ]),
             ])->columns(1);
     }

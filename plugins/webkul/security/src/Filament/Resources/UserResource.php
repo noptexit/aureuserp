@@ -196,9 +196,15 @@ class UserResource extends Resource
                                     ->schema([
                                         Select::make('language')
                                             ->label(__('security::filament/resources/user.form.sections.lang-and-status.fields.language'))
-                                            ->options([
-                                                'en' => __('English'),
-                                            ])
+                                            ->options(
+                                                collect(config('app.supported_locales', []))
+                                                    ->mapWithKeys(fn ($meta, $code) => [
+                                                        $code => ($meta['native'] ?? $code).' ('.($meta['label'] ?? $code).')',
+                                                    ])
+                                                    ->all()
+                                            )
+                                            ->default(config('app.locale'))
+                                            ->native(false)
                                             ->searchable(),
                                         Toggle::make('is_active')
                                             ->label(__('security::filament/resources/user.form.sections.lang-and-status.fields.status'))

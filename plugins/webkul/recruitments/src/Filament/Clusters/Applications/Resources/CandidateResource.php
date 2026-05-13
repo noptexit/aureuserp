@@ -187,6 +187,7 @@ class CandidateResource extends Resource
                                 ->badge()
                                 ->searchable()
                                 ->weight(FontWeight::Bold)
+                                ->wrap()
                                 ->state(function (Candidate $record): array {
                                     return $record->categories->map(fn ($category) => [
                                         'label' => $category->name,

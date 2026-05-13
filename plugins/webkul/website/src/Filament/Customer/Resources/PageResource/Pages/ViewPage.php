@@ -12,6 +12,17 @@ class ViewPage extends ViewRecord
 
     protected string $view = 'website::filament.customer.resources.page.pages.view-record';
 
+    public function mount(int|string $record): void
+    {
+        parent::mount($record);
+
+        $page = $this->getRecord();
+
+        if (! $page->is_published) {
+            abort(404);
+        }
+    }
+
     public function getBreadcrumbs(): array
     {
         return [];
@@ -23,7 +34,6 @@ class ViewPage extends ViewRecord
         $translationKey = 'website::filament/app.page_titles.'.$record->slug;
         $translated = __($translationKey);
 
-        // If translation key is returned (no translation found), use database title
         if ($translated === $translationKey) {
             return $record->title;
         }
