@@ -48,6 +48,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Webkul\Inventory\Enums\OperationType;
 use Webkul\Manufacturing\Enums\BillOfMaterialConsumption;
 use Webkul\Manufacturing\Enums\BillOfMaterialReadyToProduce;
 use Webkul\Manufacturing\Enums\BillOfMaterialType;
@@ -233,17 +234,20 @@ class BillsOfMaterialResource extends Resource
                                     ->required(),
                             ])
                             ->columns(2),
+
                         Tabs::make('bom-tabs')
                             ->tabs([
                                 Tab::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.components.title'))
                                     ->schema([
                                         static::getComponentsRepeater(),
                                     ]),
+
                                 Tab::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.operations.title'))
                                     ->visible(static::getOperationSettings()->enable_work_orders)
                                     ->schema([
                                         static::getOperationsRepeater(),
                                     ]),
+
                                 Tab::make(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.by-products.title'))
                                     ->hidden(true)
                                     ->schema([
@@ -274,11 +278,12 @@ class BillsOfMaterialResource extends Resource
                                     ->label(__('manufacturing::filament/clusters/products/resources/bill-of-material.form.tabs.miscellaneous.fields.routing'))
                                     ->relationship('operationType', 'name', fn (Builder $query) => $query
                                         ->withTrashed()
-                                        ->where('type', 'manufacturing'))
+                                        ->where('type', OperationType::MANUFACTURE))
                                     ->searchable()
                                     ->preload()
                                     ->native(false)
                                     ->wrapOptionLabels(false)
+                                    ->getOptionLabelFromRecordUsing(fn ($record): string => $record->warehouse->name.': '.$record->name)
                                     ->visible(fn (Get $get): bool => ! static::matchesEnumState($get('type'), BillOfMaterialType::PHANTOM))
                                     ->columnSpanFull(),
                                 Select::make('consumption')
