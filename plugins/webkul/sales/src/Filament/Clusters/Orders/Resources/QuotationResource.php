@@ -1292,6 +1292,15 @@ class QuotationResource extends Resource
                 $action->requiresConfirmation();
 
                 $action->before(function (Action $action, $livewire) {
+                    $arguments = $action->getArguments();
+
+                    if (
+                        ! empty($arguments['item'] ?? '') &&
+                        ! str_starts_with($arguments['item'] ?? '', 'record-')
+                    ) {
+                        return;
+                    }
+
                     if ($livewire->getRecord()?->state === OrderState::SALE) {
                         Notification::make()
                             ->danger()
