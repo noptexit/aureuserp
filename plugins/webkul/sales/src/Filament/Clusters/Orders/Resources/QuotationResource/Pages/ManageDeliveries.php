@@ -50,11 +50,11 @@ class ManageDeliveries extends ManageRelatedRecords
             ->recordActions([
                 ViewAction::make()
                     ->url(fn ($record) => DeliveryResource::getUrl('view', ['record' => $record]))
-                    ->openUrlInNewTab(false),
+                    ->openUrlInNewTab(true),
 
                 EditAction::make()
                     ->url(fn ($record) => DeliveryResource::getUrl('edit', ['record' => $record]))
-                    ->openUrlInNewTab(false),
+                    ->openUrlInNewTab(true),
             ])
             ->toolbarActions([]);
     }

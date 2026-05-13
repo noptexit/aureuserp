@@ -46,7 +46,12 @@ function inventoryMoveRoute(): string
 
 function createMoveLineRecord(array $moveOverrides = [], array $lineOverrides = []): MoveLine
 {
-    $move = Move::factory()->create($moveOverrides);
+    $product = \Webkul\Product\Models\Product::factory()->create();
+
+    $move = Move::factory()->create(array_merge([
+        'product_id' => $product->id,
+        'uom_id'     => $product->uom_id,
+    ], $moveOverrides));
 
     return MoveLine::factory()->create(array_merge([
         'move_id'                 => $move->id,

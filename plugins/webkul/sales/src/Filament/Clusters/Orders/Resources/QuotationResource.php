@@ -1798,7 +1798,7 @@ class QuotationResource extends Resource
     {
         $product = Product::withTrashed()->find($get('product_id'));
 
-        $vendorPrices = $product->supplierInformation->sortByDesc('sort');
+        $vendorPrices = $product->sellers->sortByDesc('sort');
 
         if ($get('../../partner_id')) {
             $vendorPrices = $vendorPrices->where('partner_id', $get('../../partner_id'));

@@ -1332,7 +1332,7 @@ class OrderResource extends Resource
     {
         $product = Product::find($get('product_id'));
 
-        $vendorPrices = $product->supplierInformation->sortByDesc('sort');
+        $vendorPrices = $product->sellers->sortByDesc('sort');
 
         if ($get('../../partner_id')) {
             $vendorPrices = $vendorPrices->where('partner_id', $get('../../partner_id'));
@@ -1589,7 +1589,7 @@ class OrderResource extends Resource
                 continue;
             }
 
-            $vendorPrices = $productModel->supplierInformation
+            $vendorPrices = $productModel->sellers
                 ->where('partner_id', $partnerId)
                 ->where('currency_id', $get('currency_id'))
                 ->where('min_qty', '<=', $product['product_qty'] ?? 1)

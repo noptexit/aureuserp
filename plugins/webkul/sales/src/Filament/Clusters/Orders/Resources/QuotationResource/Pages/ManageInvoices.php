@@ -7,7 +7,7 @@ use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Tables\Table;
 use Livewire\Livewire;
-use Webkul\Account\Filament\Resources\InvoiceResource;
+use Webkul\Invoice\Filament\Clusters\Customers\Resources\InvoiceResource;
 use Webkul\Sale\Filament\Clusters\Orders\Resources\QuotationResource;
 use Webkul\Support\Traits\HasRecordNavigationTabs;
 
@@ -37,11 +37,11 @@ class ManageInvoices extends ManageRelatedRecords
             ->recordActions([
                 ViewAction::make()
                     ->url(fn ($record) => InvoiceResource::getUrl('view', ['record' => $record]))
-                    ->openUrlInNewTab(false),
+                    ->openUrlInNewTab(true),
 
                 EditAction::make()
                     ->url(fn ($record) => InvoiceResource::getUrl('edit', ['record' => $record]))
-                    ->openUrlInNewTab(false),
+                    ->openUrlInNewTab(true),
             ]);
     }
 }
