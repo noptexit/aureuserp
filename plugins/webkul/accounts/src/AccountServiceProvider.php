@@ -91,6 +91,7 @@ class AccountServiceProvider extends PackageServiceProvider
                 '2026_02_16_063000_alter_partners_partners_table',
                 '2026_02_25_044931_alter_accounts_full_reconciles_table',
                 '2026_03_03_120000_alter_accounts_journals_bank_account_foreign_key',
+                '2026_04_17_000001_add_parent_id_to_accounts_accounts_table'
             ])
             ->runsMigrations()
             ->hasSettings([
