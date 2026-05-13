@@ -148,6 +148,77 @@ export class ErpLocators {
     readonly salesSuccessToast: Locator;
     readonly salesValidationMessage: Locator;
 
+    /**
+     * Purchases - Vendors, Products, Quotations, Agreements
+     */
+
+    readonly purchaseAgreementSettingsToggle: Locator;
+
+    readonly purchaseVendorsTable: Locator;
+    readonly purchaseVendorNewCreateButton: Locator;
+    readonly purchaseVendorNameInput: Locator;
+    readonly purchaseVendorEmailInput: Locator;
+    readonly purchaseVendorSaveButton: Locator;
+    readonly purchaseVendorSearchInput: Locator;
+    readonly purchaseVendorEditButton: Locator;
+    readonly purchaseVendorDeleteButton: Locator;
+
+
+    readonly purchaseProductsTable: Locator;
+    readonly purchaseProductNewCreateButton: Locator;
+    readonly purchaseProductCreateButton: Locator;
+    readonly purchaseProductEditButton: Locator;
+    readonly purchaseProductNameInput: Locator;
+    readonly purchaseProductPriceInput: Locator;
+    readonly purchaseProductSaveButton: Locator;
+    readonly purchaseProductSearchInput: Locator;
+    readonly purchaseProductDeleteButton: Locator;
+
+    readonly purchaseQuotationsTable: Locator;
+    readonly purchaseQuotationCreateButton: Locator;
+    readonly purchaseQuotationEditButton: Locator;
+    readonly purchaseQuotationVendorSelect: Locator;
+    readonly purchaseQuotationAgreementSelect: Locator;
+    readonly purchaseQuotationAddProductButton: Locator;
+    readonly purchaseQuotationProductSelect: Locator;
+    readonly purchaseQuotationQuantityInput: Locator;
+    readonly purchaseQuotationUnitPriceInput: Locator;
+    readonly purchaseQuotationSaveButton: Locator;
+    readonly purchaseQuotationSavechangesButton: Locator;
+    readonly purchaseQuotationDeleteButton: Locator;
+    readonly purchaseQuotationConfirmButton: Locator;
+    readonly purchaseQuotationBillsTable: Locator;
+    readonly purchaseQuotationReceiptsTable: Locator;
+    readonly purchaseQuotationValidationMessage: Locator;
+
+    readonly purchaseOrdersTable: Locator;
+    readonly purchaseOrderSearchInput: Locator;
+
+    readonly purchaseAgreementTable: Locator;
+    readonly purchaseAgreementCreateButton: Locator;
+    readonly purchaseAgreementVendorSelect: Locator;
+    readonly purchaseAgreementTypeSelect: Locator;
+    readonly purchaseAgreementReferenceInput: Locator;
+    readonly purchaseAgreementProductSelect: Locator;
+    readonly purchaseAgreementQuantityInput: Locator;
+    readonly purchaseAgreementUnitPriceInput: Locator;
+    readonly purchaseAgreementEditButton: Locator;
+    readonly purchaseAgreementDeleteButton: Locator;
+    readonly purchaseAgreementSaveButton: Locator;
+    readonly purchaseAgreementConfirmButton: Locator;
+    readonly purchaseAgreementSearchInput: Locator;
+    readonly purchaseAgreementValidationMessage: Locator;
+
+    readonly purchaseSearchInput: Locator;
+    readonly purchaseRowActionsButton: Locator;
+    readonly purchaseEditAction: Locator;
+    readonly purchaseDeleteAction: Locator;
+    readonly purchaseConfirmDeleteButton: Locator;
+    readonly purchaseDialogConfirmButton: Locator;
+    readonly purchaseAgreementConfirmedRadio: Locator;
+    readonly purchaseSuccessToast: Locator;
+    readonly purchaseValidationMessage: Locator;
+
     constructor(page: Page) {
         this.page = page;
 
@@ -296,5 +367,76 @@ export class ErpLocators {
         this.salesSelectOption = page.locator('.fi-dropdown-panel[role="listbox"]:visible [role="option"]');
         this.salesSuccessToast = page.locator("h3.fi-no-notification-title, .fi-toast-message-success").first();
         this.salesValidationMessage = page.locator(".fi-fo-field-wrp-error-message, .text-danger, .invalid-feedback");
+
+        /**
+         * Purchases - Vendors, Products, Quotations, Agreements
+         */
+
+        this.purchaseAgreementSettingsToggle = page.getByRole("switch", { name: /Purchase Agreements/i });
+
+        this.purchaseVendorsTable = page.locator("div.fi-ta-content-grid, div.fi-ta-empty-state, table");
+        this.purchaseVendorNewCreateButton = page.locator("a,button").filter({ hasText: /new vendor|create vendor|add vendor|create/i }).first();
+        this.purchaseVendorNameInput = page.locator('input[id="form.name"]').first();
+        this.purchaseVendorEmailInput = page.locator('input[id="form.email"]').first();
+        this.purchaseVendorEditButton = page.getByRole('link', { name: 'Edit' }).first();
+        this.purchaseVendorDeleteButton = page.locator('button[id="key-bindings-1"]').first();
+        this.purchaseVendorSaveButton = page.locator('button[id="key-bindings-2"]').first();
+        this.purchaseVendorSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
+
+        this.purchaseProductsTable = page.locator("table, div.fi-ta-empty-state");
+        this.purchaseProductNewCreateButton = page.locator("a,button").filter({ hasText: /new product|create product|add product|create/i }).first();
+        this.purchaseProductCreateButton = page.locator('button[id="key-bindings-1"]').first();
+        this.purchaseProductEditButton = page.getByRole('link', { name: 'Edit' });
+        this.purchaseProductNameInput = page.locator('input[id="form.name"]').first();
+        this.purchaseProductPriceInput = page.locator('input[id="form.price"]').first();
+        this.purchaseProductSaveButton = page.locator('button[id="key-bindings-2"]').first();
+        this.purchaseProductSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
+        this.purchaseProductDeleteButton = page.getByRole('button', { name: 'Delete' });
+
+        this.purchaseQuotationsTable = page.locator("table, div.fi-ta-empty-state");
+        this.purchaseQuotationCreateButton = page.locator("a,button").filter({ hasText: /new request for quotation|New RFQ|create quotation|add quotation|create/i }).first();
+        this.purchaseQuotationEditButton = page.getByRole('link', { name: 'Edit' }).first();
+        this.purchaseQuotationDeleteButton = page.getByRole('button', { name: 'Delete' }).first();
+        this.purchaseQuotationVendorSelect = page.locator('[wire\\:key$="form.partner_id"] button.fi-select-input-btn').first();
+        this.purchaseQuotationAgreementSelect = page.locator('[wire\\:key$="form.requisition_id"] button.fi-select-input-btn').first();
+        this.purchaseQuotationAddProductButton = page.getByRole("button", { name: /Add Product/i }).first();
+        this.purchaseQuotationProductSelect = page.locator('[wire\\:key*=".form.products."][wire\\:key*=".product_id."] button.fi-select-input-btn');
+        this.purchaseQuotationQuantityInput = page.locator('input[id^="form.products."][id$=".product_qty"]');
+        this.purchaseQuotationUnitPriceInput = page.locator('input[id^="form.products."][id$=".price_unit"]');
+        // this.purchaseQuotationSaveButton = page.getByRole('button', { name: /^(Create|Save changes|Submit)$/i }).first();
+        this.purchaseQuotationSaveButton = page.locator('#key-bindings-1');
+        this.purchaseQuotationSavechangesButton = page.getByRole('button', { name: 'Save changes' });
+        this.purchaseQuotationConfirmButton = page.getByRole("button", { name: /Confirm Order|Confirm/i }).first();
+        this.purchaseQuotationBillsTable = page.locator("table, div.fi-ta-empty-state");
+        this.purchaseQuotationReceiptsTable = page.locator("table, div.fi-ta-empty-state");
+        this.purchaseQuotationValidationMessage = page.locator(".fi-fo-field-wrp-error-message, .text-danger, .invalid-feedback");
+
+        this.purchaseOrdersTable = page.locator("table, div.fi-ta-empty-state");
+        this.purchaseOrderSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
+
+        this.purchaseAgreementTable = page.locator("table, div.fi-ta-empty-state");
+        this.purchaseAgreementCreateButton = page.locator("a,button").filter({ hasText: /new purchase agreement|create purchase agreement|add purchase agreement|create/i }).first();
+        this.purchaseAgreementVendorSelect = page.locator('[wire\\:key$="form.partner_id"] button.fi-select-input-btn').first();
+        this.purchaseAgreementTypeSelect = page.getByRole("combobox", { name: /Agreement Type/i }).first();
+        this.purchaseAgreementReferenceInput = page.getByRole("textbox", { name: /Reference/i }).first();
+        this.purchaseAgreementProductSelect = page.locator('[wire\\:key*=".form.lines."][wire\\:key*=".product_id."] button.fi-select-input-btn');
+        this.purchaseAgreementQuantityInput = page.locator('input[id^="form.lines."][id$=".qty"]');
+        this.purchaseAgreementUnitPriceInput = page.locator('input[id^="form.lines."][id$=".price_unit"]');
+        this.purchaseAgreementEditButton = page.getByRole('link', { name: 'Edit' });
+        this.purchaseAgreementDeleteButton = page.getByRole('button', { name: 'Delete' });
+        this.purchaseAgreementSaveButton = page.getByRole("button", { name: /^(Create|Save changes|Submit)$/i }).first();
+        this.purchaseAgreementConfirmButton = page.getByRole("button", { name: /^Confirm$/i }).first();
+        this.purchaseAgreementSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
+        this.purchaseAgreementValidationMessage = page.locator(".fi-fo-field-wrp-error-message, .text-danger, .invalid-feedback");
+
+        this.purchaseSearchInput = page.locator(".fi-input.fi-input-has-inline-prefix").nth(1);
+        this.purchaseRowActionsButton = page.getByRole("button", { name: "Actions" });
+        this.purchaseEditAction = page.getByRole("menuitem", { name: /Edit/i }).first();
+        this.purchaseDeleteAction = page.getByRole("menuitem", { name: /Delete/i }).first();
+        this.purchaseConfirmDeleteButton = page.getByRole("dialog").getByRole("button", { name: /Delete/i }).first();
+        this.purchaseDialogConfirmButton = page.getByRole("dialog").getByRole("button", { name: /Confirm/i }).first();
+        this.purchaseAgreementConfirmedRadio = page.getByRole("radio", { name: /Confirmed/i }).first();
+        this.purchaseSuccessToast = page.locator("h3.fi-no-notification-title, .fi-toast-message-success").first();
+        this.purchaseValidationMessage = page.locator(".fi-fo-field-wrp-error-message, .text-danger, .invalid-feedback");
     }
 }
