@@ -275,7 +275,7 @@ class OrderResource extends Resource
                                             ->required()
                                             ->default(Auth::user()->default_company_id)
                                             ->disabled(fn ($record): bool => $record && ! in_array($record?->state, [OrderState::DRAFT, OrderState::SENT])),
-                                        TextInput::make('reference')
+                                        TextInput::make('origin')
                                             ->label(__('purchases::filament/admin/clusters/orders/resources/order.form.tabs.additional.fields.source-document'))
                                             ->maxLength(255),
                                         Select::make('incoterm_id')
@@ -286,7 +286,7 @@ class OrderResource extends Resource
                                             ->createOptionForm(fn (Schema $schema) => IncotermResource::form($schema))
                                             ->hintIcon('heroicon-o-question-mark-circle', tooltip: __('purchases::filament/admin/clusters/orders/resources/order.form.tabs.additional.fields.incoterm-tooltip'))
                                             ->disabled(fn ($record): bool => $record && ! in_array($record?->state, [OrderState::DRAFT, OrderState::SENT, OrderState::PURCHASE])),
-                                        TextInput::make('reference')
+                                        TextInput::make('incoterm_location')
                                             ->label(__('purchases::filament/admin/clusters/orders/resources/order.form.tabs.additional.fields.incoterm-location'))
                                             ->maxLength(255)
                                             ->disabled(fn ($record): bool => $record && ! in_array($record?->state, [OrderState::DRAFT, OrderState::SENT, OrderState::PURCHASE])),
