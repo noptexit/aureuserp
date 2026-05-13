@@ -33,10 +33,10 @@ class FindMissingTranslations extends Command
         '/resources/lang',
     ];
 
-    protected const SUPPORTED_LOCALES = [
-        'en',
-        'ar',
-    ];
+    protected static function supportedLocales(): array
+    {
+        return array_keys(config('app.supported_locales', ['en' => []]));
+    }
 
     protected bool $hasError = false;
 
@@ -131,7 +131,7 @@ class FindMissingTranslations extends Command
 
         $enFilesRel = $enFiles->map(fn ($f) => Str::after($f, $enPath.'/'));
 
-        $locales = collect(self::SUPPORTED_LOCALES)
+        $locales = collect(self::supportedLocales())
             ->reject(fn ($d) => $d === self::BASE_LOCALE)
             ->when($targetLocale, fn ($collection) => $collection->filter(
                 fn ($l) => Str::lower($l) === Str::lower($targetLocale)
