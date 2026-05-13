@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  Built with Laravel 11 • Powered by FilamentPHP 5 • PHP 8.3+
+  Built with Laravel 13 • Powered by FilamentPHP 5 • PHP 8.3+
 </p>
 
 ---
@@ -45,7 +45,7 @@
 
 ## 🚀 Introduction
 
-Aureus ERP is a comprehensive, open-source Enterprise Resource Planning (ERP) solution designed for Small and Medium Enterprises (SMEs) and large-scale organizations. Built on **[Laravel 11](https://laravel.com)**, the most popular PHP framework, and **[FilamentPHP 5](https://filamentphp.com)**, a cutting-edge admin panel framework, Aureus ERP offers an extensible and developer-friendly platform for managing every aspect of your business operations.
+Aureus ERP is a comprehensive, open-source Enterprise Resource Planning (ERP) solution designed for Small and Medium Enterprises (SMEs) and large-scale organizations. Built on **[Laravel 13](https://laravel.com)**, the most popular PHP framework, and **[FilamentPHP 5](https://filamentphp.com)**, a cutting-edge admin panel framework, Aureus ERP offers an extensible and developer-friendly platform for managing every aspect of your business operations.
 
 Whether you're managing accounting, inventory, HR, CRM, or projects, Aureus ERP provides a modular approach that grows with your business.
 
@@ -53,7 +53,7 @@ Whether you're managing accounting, inventory, HR, CRM, or projects, Aureus ERP 
 
 ## ✨ Key Features
 
--   🏗️ **Modern Architecture**: Built with Laravel 11 and FilamentPHP 5 for maximum performance and developer experience
+-   🏗️ **Modern Architecture**: Built with Laravel 13 and FilamentPHP 5 for maximum performance and developer experience
 -   🧩 **Modular Plugin System**: Install only the features you need - from accounting to project management
 -   🎨 **Beautiful UI/UX**: Responsive design with TailwindCSS 4, optimized for desktop and mobile
 -   🔐 **Advanced Security**: Role-based access control with Filament Shield integration
@@ -93,7 +93,7 @@ Ensure your development environment meets the following requirements:
 -   **NPM/Yarn**: Latest stable version
 
 ### Framework Versions
--   **Laravel**: 11.x
+-   **Laravel**: 13.x
 -   **FilamentPHP**: 5.x
 -   **Livewire**: 4.x
 -   **TailwindCSS**: 4.x
@@ -171,12 +171,13 @@ These plugins can be installed as needed to extend system functionality:
 | Payments   | Payment processing and tracking       |
 
 #### 📦 Operations
-| Module      | Description                               |
-| ----------- | ----------------------------------------- |
-| Inventories | Inventory and warehouse management        |
-| Products    | Product catalog and management            |
-| Purchases   | Procurement and purchase order management |
-| Sales       | Sales pipeline and opportunity management |
+| Module        | Description                                                                     |
+| ------------- | ------------------------------------------------------------------------------- |
+| Inventories   | Inventory and warehouse management                                              |
+| Manufacturing | Bill of Materials (BOM), Manufacturing Orders, Work Orders, Work Centers & Operations |
+| Products      | Product catalog and management                                                  |
+| Purchases     | Procurement and purchase order management                                       |
+| Sales         | Sales pipeline and opportunity management                                       |
 
 #### 👥 Human Resources
 | Module       | Description                       |
