@@ -16,10 +16,8 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use Webkul\Product\Filament\Resources\ProductResource as BaseProductResource;
 use Webkul\Field\Filament\Traits\HasCustomFields;
-use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\ProductTracking;
 use Webkul\Inventory\Filament\Clusters\Products;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource\Pages\CreateProduct;
@@ -30,7 +28,6 @@ use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource\Pages\
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource\Pages\ManageQuantities;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource\Pages\ManageVariants;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource\Pages\ViewProduct;
-use Webkul\Inventory\Models\Move;
 use Webkul\Inventory\Models\Product;
 use Webkul\Inventory\Settings\TraceabilitySettings;
 use Webkul\Product\Enums\ProductType;
@@ -298,44 +295,5 @@ class ProductResource extends BaseProductResource
             'moves'      => ManageMoves::route('/{record}/moves'),
             'quantities' => ManageQuantities::route('/{record}/quantities'),
         ];
-    }
-
-    public static function createMove($record, $currentQuantity, $sourceLocationId, $destinationLocationId)
-    {
-        $move = Move::create([
-            'name'                    => 'Product Quantity Updated',
-            'state'                   => MoveState::DONE,
-            'product_id'              => $record->product_id,
-            'source_location_id'      => $sourceLocationId,
-            'destination_location_id' => $destinationLocationId,
-            'product_qty'             => abs($currentQuantity),
-            'product_uom_qty'         => abs($currentQuantity),
-            'quantity'                => abs($currentQuantity),
-            'reference'               => 'Product Quantity Updated',
-            'scheduled_at'            => now(),
-            'uom_id'                  => $record->product->uom_id,
-            'creator_id'              => Auth::id(),
-            'company_id'              => $record->company_id,
-        ]);
-
-        $move->lines()->create([
-            'state'                   => MoveState::DONE,
-            'qty'                     => abs($currentQuantity),
-            'uom_qty'                 => abs($currentQuantity),
-            'is_picked'               => 1,
-            'scheduled_at'            => now(),
-            'operation_id'            => null,
-            'product_id'              => $record->product_id,
-            'result_package_id'       => $record->package_id,
-            'lot_id'                  => $record->lot_id,
-            'uom_id'                  => $record->product->uom_id,
-            'source_location_id'      => $sourceLocationId,
-            'destination_location_id' => $destinationLocationId,
-            'reference'               => $move->reference,
-            'company_id'              => $record->company_id,
-            'creator_id'              => Auth::id(),
-        ]);
-
-        return $move;
     }
 }

@@ -110,7 +110,7 @@ class OperationController extends Controller
     protected function checkAvailabilityById(string $id): Operation
     {
         $operation = $this->findOperationById($id);
-        $operation = Inventory::checkTransferAvailability($operation);
+        $operation = Inventory::assignTransfer($operation);
 
         return $operation->refresh()->load($this->allowedIncludes);
     }
@@ -118,7 +118,7 @@ class OperationController extends Controller
     protected function todoById(string $id): Operation
     {
         $operation = $this->findOperationById($id);
-        $operation = Inventory::todoTransfer($operation);
+        $operation = Inventory::confirmTransfer($operation);
 
         return $operation->refresh()->load($this->allowedIncludes);
     }
@@ -126,7 +126,7 @@ class OperationController extends Controller
     protected function validateById(string $id): Operation
     {
         $operation = $this->findOperationById($id);
-        $operation = Inventory::validateTransfer($operation);
+        $operation = Inventory::doneTransfer($operation);
 
         return $operation->refresh()->load($this->allowedIncludes);
     }

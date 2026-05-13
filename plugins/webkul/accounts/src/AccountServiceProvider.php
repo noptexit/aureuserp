@@ -112,8 +112,6 @@ class AccountServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
-        include __DIR__.'/helpers.php';
-
         Livewire::component('invoice-summary', InvoiceSummary::class);
     }
 

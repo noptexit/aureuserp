@@ -2,7 +2,8 @@
 
 namespace Webkul\Account\Filament\Resources\InvoiceResource\Actions;
 
-use Exception;
+use Closure;
+use Throwable;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Livewire\Component;
@@ -13,6 +14,8 @@ use Webkul\Account\Models\Move;
 
 class ConfirmAction extends Action
 {
+    protected bool|Closure $hasDatabaseTransactions = true;
+
     public static function getDefaultName(): ?string
     {
         return 'customers.invoice.confirm';
@@ -32,12 +35,14 @@ class ConfirmAction extends Action
                     $record = AccountFacade::confirmMove($record);
 
                     $livewire->refreshFormData(['state', 'parent_state']);
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     Notification::make()
                         ->warning()
                         ->title('Confirmation Error')
                         ->body($e->getMessage())
                         ->send();
+
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
                 }
             })
             ->hidden(function (Move $record) {

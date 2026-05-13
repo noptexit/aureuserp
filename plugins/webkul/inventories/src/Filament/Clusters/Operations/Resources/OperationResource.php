@@ -20,6 +20,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\View\Components\InputComponent\WrapperComponent\IconComponent;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -35,6 +36,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\ComponentAttributeBag;
 use Webkul\Field\Filament\Forms\Components\ProgressStepper as FormProgressStepper;
 use Webkul\Field\Filament\Infolists\Components\ProgressStepper as InfolistProgressStepper;
 use Webkul\Field\Filament\Traits\HasCustomFields;
@@ -43,9 +45,7 @@ use Webkul\Inventory\Enums\LocationType;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\MoveType;
 use Webkul\Inventory\Enums\OperationState;
-use Webkul\Inventory\Enums\ProcureMethod;
 use Webkul\Inventory\Enums\ProductTracking;
-use Webkul\Inventory\Facades\Inventory;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\LotResource;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\PackageResource;
 use Webkul\Inventory\Filament\Clusters\Products\Resources\ProductResource;
@@ -101,8 +101,16 @@ class OperationResource extends Resource
                     ->options(function ($record) {
                         $options = OperationState::options();
 
-                        if ($record && $record->state !== OperationState::CANCELED) {
-                            unset($options[OperationState::CANCELED->value]);
+                        if (! $record) {
+                            unset($options[OperationState::WAITING->value]);
+                        } else {
+                            if ($record->state !== OperationState::CANCELED) {
+                                unset($options[OperationState::CANCELED->value]);
+                            }
+
+                            if ($record->state !== OperationState::WAITING) {
+                                unset($options[OperationState::WAITING->value]);
+                            }
                         }
 
                         return $options;
@@ -495,6 +503,10 @@ class OperationResource extends Resource
                             unset($options[OperationState::CANCELED->value]);
                         }
 
+                        if ($record->state !== OperationState::WAITING) {
+                            unset($options[OperationState::WAITING->value]);
+                        }
+
                         return $options;
                     })
                     ->default(OperationState::DRAFT),
@@ -828,6 +840,29 @@ class OperationResource extends Resource
                     ->required()
                     ->visible(fn (?Move $record): bool => $record?->id && $record?->state !== MoveState::DRAFT)
                     ->disabled(fn (?Move $record): bool => in_array($record?->state, [MoveState::DONE, MoveState::CANCELED]))
+                    ->suffix(function (?Move $record, Get $get): mixed {
+                        if (
+                            ! $get('product_id')
+                            || (float) ($get('product_uom_qty') ?? 0) <= 0
+                            || (float) ($get('quantity') ?? 0) > 0
+                            || ($record?->forecast_availability ?? 1) > 0
+                            || ($record?->operationType?->type === Enums\OperationType::OUTGOING && $record?->state !== MoveState::DRAFT)
+                        ) {
+                            return null;
+                        }
+
+                        return \Filament\Support\generate_icon_html(
+                            'heroicon-o-exclamation-triangle',
+                            null,
+                            (new ComponentAttributeBag)
+                                ->color(IconComponent::class, 'danger')
+                                ->class(['fi-text-color-600'])
+                                ->merge([
+                                    'style'         => 'color: var(--text)',
+                                    'x-tooltip.raw' => __('inventories::filament/clusters/operations/resources/operation.form.tabs.operations.columns.insufficient-stock-tooltip'),
+                                ], escape: false),
+                        );
+                    })
                     ->suffixAction(fn (Move $record) => static::getMoveLinesAction($record)),
                 Select::make('uom_id')
                     ->label(__('inventories::filament/clusters/operations/resources/operation.form.tabs.operations.fields.unit'))
@@ -861,40 +896,6 @@ class OperationResource extends Resource
                     ->default(0),
             ])
             ->columns(4)
-            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, $record) {
-                $product = Product::find($data['product_id']);
-
-                $data = array_merge($data, [
-                    'creator_id'              => Auth::id(),
-                    'company_id'              => Auth::user()->default_company_id,
-                    'warehouse_id'            => $record->destinationLocation->warehouse_id,
-                    'state'                   => $record->state->value,
-                    'name'                    => $product->name,
-                    'procure_method'          => ProcureMethod::MAKE_TO_STOCK,
-                    'uom_id'                  => $data['uom_id'] ?? $product->uom_id,
-                    'operation_type_id'       => $record->operation_type_id,
-                    'quantity'                => null,
-                    'source_location_id'      => $record->source_location_id,
-                    'destination_location_id' => $record->destination_location_id,
-                    'scheduled_at'            => $record->scheduled_at ?? now(),
-                    'reference'               => $record->name,
-                ]);
-
-                return $data;
-            })
-            ->mutateRelationshipDataBeforeSaveUsing(function (array $data, $record) {
-                if (isset($data['quantity'])) {
-                    $record->fill([
-                        'quantity' => $data['quantity'] ?? null,
-                    ]);
-
-                    Inventory::computeTransferMove($record);
-
-                    Inventory::computeTransferState($record->operation);
-                }
-
-                return $data;
-            })
             ->extraItemActions([
                 Action::make('openProduct')
                     ->tooltip('Open product')
@@ -965,12 +966,16 @@ class OperationResource extends Resource
                                     ];
                                 }
 
+                                [$quantLocationScope] = $move->product->getLocationFilters();
+
                                 return ProductQuantity::with(['location', 'lot', 'package'])
                                     ->where('product_id', $move->product_id)
                                     ->whereHas('location', function (Builder $query) use ($move) {
                                         $query->where('id', $move->source_location_id)
                                             ->orWhere('parent_id', $move->source_location_id);
                                     })
+                                    ->where('quantity', '>', 0)
+                                    ->where(fn (Builder $query) => $quantLocationScope($query))
                                     ->get()
                                     ->mapWithKeys(function ($quantity) {
                                         $nameParts = array_filter([
@@ -1090,13 +1095,6 @@ class OperationResource extends Resource
                             ->searchable()
                             ->preload()
                             ->createOptionForm(fn (Schema $schema): Schema => PackageResource::form($schema))
-                            ->createOptionAction(function (Action $action) use ($move) {
-                                $action->mutateDataUsing(function (array $data) use ($move) {
-                                    $data['company_id'] = $move->company_id;
-
-                                    return $data;
-                                });
-                            })
                             ->disabled(fn (): bool => in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
                             ->visible(static::getOperationSettings()->enable_packages),
                         TextInput::make('qty')
@@ -1127,18 +1125,8 @@ class OperationResource extends Resource
                             $data['package_id'] = $productQuantity?->package_id;
                         }
 
-                        $data['reference'] = $move->reference;
-                        $data['state'] = $move->state;
                         $data['uom_qty'] = static::calculateProductQuantity($data['uom_id'] ?? $move->uom_id, $data['qty']);
-                        $data['scheduled_at'] = $move->scheduled_at;
-                        $data['operation_id'] = $move->operation_id;
                         $data['move_id'] = $move->id;
-                        $data['source_location_id'] = $move->source_location_id;
-                        $data['uom_id'] ??= $move->uom_id;
-                        $data['creator_id'] = Auth::id();
-                        $data['product_id'] = $move->product_id;
-                        $data['company_id'] = $move->company_id;
-                        $data['destination_location_id'] = $data['destination_location_id'] ?? $move->destination_location_id;
 
                         return $data;
                     })
@@ -1168,18 +1156,13 @@ class OperationResource extends Resource
                 fn ($action) => $action
                     ->visible(! in_array($move->state, [MoveState::DONE, MoveState::CANCELED]))
             )
+            ->databaseTransaction()
             ->action(function (Set $set, Move $move, Schema $schema): void {
                 $schema->saveRelationships();
 
-                $totalQty = $move->lines()->sum('qty');
+                $move->refresh();
 
-                $move->fill([
-                    'quantity' => $totalQty,
-                ]);
-
-                Inventory::computeTransferMove($move);
-
-                $set('quantity', $totalQty);
+                $set('quantity', $move->quantity);
             });
     }
 

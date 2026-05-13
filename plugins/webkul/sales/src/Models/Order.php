@@ -18,7 +18,9 @@ use Webkul\Chatter\Traits\HasLogActivity;
 use Webkul\Field\Traits\HasCustomFields;
 use Webkul\Inventory\Models\Operation;
 use Webkul\Inventory\Models\Warehouse;
+use Webkul\Inventory\Models\ProcurementGroup;
 use Webkul\Partner\Models\Partner;
+use Webkul\PluginManager\Package;
 use Webkul\Sale\Database\Factories\OrderFactory;
 use Webkul\Sale\Enums\InvoiceStatus;
 use Webkul\Sale\Enums\OrderState;
@@ -79,6 +81,7 @@ class Order extends Model
         'amount_tax',
         'amount_total',
         'warehouse_id',
+        'procurement_group_id',
     ];
 
     public function getLogAttributeLabels(): array
@@ -97,11 +100,14 @@ class Order extends Model
     }
 
     protected $casts = [
+        'state'          => OrderState::class,
+        'invoice_status' => InvoiceStatus::class,
         'amount_tax'     => 'decimal:4',
         'amount_total'   => 'decimal:4',
         'amount_untaxed' => 'decimal:4',
-        'state'          => OrderState::class,
-        'invoice_status' => InvoiceStatus::class,
+        'validity_date'  => 'date',
+        'date_order'     => 'date',
+        'signed_on'      => 'date',
     ];
 
     public function company()
@@ -209,6 +215,11 @@ class Order extends Model
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
+    public function procurementGroup(): BelongsTo
+    {
+        return $this->belongsTo(ProcurementGroup::class, 'procurement_group_id');
+    }
+
     public function operations(): HasMany
     {
         return $this->hasMany(Operation::class, 'sale_order_id');
@@ -244,6 +255,8 @@ class Order extends Model
 
         static::creating(function ($order) {
             $order->handleOrderCreation();
+
+            $order->computeWarehouseId();
         });
 
         static::saving(function ($order) {
@@ -253,6 +266,15 @@ class Order extends Model
         static::created(function ($order) {
             $order->update(['name' => $order->name]);
         });
+    }
+
+    public function computeWarehouseId()
+    {
+        if (! Package::isPluginInstalled('inventories')) {
+            return;
+        }
+
+        $this->warehouse_id = Warehouse::where('company_id', $this->company_id)->first()?->id;
     }
 
     protected static function newFactory(): OrderFactory
