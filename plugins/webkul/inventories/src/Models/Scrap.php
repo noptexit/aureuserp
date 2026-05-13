@@ -23,6 +23,8 @@ class Scrap extends Model
 {
     use HasChatter, HasFactory, HasLogActivity;
 
+    public const ACTIVITY_PLAN_PLUGIN = 'inventories';
+
     protected $table = 'inventories_scraps';
 
     protected $fillable = [

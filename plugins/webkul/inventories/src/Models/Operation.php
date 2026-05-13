@@ -29,6 +29,8 @@ class Operation extends Model
 {
     use HasChatter, HasCustomFields, HasFactory, HasLogActivity;
 
+    public const ACTIVITY_PLAN_PLUGIN = 'inventories';
+
     protected $table = 'inventories_operations';
 
     protected $fillable = [

@@ -7,19 +7,17 @@ use Exception;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Webkul\Chatter\Models\Attachment;
 use Webkul\Chatter\Models\Follower;
 use Webkul\Chatter\Models\Message;
 use Webkul\Partner\Models\Partner;
+use Webkul\Support\Models\ActivityPlan;
 
 trait HasChatter
 {
-    /**
-     * Get all messages for this model
-     */
     public function messages(): MorphMany
     {
         $owner = $this->resolveChatterMessageOwner();
@@ -29,9 +27,6 @@ trait HasChatter
             ->orderBy('created_at', 'desc');
     }
 
-    /**
-     * Get all messages with filters
-     */
     public function withFilters($filters)
     {
         $query = $this->messages();
@@ -41,9 +36,6 @@ trait HasChatter
         return $query->get();
     }
 
-    /**
-     * Apply filters to the query
-     */
     private function applyMessageFilters($query, array $filters)
     {
         if (! empty($filters['type'])) {
@@ -96,25 +88,16 @@ trait HasChatter
         return $query;
     }
 
-    /**
-     * Get all read messages
-     */
     public function unRead()
     {
         return $this->messages()->where('is_read', false)->get();
     }
 
-    /**
-     * Mark all unread messages as read.
-     */
     public function markAsRead(): int
     {
         return $this->messages()->where('is_read', false)->update(['is_read' => true]);
     }
 
-    /**
-     * Get all activity messages for this model
-     */
     public function activities(): MorphMany
     {
         $owner = $this->resolveChatterMessageOwner();
@@ -124,25 +107,27 @@ trait HasChatter
             ->orderBy('created_at', 'desc');
     }
 
-    /**
-     * Get all activity plans for this model
-     */
     public function activityPlans(): mixed
     {
-        return collect();
+        $plugin = $this->activityPlanPlugin();
+
+        return $plugin
+            ? ActivityPlan::forPlugin($plugin)->pluck('name', 'id')
+            : collect();
     }
 
-    /**
-     * Get partners
-     */
+    public function activityPlanPlugin(): ?string
+    {
+        $constantName = static::class.'::ACTIVITY_PLAN_PLUGIN';
+
+        return defined($constantName) ? (string) constant($constantName) : null;
+    }
+
     public function followable()
     {
         return $this->belongsTo(Partner::class, 'partner_id');
     }
 
-    /**
-     * Add a new message
-     */
     public function addMessage(array $data): Message
     {
         $message = new Message;
@@ -161,10 +146,6 @@ trait HasChatter
         return $message;
     }
 
-    /**
-     * Resolve the owner model for chatter operations.
-     * Models can override chatterMessageOwner() to specify a different owner.
-     */
     protected function resolveChatterMessageOwner(): Model
     {
         if (method_exists($this, 'chatterMessageOwner')) {
@@ -180,31 +161,29 @@ trait HasChatter
     public function chatterMessageOwner(): Model
     {
         $class = get_class($this);
+
         $parentWebkulClass = null;
 
-        // Walk up the inheritance chain
         while (($parent = get_parent_class($class)) !== false) {
-            // Check if parent is a Webkul class
             if (str_starts_with($parent, 'Webkul\\')) {
                 $parentWebkulClass = $parent;
+
                 $class = $parent;
 
                 continue;
             }
-            // Stop if we've left the Webkul namespace
+
             break;
         }
 
-        // If we found a parent Webkul class, return an instance of it
-        // Otherwise return current model
         if ($parentWebkulClass && $parentWebkulClass !== get_class($this)) {
             try {
-                // Create a new instance of the parent class and query with it
                 $parentModel = new $parentWebkulClass;
+
                 $parentInstance = $parentModel->newQuery()->find($this->getKey());
 
                 return $parentInstance ?? $this;
-            } catch (Exception $e) {
+            } catch (Exception) {
                 return $this;
             }
         }
@@ -212,9 +191,6 @@ trait HasChatter
         return $this;
     }
 
-    /**
-     * Add a reply to an existing message
-     */
     public function replyToMessage(Message $parentMessage, array $data): Message
     {
         return $this->addMessage(array_merge($data, [
@@ -224,9 +200,6 @@ trait HasChatter
         ]));
     }
 
-    /**
-     * Remove a message
-     */
     public function removeMessage($messageId, $type = 'messages'): bool
     {
         $message = $this->{$type}()->find($messageId);
@@ -243,9 +216,6 @@ trait HasChatter
         return $message->delete();
     }
 
-    /**
-     * Pin a message
-     */
     public function pinMessage(Message $message): bool
     {
         $owner = $this->resolveChatterMessageOwner();
@@ -262,9 +232,6 @@ trait HasChatter
         return $message->save();
     }
 
-    /**
-     * Unpin a message
-     */
     public function unpinMessage(Message $message): bool
     {
         $owner = $this->resolveChatterMessageOwner();
@@ -281,33 +248,21 @@ trait HasChatter
         return $message->save();
     }
 
-    /**
-     * Get all pinned messages
-     */
     public function getPinnedMessages(): Collection
     {
         return $this->messages()->whereNotNull('pinned_at')->orderBy('pinned_at', 'desc')->get();
     }
 
-    /**
-     * Get messages by type
-     */
     public function getMessagesByType(string $type): Collection
     {
         return $this->messages()->where('type', $type)->get();
     }
 
-    /**
-     * Get internal messages
-     */
     public function getInternalMessages(): Collection
     {
         return $this->messages()->where('is_internal', true)->get();
     }
 
-    /**
-     * Get messages by date range
-     */
     public function getMessagesByDateRange(Carbon $startDate, Carbon $endDate): Collection
     {
         return $this->messages()
@@ -315,9 +270,6 @@ trait HasChatter
             ->get();
     }
 
-    /**
-     * Get messages by activity type
-     */
     public function getMessagesByActivityType(int $activityTypeId): Collection
     {
         return $this->messages()
@@ -325,9 +277,6 @@ trait HasChatter
             ->get();
     }
 
-    /**
-     * Get all attachments for this model
-     */
     public function attachments(): MorphMany
     {
         $owner = $this->resolveChatterMessageOwner();
@@ -335,9 +284,6 @@ trait HasChatter
         return $owner->morphMany(Attachment::class, 'messageable')->orderBy('created_at', 'desc');
     }
 
-    /**
-     * Add multiple attachments
-     */
     public function addAttachments(array $files, array $additionalData = []): Collection
     {
         if (empty($files)) {
@@ -360,9 +306,6 @@ trait HasChatter
             );
     }
 
-    /**
-     * Remove an attachment
-     */
     public function removeAttachment($attachmentId): bool
     {
         $attachment = $this->attachments()->find($attachmentId);
@@ -382,9 +325,6 @@ trait HasChatter
         return $attachment->delete();
     }
 
-    /**
-     * Get attachments by type
-     */
     public function getAttachmentsByType(string $mimeType): Collection
     {
         return $this->attachments()
@@ -392,9 +332,6 @@ trait HasChatter
             ->get();
     }
 
-    /**
-     * Get attachments by date range
-     */
     public function getAttachmentsByDateRange(Carbon $startDate, Carbon $endDate): Collection
     {
         return $this->attachments()
@@ -402,17 +339,11 @@ trait HasChatter
             ->get();
     }
 
-    /**
-     * Get all image attachments
-     */
     public function getImageAttachments(): Collection
     {
         return $this->getAttachmentsByType('image/');
     }
 
-    /**
-     * Get all document attachments
-     */
     public function getDocumentAttachments(): Collection
     {
         return $this->attachments()
@@ -420,9 +351,6 @@ trait HasChatter
             ->get();
     }
 
-    /**
-     * Check if file exists
-     */
     public function attachmentExists($attachmentId): bool
     {
         $attachment = $this->attachments()->find($attachmentId);
@@ -430,34 +358,21 @@ trait HasChatter
         return $attachment && Storage::exists('public/'.$attachment->file_path);
     }
 
-    /*
-     * Get all followers for this model
-     */
     public function followers(): MorphMany
     {
-        $owner = $this->resolveChatterMessageOwner();
-
-        return $owner->morphMany(Follower::class, 'followable');
+        return $this
+            ->resolveChatterMessageOwner()
+            ->morphMany(Follower::class, 'followable');
     }
 
-    /**
-     * Add a follower to this model
-     */
     public function addFollower(Partner $partner): Follower
     {
         return $this->followers()->firstOrCreate(
-            [
-                'partner_id' => $partner->id,
-            ],
-            [
-                'followed_at' => now(),
-            ],
+            ['partner_id' => $partner->id],
+            ['followed_at' => now()],
         );
     }
 
-    /**
-     * Remove a follower from this model
-     */
     public function removeFollower(Partner $partner): bool
     {
         return (bool) $this->followers()
@@ -465,9 +380,6 @@ trait HasChatter
             ->delete();
     }
 
-    /**
-     * Check if a partner is following this model
-     */
     public function isFollowedBy(Partner $partner): bool
     {
         return $this->followers()

@@ -22,7 +22,8 @@ class ViewScrap extends ViewRecord
     {
         return [
             ChatterAction::make()
-                ->resource(static::$resource),
+                ->resource(static::$resource)
+                ->activityPlans($this->getRecord()->activityPlans()),
             DeleteAction::make()
                 ->hidden(fn () => $this->getRecord()->state == ScrapState::DONE)
                 ->action(function (DeleteAction $action, Scrap $record) {

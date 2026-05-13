@@ -48,6 +48,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Webkul\Chatter\Filament\Actions\ActivityTableAction;
 use Webkul\Partner\Enums\AccountType;
 use Webkul\Partner\Models\Partner;
 use Webkul\Security\Traits\HasResourcePermissionQuery;
@@ -514,6 +515,8 @@ class PartnerResource extends Resource
             )
             ->filtersFormColumns(2)
             ->recordActions([
+                ActivityTableAction::make()
+                    ->hidden(fn ($record) => $record->trashed()),
                 ViewAction::make()
                     ->hidden(fn ($record) => $record->trashed()),
                 EditAction::make()

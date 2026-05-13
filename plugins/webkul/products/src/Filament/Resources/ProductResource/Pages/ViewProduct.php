@@ -23,7 +23,8 @@ class ViewProduct extends ViewRecord
     {
         return [
             ChatterAction::make()
-                ->resource(static::$resource),
+                ->resource(static::$resource)
+                ->activityPlans($this->getRecord()->activityPlans()),
             Action::make('print')
                 ->label(__('products::filament/resources/product/pages/edit-product.header-actions.print.label'))
                 ->color('gray')
@@ -48,7 +49,7 @@ class ViewProduct extends ViewRecord
                         ->required(),
                 ])
                 ->action(function (array $data, $record) {
-                    $pdf = PDF::loadView('products::filament.resources.products.actions.print', [
+                    $pdf = Pdf::loadView('products::filament.resources.products.actions.print', [
                         'records'  => collect([$record]),
                         'quantity' => $data['quantity'],
                         'format'   => $data['format'],
