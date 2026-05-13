@@ -4,7 +4,9 @@ namespace Webkul\Inventory\Filament\Clusters\Operations\Actions;
 
 use Closure;
 use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Livewire\Component;
+use Throwable;
 use Webkul\Inventory\Enums\MoveState;
 use Webkul\Inventory\Enums\OperationState;
 use Webkul\Inventory\Facades\Inventory;
@@ -26,9 +28,20 @@ class CheckAvailabilityAction extends Action
         $this
             ->label(__('inventories::filament/clusters/operations/actions/check-availability.label'))
             ->action(function (Operation $record, Component $livewire): void {
-                $record = Inventory::assignTransfer($record);
+                try {
+                    $record = Inventory::assignTransfer($record);
 
-                $livewire->updateForm();
+                    $livewire->updateForm();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->danger()
+                        ->body($e->getMessage())
+                        ->send();
+
+                    $livewire->unmountAction();
+
+                    $this->halt(shouldRollBackDatabaseTransaction: true);
+                }
             })
             ->hidden(function () {
                 if (! in_array($this->getRecord()->state, [OperationState::CONFIRMED, OperationState::ASSIGNED])) {

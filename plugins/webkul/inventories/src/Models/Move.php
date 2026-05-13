@@ -514,24 +514,24 @@ class Move extends Model
         $processDecrease = function (Move $move, float $quantity) {
             $toDelete = collect();
 
-            foreach ($move->lines->sortBy('id')->reverse() as $ml) {
+            foreach ($move->lines->sortBy('id')->reverse() as $moveLine) {
                 if (float_is_zero($quantity, precisionRounding: $move->uom->rounding)) {
                     break;
                 }
 
-                $qtyMlDec = min($ml->qty, $ml->uom->computeQuantity($quantity, $ml->uom, round: false));
+                $qtyMlDec = min($moveLine->qty, $moveLine->uom->computeQuantity($quantity, $moveLine->uom, round: false));
 
-                if (float_is_zero($qtyMlDec, precisionRounding: $ml->uom->rounding)) {
+                if (float_is_zero($qtyMlDec, precisionRounding: $moveLine->uom->rounding)) {
                     continue;
                 }
 
                 if (
-                    float_compare($ml->qty, $qtyMlDec, precisionRounding: $ml->uom->rounding) === 0
-                    && ! in_array($ml->state, [MoveState::DONE, MoveState::CANCELED])
+                    float_compare($moveLine->qty, $qtyMlDec, precisionRounding: $moveLine->uom->rounding) === 0
+                    && ! in_array($moveLine->state, [MoveState::DONE, MoveState::CANCELED])
                 ) {
-                    $toDelete->push($ml->id);
+                    $toDelete->push($moveLine->id);
                 } else {
-                    $ml->decrement('qty', $qtyMlDec);
+                    $moveLine->update(['qty' => $moveLine->qty - $qtyMlDec]);
                 }
 
                 $quantity -= $move->uom->computeQuantity($qtyMlDec, $move->uom, round: false);
