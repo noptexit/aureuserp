@@ -1,7 +1,8 @@
 <?php
 
 return [
-    'label' => 'Produce All',
+    'label'         => 'Produce All',
+    'partial-label' => 'Produce',
 
     'modal' => [
         'consumption-warning' => [

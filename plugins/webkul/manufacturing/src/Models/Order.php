@@ -281,6 +281,20 @@ class Order extends Model
             ->filter(fn ($move) => $move->product_id !== $this->product_id);
     }
 
+    public function getComponentsAvailabilityStateAttribute()
+    {
+        [$componentAvailabilityState] = $this->getComponentsAvailability();
+
+        return $componentAvailabilityState;
+    }
+
+    public function getComponentsAvailabilityAttribute()
+    {
+        [, $componentAvailability] = $this->getComponentsAvailability();
+
+        return $componentAvailability;
+    }
+
     public function getDocumentIterateKey(Move $move)
     {
         return $move->moveOrigins ? 'moveOrigins' : false;
@@ -1264,5 +1278,61 @@ class Order extends Model
         $duplicates = $coProdMoveLines->filter(fn ($moveLine) => $moveLine->quantity && $moveLine->lot_id === $lot->id);
 
         return $duplicates->isNotEmpty();
+    }
+
+    public function getComponentsAvailability(): array
+    {
+        $componentsAvailabilityState = null;
+
+        $componentsAvailability = null;
+
+        if (in_array($this->state, [ManufacturingOrderState::CANCEL, ManufacturingOrderState::DONE, ManufacturingOrderState::DRAFT])) {
+            return [
+                $componentsAvailabilityState,
+                $componentsAvailability,
+            ];
+        }
+
+        $componentsAvailabilityState = 'available';
+
+        $componentsAvailability = __('Available');
+
+        $hasUnavailable = $this->rawMaterialMoves->some(function ($move) {
+            $threshold = $move->state === MoveState::DRAFT ? 0 : $move->product_qty;
+
+            return float_compare($move->forecast_availability, $threshold, precisionRounding: $move->product->uom->rounding) === -1;
+        });
+
+        if ($hasUnavailable) {
+            $componentsAvailabilityState = 'unavailable';
+
+            $componentsAvailability = __('Not Available');
+
+            return [
+                $componentsAvailabilityState,
+                $componentsAvailability,
+            ];
+        }
+
+        $forecastDate = $this->rawMaterialMoves
+            ->filter(fn ($move) => $move->forecast_expected_date)
+            ->max(fn ($move) => $move->forecast_expected_date);
+
+        if ($forecastDate) {
+            if ($this->started_at) {
+                $componentsAvailabilityState = Carbon::parse($forecastDate)->gt(Carbon::parse($this->started_at))
+                    ? 'late'
+                    : 'expected';
+            }
+
+            $componentsAvailability = __('Expected :date', [
+                'date' => Carbon::parse($forecastDate)->format('Y-m-d'),
+            ]);
+        }
+
+        return [
+            $componentsAvailabilityState,
+            $componentsAvailability,
+        ];
     }
 }

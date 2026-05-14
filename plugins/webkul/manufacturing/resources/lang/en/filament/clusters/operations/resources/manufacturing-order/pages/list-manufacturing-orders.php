@@ -18,6 +18,10 @@ return [
         'confirmed'   => 'Confirmed',
         'in-progress' => 'In Progress',
         'to-close'    => 'To Close',
+        'mo-pending'  => 'MO Pending',
+        'mo-ready'    => 'MO Ready',
+        'my-mos'      => 'My MOs',
+        'late'        => 'Late',
     ],
 
     'notification' => [

@@ -31,6 +31,16 @@ class DoneAction extends Action
 
         $this
             ->label(__('manufacturing::filament/clusters/operations/actions/done.label'))
+            ->label(function (Order $record) {
+                if (
+                    $record->quantity_producing == 0
+                    || $record->quantity_producing == $record->quantity
+                ) {
+                    return __('manufacturing::filament/clusters/operations/actions/done.label');
+                }
+
+                return __('manufacturing::filament/clusters/operations/actions/done.partial-label');
+            })
             ->modal(fn (Order $record) => $this->hasAnyCondition($record))
             ->mountUsing(function (Order $record, Schema $form): void {
                 try {
