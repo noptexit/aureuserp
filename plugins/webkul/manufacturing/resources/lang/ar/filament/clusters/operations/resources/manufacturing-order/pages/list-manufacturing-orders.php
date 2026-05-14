@@ -18,6 +18,10 @@ return [
         'confirmed'   => 'مؤكدة',
         'in-progress' => 'قيد التنفيذ',
         'to-close'    => 'للإغلاق',
+        'mo-pending'  => 'أوامر تصنيع معلقة',
+        'mo-ready'    => 'أوامر تصنيع جاهزة',
+        'my-mos'      => 'أوامري',
+        'late'        => 'متأخرة',
     ],
 
     'notification' => [

@@ -5,6 +5,8 @@ namespace Webkul\Manufacturing\Filament\Clusters\Operations\Resources\Manufactur
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Webkul\Manufacturing\Enums\ManufacturingOrderReservationState;
 use Webkul\Manufacturing\Enums\ManufacturingOrderState;
 use Webkul\Manufacturing\Filament\Clusters\Operations\Resources\ManufacturingOrderResource;
 use Webkul\TableViews\Filament\Components\PresetView;
@@ -64,6 +66,29 @@ class ListManufacturingOrders extends ListRecords
             'to-close' => PresetView::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order/pages/list-manufacturing-orders.tabs.to-close'))
                 ->icon('heroicon-s-archive-box-arrow-down')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('state', ManufacturingOrderState::TO_CLOSE)),
+
+            'mo-pending' => PresetView::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order/pages/list-manufacturing-orders.tabs.mo-pending'))
+                ->icon('heroicon-s-clock')
+                ->favorite()
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('reservation_state', [ManufacturingOrderReservationState::CONFIRMED, ManufacturingOrderReservationState::WAITING])),
+
+            'mo-ready' => PresetView::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order/pages/list-manufacturing-orders.tabs.mo-ready'))
+                ->icon('heroicon-s-check-badge')
+                ->favorite()
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('reservation_state', ManufacturingOrderReservationState::ASSIGNED)),
+
+            'my-mos' => PresetView::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order/pages/list-manufacturing-orders.tabs.my-mos'))
+                ->icon('heroicon-s-user')
+                ->favorite()
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('assigned_user_id', Auth::id())),
+
+            'late' => PresetView::make(__('manufacturing::filament/clusters/operations/resources/manufacturing-order/pages/list-manufacturing-orders.tabs.late'))
+                ->icon('heroicon-s-exclamation-triangle')
+                ->favorite()
+                ->modifyQueryUsing(fn (Builder $query) => $query
+                    ->whereNotNull('deadline_at')
+                    ->where('deadline_at', '<', now())
+                    ->whereNotIn('state', [ManufacturingOrderState::DONE, ManufacturingOrderState::CANCEL])),
         ];
     }
 }

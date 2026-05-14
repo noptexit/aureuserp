@@ -1,7 +1,8 @@
 <?php
 
 return [
-    'label' => 'إنتاج الكل',
+    'label'         => 'إنتاج الكل',
+    'partial-label' => 'ينتج',
 
     'modal' => [
         'consumption-warning' => [

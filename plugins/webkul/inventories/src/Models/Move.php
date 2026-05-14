@@ -1146,6 +1146,7 @@ class Move extends Model
         $toWarehouse = $this->destinationLocation->warehouse ?? null;
 
         return $this->operationType?->type === OperationTypeEnum::OUTGOING
+            || $this->operationType?->type === OperationTypeEnum::MANUFACTURE
             || (
                 $fromWarehouse
                 &&
