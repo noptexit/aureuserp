@@ -23,6 +23,7 @@ yarn-error.log
 /.vscode
 /.agents
 /.zed
+/.codex
 boost.json
 opencode.json
 /playwright-report
