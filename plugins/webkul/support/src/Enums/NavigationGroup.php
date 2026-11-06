@@ -11,6 +11,8 @@ enum NavigationGroup: string implements HasIcon, HasLabel
 
     case Contact = 'contact';
 
+    case Crm = 'crm';
+
     case Sale = 'sale';
 
     case Purchase = 'purchase';
@@ -35,6 +37,8 @@ enum NavigationGroup: string implements HasIcon, HasLabel
 
     case Website = 'website';
 
+    case PointOfSale = 'point-of-sale';
+
     case Barcode = 'barcode';
 
     case Plugin = 'plugin';
@@ -53,6 +57,7 @@ enum NavigationGroup: string implements HasIcon, HasLabel
         return match ($this) {
             self::Dashboard     => 'icon-dashboard',
             self::Contact       => 'icon-contacts',
+            self::Crm           => 'icon-crm',
             self::Sale          => 'icon-sales',
             self::Purchase      => 'icon-purchases',
             self::Maintenance   => 'icon-maintenance',
@@ -65,6 +70,7 @@ enum NavigationGroup: string implements HasIcon, HasLabel
             self::TimeOff       => 'icon-time-offs',
             self::Recruitment   => 'icon-recruitments',
             self::Website       => 'icon-website',
+            self::PointOfSale   => 'icon-point-of-sale',
             self::Barcode       => 'icon-barcode',
             self::Plugin        => 'icon-plugin',
             self::Setting       => 'icon-settings',

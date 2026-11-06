@@ -48,7 +48,7 @@ class MoveCompleter
 
         $operation = $completable->pluck('operation')->unique()->filter()->first();
 
-        $completable->each->update(['state' => MoveState::DONE, 'date' => now()]);
+        $completable->each->update(['state' => MoveState::DONE, 'scheduled_at' => now()]);
 
         $pushable = $completable->filter(fn (Move $move) => ! $move->skipsPushRules());
 

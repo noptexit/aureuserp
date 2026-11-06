@@ -29,7 +29,7 @@ class PageForm
                                     ->required()
                                     ->live(onBlur: true)
                                     ->placeholder(__('website::filament/admin/resources/page.form.sections.general.fields.title-placeholder'))
-                                    ->extraInputAttributes(['style' => 'font-size: 1.5rem;height: 3rem;'])
+                                    ->extraInputAttributes(['style' => 'font-size: 1.25rem;height: 2.5rem;'])
                                     ->afterStateUpdated(fn (string $operation, $state, Set $set) => $operation === 'create' ? $set('slug', Str::slug($state)) : null),
                                 TextInput::make('slug')
                                     ->disabled()
@@ -75,6 +75,11 @@ class PageForm
                                     ->inline(false),
                                 Toggle::make('is_footer_visible')
                                     ->label(__('website::filament/admin/resources/page.form.sections.settings.fields.is-footer-visible'))
+                                    ->inline(false),
+                                Toggle::make('is_tracked')
+                                    ->label(__('website::filament/admin/resources/page.form.sections.settings.fields.is-tracked'))
+                                    ->helperText(__('website::filament/admin/resources/page.form.sections.settings.fields.is-tracked-helper'))
+                                    ->default(true)
                                     ->inline(false),
                             ]),
                     ]),

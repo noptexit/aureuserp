@@ -31,8 +31,8 @@ class WorkOrdersTable
     {
         return $table
             ->reorderableColumns()
-            ->modifyQueryUsing(fn (Builder $query) => $query
-                ->with('manufacturingOrder')
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('manufacturingOrder'))
+            ->defaultSort(fn (Builder $query) => $query
                 ->orderBy('sort')
                 ->orderBy('calendar_leave_id')
                 ->orderBy('started_at')
@@ -183,7 +183,7 @@ class WorkOrdersTable
                     ->hiddenLabel()
                     ->icon('heroicon-m-play-circle')
                     ->color('success')
-                    ->size(Size::ExtraLarge)
+                    ->size(Size::Large)
                     ->visible(function (WorkOrder $record): bool {
                         $productionState = $record->manufacturingOrder?->state;
 
@@ -205,7 +205,7 @@ class WorkOrdersTable
                     ->hiddenLabel()
                     ->icon('heroicon-m-pause-circle')
                     ->color('warning')
-                    ->size(Size::ExtraLarge)
+                    ->size(Size::Large)
                     ->visible(function (WorkOrder $record): bool {
                         $productionState = $record->manufacturingOrder?->state;
 
@@ -226,7 +226,7 @@ class WorkOrdersTable
                     ->hiddenLabel()
                     ->icon('heroicon-m-check-circle')
                     ->color('primary')
-                    ->size(Size::ExtraLarge)
+                    ->size(Size::Large)
                     ->visible(function (WorkOrder $record): bool {
                         $productionState = $record->manufacturingOrder?->state;
 

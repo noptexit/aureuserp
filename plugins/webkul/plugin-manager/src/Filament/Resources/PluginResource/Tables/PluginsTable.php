@@ -37,7 +37,7 @@ class PluginsTable
                         ->label('')
                         ->state(true)
                         ->icon('heroicon-o-puzzle-piece')
-                        ->size(IconSize::TwoExtraLarge)
+                        ->size(IconSize::ExtraLarge)
                         ->color('primary')
                         ->visible(fn ($record) => ! $record?->package?->icon)
                         ->grow(false),
@@ -94,6 +94,7 @@ class PluginsTable
                     ])->space(1),
                 ]),
             ])
+            ->extraAttributes(['class' => 'plugins-table'])
             ->contentGrid([
                 'sm'  => 1,
                 'md'  => 2,

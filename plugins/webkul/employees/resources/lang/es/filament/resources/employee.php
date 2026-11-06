@@ -170,13 +170,20 @@ return [
 
     'table' => [
         'columns' => [
-            'name'         => 'Nombre',
-            'manager-name' => 'Responsable',
-            'company-name' => 'Empresa',
-            'job-title'    => 'Título del puesto',
-            'work-email'   => 'Correo del trabajo',
-            'work-phone'   => 'Teléfono del trabajo',
-            'categories'   => 'Etiquetas',
+            'name'            => 'Nombre',
+            'manager-name'    => 'Responsable',
+            'company-name'    => 'Empresa',
+            'job-title'       => 'Título del puesto',
+            'work-email'      => 'Correo del trabajo',
+            'work-phone'      => 'Teléfono del trabajo',
+            'categories'      => 'Etiquetas',
+            'department'      => 'Departamento',
+            'employment-type' => 'Tipo de empleo',
+
+            'status' => [
+                'active'   => 'Activo',
+                'archived' => 'Archivado',
+            ],
         ],
 
         'filters' => [
@@ -284,6 +291,11 @@ return [
                 'notification' => [
                     'title' => 'Empleados eliminados',
                     'body'  => 'Los empleados se han eliminado correctamente.',
+
+                    'error' => [
+                        'title' => 'No se pudieron eliminar los empleados',
+                        'body'  => 'Los empleados no se pueden eliminar porque están actualmente en uso.',
+                    ],
                 ],
             ],
 

@@ -5,6 +5,7 @@ namespace Webkul\PluginManager;
 use Exception;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Spatie\LaravelPackageTools\Package as BasePackage;
 use Symfony\Component\Process\ExecutableFinder;
@@ -155,7 +156,7 @@ class Package extends BasePackage
             'author'         => $composerData['authors'][0]['name'] ?? null,
             'summary'        => $composerData['description'] ?? null,
             'description'    => $composerData['description'] ?? null,
-            'latest_version' => $this->version ?? null,
+            'latest_version' => $composerData['version'] ?? '1.0.0',
             'license'        => $composerData['license'] ?? null,
             'sort'           => $this->sort ?? null,
             'is_active'      => true,
@@ -204,26 +205,31 @@ class Package extends BasePackage
             Artisan::call('optimize:clear');
 
             if (app()->isProduction()) {
-                static::rebuildCachesInBackground();
+                if (app()->runningInConsole()) {
+                    static::optimizeInFreshProcess();
+
+                    return;
+                }
+
+                app()->terminating(static function (): void {
+                    try {
+                        static::optimizeInFreshProcess();
+                    } catch (Throwable $e) {
+                        report($e);
+                    }
+                });
             }
         } catch (Throwable $e) {
             report($e);
         }
     }
 
-    protected static function rebuildCachesInBackground(): void
+    protected static function optimizeInFreshProcess(): void
     {
-        if (! app()->isProduction() || PHP_OS_FAMILY === 'Windows') {
-            return;
-        }
-
-        $command = sprintf(
-            '%s %s optimize > /dev/null 2>&1 &',
-            escapeshellarg(static::phpBinaryPath()),
-            escapeshellarg(base_path('artisan'))
-        );
-
-        exec($command);
+        Process::path(base_path())
+            ->timeout(300)
+            ->run([static::phpBinaryPath(), 'artisan', 'optimize'])
+            ->throw();
     }
 
     public static function phpBinaryPath(): string

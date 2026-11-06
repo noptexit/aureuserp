@@ -279,7 +279,8 @@ trait HasTableViews
         return Action::make('openTableViews')
             ->label(__('table-views::filament/concerns/has-table-views.title'))
             ->iconButton()
-            ->icon('heroicon-m-ellipsis-vertical')
+            ->icon('heroicon-o-queue-list')
+            ->color('gray')
             ->livewireClickHandlerEnabled(false)
             ->modalSubmitAction(false);
     }
@@ -303,6 +304,10 @@ trait HasTableViews
 
                 return $data;
             })
+            ->iconButton()
+            ->icon('heroicon-o-plus')
+            ->color('gray')
+            ->tooltip(__('table-views::filament/actions/create-view.label'))
             ->after(function (TableViewModel $saveFilter): void {
                 unset($this->cachedTableViews);
                 unset($this->cachedFavoriteTableViews);
@@ -471,6 +476,6 @@ trait HasTableViews
                 ($this->deleteTableViewAction())($args)
                     ->visible(fn () => $key == $tableView->isDeletable()),
             ])->dropdown(false),
-        ])->dropdownPlacement('bottom-end');
+        ])->dropdownPlacement('bottom-start')->dropdownTeleport();
     }
 }

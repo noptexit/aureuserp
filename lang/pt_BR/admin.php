@@ -4,6 +4,7 @@ return [
     'navigation' => [
         'dashboard'     => 'Dashboard',
         'contact'       => 'Contatos',
+        'crm'           => 'CRM',
         'sale'          => 'Vendas',
         'purchase'      => 'Compras',
         'invoice'       => 'Faturas',
@@ -19,6 +20,12 @@ return [
         'plugin'        => 'Plugins',
         'setting'       => 'Configurações',
         'help'          => 'Ajuda',
+        'point-of-sale' => 'Ponto de Venda',
         'barcode'       => 'Código de barras',
+    ],
+
+    'app-menu' => [
+        'label' => 'Aplicativos',
+        'close' => 'Fechar',
     ],
 ];

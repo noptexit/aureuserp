@@ -2,11 +2,13 @@
 
 namespace Webkul\Support\Traits;
 
+use Filament\Facades\Filament;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentView;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
@@ -21,6 +23,8 @@ trait HasFilamentDefaults
 
         Section::configureUsing(fn (Section $section) => $section->columnSpanFull());
 
+        Group::configureUsing(fn (Group $group) => $group->collapsible());
+
         Table::configureUsing(fn (Table $table) => $table->defaultCurrency(fn (): string => default_currency_code()));
 
         Schema::configureUsing(fn (Schema $schema) => $schema->defaultCurrency(fn (): string => default_currency_code()));
@@ -28,11 +32,11 @@ trait HasFilamentDefaults
 
     protected function registerHooks(): void
     {
-        $version = '1.6.0';
+        $version = '1.8.0';
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::USER_MENU_PROFILE_BEFORE,
-            fn (): string => Blade::render(<<<'BLADE'
+            fn (): string => Filament::getCurrentPanel()?->getId() === 'pos' ? '' : Blade::render(<<<'BLADE'
                 <x-filament::dropdown.list>
                     <x-filament::dropdown.list.item>
                         <div class="flex items-center gap-2">

@@ -84,7 +84,7 @@ jobs:
         with:
           php-version: ${{ matrix.php-versions }}
           extensions: curl, fileinfo, gd, intl, mbstring, openssl, pdo, ${{ matrix.php-db-ext }}, tokenizer, zip
-          ini-values: error_reporting=E_ALL
+          ini-values: error_reporting=E_ALL, max_execution_time=0
           tools: composer:v2
 
       - name: Set Up Node.js
@@ -170,6 +170,12 @@ jobs:
             --admin-name="Example" \
             --admin-email="admin@example.com" \
             --admin-password="admin123"
+
+      - name: Switch to Production Mode
+        run: |
+          sed -i "s|^\(APP_ENV=\s*\).*$|\1production|" .env
+          sed -i "/URL::forceScheme('https');/s|^|//|" app/Providers/AppServiceProvider.php
+          php artisan config:clear
 
       - name: Start Laravel server
         run: |

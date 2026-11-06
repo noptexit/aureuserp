@@ -170,13 +170,20 @@ return [
 
     'table' => [
         'columns' => [
-            'name'         => 'Nome',
-            'manager-name' => 'Gerente',
-            'company-name' => 'Empresa',
-            'job-title'    => 'Cargo',
-            'work-email'   => 'E-mail de trabalho',
-            'work-phone'   => 'Telefone de trabalho',
-            'categories'   => 'Tags',
+            'name'            => 'Nome',
+            'manager-name'    => 'Gerente',
+            'company-name'    => 'Empresa',
+            'job-title'       => 'Cargo',
+            'work-email'      => 'E-mail de trabalho',
+            'work-phone'      => 'Telefone de trabalho',
+            'categories'      => 'Tags',
+            'department'      => 'Departamento',
+            'employment-type' => 'Tipo de emprego',
+
+            'status' => [
+                'active'   => 'Ativo',
+                'archived' => 'Arquivado',
+            ],
         ],
 
         'filters' => [
@@ -284,6 +291,11 @@ return [
                 'notification' => [
                     'title' => 'Colaboradores excluídos',
                     'body'  => 'Os colaboradores foram excluídos com sucesso.',
+
+                    'error' => [
+                        'title' => 'Os colaboradores não puderam ser excluídos',
+                        'body'  => 'Os colaboradores não podem ser excluídos porque estão em uso no momento.',
+                    ],
                 ],
             ],
 

@@ -142,6 +142,11 @@ class User extends BaseUser implements FilamentUser, HasAppAuthentication, HasAp
         });
     }
 
+    public function revokeApiTokens(): void
+    {
+        $this->tokens()->delete();
+    }
+
     private function handlePartnerCreation(self $user)
     {
         $partnerAttributes = Arr::only($user->toArray(), app(Partner::class)->getFillable());

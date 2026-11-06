@@ -19,6 +19,7 @@ use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Exceptions\Cancel;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
@@ -339,7 +340,7 @@ class Profile extends Page implements HasForms
 
         $userData = $user->only(['name', 'email', 'avatar', 'language']);
 
-        $userData['avatar'] = $user->partner->avatar;
+        $userData['avatar'] = $user?->partner?->avatar;
 
         if (empty($userData['language'])) {
             $userData['language'] = app()->getLocale();
@@ -471,6 +472,8 @@ class Profile extends Page implements HasForms
                         $action->cancel();
 
                         redirect()->to(filament()->getCurrentOrDefaultPanel()->getLoginUrl());
+                    } catch (Cancel $e) {
+                        throw $e;
                     } catch (ValidationException $e) {
                         throw $e;
                     } catch (Exception $e) {

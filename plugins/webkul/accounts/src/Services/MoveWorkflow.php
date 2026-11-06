@@ -135,10 +135,13 @@ class MoveWorkflow
         foreach ($reversals as $reversal) {
             foreach ($reversal->lines as $line) {
                 if ($reversal->move_type === MoveType::ENTRY || $line->display_type === DisplayType::COGS) {
-                    $line->update([
-                        'balance'         => -$line->balance,
-                        'amount_currency' => -$line->amount_currency,
-                    ]);
+                    $line->balance = -$line->balance;
+
+                    $line->amount_currency = -$line->amount_currency;
+
+                    $line->computeCreditAndDebit();
+
+                    $line->save();
                 }
             }
         }
@@ -176,6 +179,8 @@ class MoveWorkflow
             $copy->move_id = $reversal->id;
 
             $copy->save();
+
+            $copy->taxes()->sync($line->taxes->pluck('id')->all());
         }
 
         return app(MoveCalculator::class)->recompute($reversal);
@@ -281,6 +286,14 @@ class MoveWorkflow
 
         if (! $move->currency) {
             throw new Exception(__('accounts::account-manager.post-action-validate.currency-archived'));
+        }
+
+        if ($move->move_type === MoveType::ENTRY) {
+            $balance = $move->lines->sum(fn (MoveLine $line) => (float) $line->debit - (float) $line->credit);
+
+            if (! float_is_zero($balance, precisionRounding: $move->currency->rounding)) {
+                throw new Exception(__('accounts::account-manager.post-action-validate.unbalanced'));
+            }
         }
     }
 
